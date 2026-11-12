@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CONFIG, type EnemyType } from '../config';
+import { CONFIG, type EnemyStrike, type EnemyType } from '../config';
 import { createRandom, type Random } from '../core/random';
 import { SpatialGrid } from '../core/spatialGrid';
 import { swallowedByFinsternis } from './darkness';
@@ -34,6 +34,10 @@ export interface Enemy {
   castIn: number;
   /** Restsekunden des Zaubers, den er gerade wirkt; dabei steht er still. */
   casting: number;
+  /** Restsekunden des Hiebs, den er gerade ausführt (die Länge der Animation läuft ab); dabei steht er still. 0 = keiner. */
+  striking: number;
+  /** Sekunden, bis er wieder zuschlagen darf; nur bei Arten, die zuschlagen. */
+  strikeIn: number;
   /** Radius der Finsternis, die er mit sich trägt; 0 = keine. */
   mantle: number;
   /** Bewegt sich nicht von selbst: Der Verschlinger wird von boss.ts geführt. */
@@ -45,6 +49,8 @@ export interface EnemyHooks {
   death(enemy: Enemy): void;
   /** Ein Gegner beginnt, den Schwarzen Sog auf die Stelle (x, z) zu wirken. */
   cast(enemy: Enemy, x: number, z: number): void;
+  /** Ein Gegner holt zum Hieb aus; er blickt in `enemy.heading`. Der Boden soll die Fläche vor ihm ankündigen. */
+  strike(enemy: Enemy): void;
 }
 
 /** Alle Gegner einer Art in einem Zeichenaufruf. */
@@ -53,9 +59,10 @@ interface Horde {
   mesh: THREE.InstancedMesh;
   /** Je Gegner: Bild der Bewegung und Zerfall. Der Platzhalter hat beides nicht. */
   anim: THREE.InstancedBufferAttribute | null;
-  /** Wo Schleife und Zauber in der Bewegungstextur liegen. */
+  /** Wo Schleife, Zauber und Hieb in der Bewegungstextur liegen. */
   loop: HordeClip;
   cast: HordeClip | null;
+  strike: HordeClip | null;
   /** So viele Gegner dieser Art werden in diesem Frame gezeichnet ... */
   count: number;
   /** ... und die ersten so vielen stehen im Lichtschein und werfen einen Schatten. */
@@ -75,7 +82,7 @@ const FADE_SECONDS = 0.5;
 const FLASH_GAIN = 3;
 /** Gegner knapp außerhalb des Lichtscheins werfen ihren Schatten noch hinein. */
 const SHADOW_MARGIN = 2;
-/** Ein Zauber beginnt in der Animation bei 0 und endet kurz vor 1, damit das Überblenden nicht über das Schlussbild hinausgreift. */
+/** Zauber und Hieb beginnen in der Animation bei 0 und enden kurz vor 1, damit das Überblenden nicht über das Schlussbild hinausgreift. */
 const CAST_END = 0.999;
 const PLACEHOLDER_CLIP: HordeClip = { start: 0, frames: 1, seconds: 1 };
 const pose = new THREE.Object3D();
@@ -106,7 +113,7 @@ export class Enemies {
     geometry.translate(0, 0.85, 0);
     const material = swallowedByFinsternis(new THREE.MeshStandardMaterial({ roughness: 0.8 }), true);
     for (const type of TYPES) {
-      this.adopt(type, new THREE.InstancedMesh(geometry, material, CONFIG.enemies.max), null, PLACEHOLDER_CLIP, null);
+      this.adopt(type, new THREE.InstancedMesh(geometry, material, CONFIG.enemies.max), null, PLACEHOLDER_CLIP, null, null);
     }
     this.reset();
   }
@@ -123,7 +130,7 @@ export class Enemies {
       CONFIG.enemies.max,
     );
     mesh.customDistanceMaterial = shadowByTexture(new THREE.MeshDistanceMaterial(), model);
-    this.adopt(type, mesh, anim, model.loop, model.cast);
+    this.adopt(type, mesh, anim, model.loop, model.cast, model.strike);
   }
 
   private adopt(
@@ -132,13 +139,14 @@ export class Enemies {
     anim: THREE.InstancedBufferAttribute | null,
     loop: HordeClip,
     cast: HordeClip | null,
+    strike: HordeClip | null,
   ): void {
     const before = this.hordes.get(type);
     if (before) {
       this.group.remove(before.mesh);
       before.mesh.dispose();
     }
-    const horde: Horde = { type, mesh, anim, loop, cast, count: 0, lit: 0 };
+    const horde: Horde = { type, mesh, anim, loop, cast, strike, count: 0, lit: 0 };
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     // Die Instanzen bewegen sich, die einmal berechnete Hüllkugel wäre falsch.
@@ -241,7 +249,36 @@ export class Enemies {
           }
         }
       }
-      if (distance > 1e-4) enemy.heading = Math.atan2(dx, dz);
+      // Wer zuschlägt, tut es statt zu berühren: Er bleibt stehen, holt aus (der Boden kündigt die Fläche an) und trifft in
+      // der Sekunde der Animation, in der die Krallen durchfahren. Ohne Modell mit Hieb-Animation gilt die Berührung.
+      const strike = enemy.type.strike;
+      const strikeClip = strike ? (this.hordes.get(enemy.type)?.strike ?? null) : null;
+      if (strike && strikeClip) {
+        if (enemy.striking > 0) {
+          walking = false;
+          if (held) {
+            // Wer umgeworfen oder festgehalten wird, bricht den Hieb ab.
+            enemy.striking = 0;
+            enemy.strikeIn = strike.cooldown;
+          } else {
+            const landing = strikeClip.seconds - strike.hitAt;
+            const before = enemy.striking;
+            enemy.striking = Math.max(0, before - dt);
+            if (before > landing && enemy.striking <= landing) this.land(enemy, strike, player);
+            if (enemy.striking === 0) enemy.strikeIn = strike.cooldown;
+          }
+        } else {
+          enemy.strikeIn -= dt;
+          if (!held && enemy.strikeIn <= 0 && distance < strike.reach) {
+            enemy.striking = strikeClip.seconds;
+            // Die Fläche gilt ab jetzt: Er blickt dorthin, wo die Spielfigur steht, und dreht sich im Hieb nicht mehr nach.
+            enemy.heading = Math.atan2(dx, dz);
+            hooks.strike(enemy);
+            walking = false;
+          }
+        }
+      }
+      if (distance > 1e-4 && enemy.striking <= 0) enemy.heading = Math.atan2(dx, dz);
       const hovers = enemy.type.model.hover !== undefined;
       if (distance > 1e-4 && walking) {
         const step = (speed * dt) / distance;
@@ -263,7 +300,8 @@ export class Enemies {
       distance = Math.hypot(dx, dz);
       const reach = enemy.type.radius + CONFIG.player.radius;
       if (distance < reach) {
-        if (!held) player.hurt(enemy.type.damage);
+        // Wer zuschlagen kann, verletzt nicht durch Berührung; der Hieb ist sein Angriff.
+        if (!held && !(strike && strikeClip)) player.hurt(enemy.type.damage);
         if (distance > 1e-4) {
           const push = (reach - distance) / distance;
           enemy.x += dx * push;
@@ -272,6 +310,19 @@ export class Enemies {
       }
     }
     this.writeInstances(player);
+  }
+
+  /** Die Krallen fahren durch: Wer jetzt in der angekündigten Fläche steht, wird getroffen. */
+  private land(enemy: Enemy, strike: EnemyStrike, player: Player): void {
+    const dx = player.position.x - enemy.x;
+    const dz = player.position.z - enemy.z;
+    const toPlayer = Math.atan2(dx, dz);
+    // Der Winkel zwischen Blickrichtung und Spielfigur, auf -pi bis pi gebracht.
+    const off = Math.abs(Math.atan2(Math.sin(toPlayer - enemy.heading), Math.cos(toPlayer - enemy.heading)));
+    // Die Fläche ist nach vorn angekündigt; der halbe Radius der Spielfigur ist Nachsicht, wie beim Hieb des Verschlingers.
+    if (Math.hypot(dx, dz) <= strike.reach + CONFIG.player.radius * 0.5 && off <= strike.arc / 2) {
+      player.hurt(enemy.type.damage, false, true);
+    }
   }
 
   damage(enemy: Enemy, amount: number, pushX: number, pushZ: number): void {
@@ -345,6 +396,8 @@ export class Enemies {
       fade: 0,
       castIn: 0,
       casting: 0,
+      striking: 0,
+      strikeIn: 0,
       mantle: 0,
       driven: false,
     };
@@ -363,6 +416,8 @@ export class Enemies {
     // Der erste Zauber kommt nicht sofort, und nicht alle wirken im selben Augenblick.
     enemy.castIn = type.cast ? 1 + this.random() * type.cast.cooldown * 0.5 : 0;
     enemy.casting = 0;
+    enemy.striking = 0;
+    enemy.strikeIn = 0;
     enemy.mantle = type.mantle ?? 0;
     enemy.driven = false;
     return enemy;
@@ -449,8 +504,13 @@ export class Enemies {
     }
   }
 
-  /** Welches Bild der Bewegungstextur der Gegner zeigt: den Zauber, solange er wirkt, sonst die Schleife. */
+  /** Welches Bild der Bewegungstextur der Gegner zeigt: den Hieb oder den Zauber, solange sie laufen, sonst die Schleife. */
   private frameOf(enemy: Enemy, horde: Horde): number {
+    if (enemy.striking > 0 && horde.strike) {
+      // Der Hieb läuft in Echtzeit von vorn bis hinten.
+      const progress = Math.min(CAST_END, 1 - enemy.striking / horde.strike.seconds);
+      return horde.strike.start + progress * horde.strike.frames;
+    }
     const cast = enemy.type.cast;
     if (enemy.casting > 0 && horde.cast && cast && cast.windup > 0) {
       // Die Animation läuft genau über die Sekunden, in denen der Zauber heranreift; am Ende schlägt er ein.

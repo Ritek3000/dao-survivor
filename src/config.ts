@@ -20,6 +20,12 @@ export interface EnemyModel {
    * (`cast.windup`): Am Ende der Animation schlägt der Zauber ein. Fehlt sie, wirkt er in der Haltung des Gehens.
    */
   castClip?: string;
+  /**
+   * Name der Hieb-Animation in der Datei, falls die Art zuschlägt (`EnemyType.strike`). Sie läuft einmal in Echtzeit,
+   * während der Gegner steht; ihre Länge bestimmt, wie lange der Hieb dauert. Fehlt sie in der Datei, trifft er wie jeder
+   * andere Gegner durch Berühren.
+   */
+  strikeClip?: string;
 }
 
 /** Ein Modell für die Kulisse: Felsen, Totholz, Gestrüpp. */
@@ -55,6 +61,24 @@ export interface EnemyCast {
   damage: number;
 }
 
+/**
+ * Der Hieb eines Nahkämpfers. Statt die Spielfigur im Vorbeigehen zu berühren, bleibt er stehen und holt aus; der Boden
+ * zeigt die Fläche vor ihm an, und wer beim Treffer noch darin steht, wird verletzt. Wer ausweicht, bleibt heil.
+ */
+export interface EnemyStrike {
+  /** Aus dieser Entfernung (Mitte zu Mitte, Meter) holt er aus; so weit reicht auch die angekündigte Fläche. */
+  reach: number;
+  /** Öffnungswinkel der Fläche in Radiant. */
+  arc: number;
+  /**
+   * Sekunde der Hieb-Animation, in der die Krallen durch die Fläche fahren (siehe tools/manteltraeger-animieren.py:
+   * KRALLENHIEB_TREFFER). Bis dahin ist die Fläche angekündigt.
+   */
+  hitAt: number;
+  /** Sekunden Pause zwischen dem Ende eines Hiebs und dem nächsten. */
+  cooldown: number;
+}
+
 /** Was eine Gegnerart an Münzen fallen lässt. */
 export interface EnemyGold {
   /** Wahrscheinlichkeit von 0 bis 1, dass ein erschlagener Gegner eine Münze fallen lässt. */
@@ -85,6 +109,8 @@ export interface EnemyType {
   maxAlive?: number;
   /** Wirkt aus der Ferne den Schwarzen Sog, statt die Spielfigur anzuspringen. */
   cast?: EnemyCast;
+  /** Schlägt mit den Krallen zu, statt die Spielfigur durch Berühren zu verletzen. `damage` ist der Schaden des Hiebs. */
+  strike?: EnemyStrike;
   /** Trägt einen Mantel der Nacht: Finsternis mit diesem Radius (Meter) zieht mit ihm. */
   mantle?: number;
 }
@@ -257,14 +283,26 @@ export const CONFIG = {
         maxAlive: 4,
         cast: { keep: 9, range: 13, cooldown: 4.5, windup: 1.3, radius: 2.6, damage: 9 },
       },
-      // Mantelträger: trägt einen Mantel der Nacht mit sich. Noch ohne Modell (Kapsel).
+      // Mantelträger: trägt einen Mantel der Nacht mit sich. Geduckte Bestie mit Geweih; sie bleibt vor der Spielfigur
+      // stehen, holt mit der Kralle aus und reißt sie durch.
       {
         id: 'mantel',
-        model: { file: '', height: 2.1, clip: 'Walking', stride: 1.6 },
-        radius: 0.5, scale: 1.25, speed: 1.9, hp: 60, damage: 10, xp: 5, color: 0x7a4f9e, from: 360, weight: 0.35,
+        model: {
+          file: 'manteltraeger.glb',
+          // Vom Boden bis zu den Spitzen des Geweihs (gebückt, ohne es wäre er kaum 1,5 m hoch).
+          height: 2.1,
+          clip: 'Laufen',
+          // Meter je Durchlauf (zwei Schritte): LAUF_STRECKE aus tools/manteltraeger-animieren.py (1 m in der Datei,
+          // die 1,7 m hoch ist) mal 2,1 / 1,7. Stimmt der Wert nicht, rutschen die Füße.
+          stride: 1.24,
+          strikeClip: 'Krallenhieb',
+        },
+        radius: 0.5, scale: 1.25, speed: 1.9, hp: 60, damage: 18, xp: 5, color: 0x7a4f9e, from: 360, weight: 0.35,
         gold: { chance: 0.7, value: 6 },
         maxAlive: 2,
         mantle: 6,
+        // Die Kralle reicht gut 1,3 m vor ihn (bei 2,1 m Größe); `reach` rechnet bis zur Mitte der Spielfigur (Radius 0,8).
+        strike: { reach: 1.8, arc: 1.7, hitAt: 0.5, cooldown: 1.2 },
       },
     ] as readonly EnemyType[],
   },
