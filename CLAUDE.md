@@ -35,8 +35,8 @@ Es gibt keine automatischen Tests und keinen Linter. **Bevor ein Pull Request au
   `verbatimModuleSyntax`). Typen werden mit `import type` bzw. `type`-Modifikator importiert.
 - `src/config.ts` ist der Ort für Stellschrauben (Nachtdauer, Gegnerarten, Kulisse, Boss). Neue Zahlen, die man beim
   Balancing anfassen will, gehören dorthin und nicht tief in die Logik.
-- Angriffe, Klassen, Segen und Gegnerarten sind **Daten** (`weapons.ts`, `classes.ts`, `progression.ts`, `config.ts`).
-  Neue Inhalte sind meist ein weiterer Eintrag, kein neuer Code-Pfad.
+- Angriffe, Klassen, Segen, Steigerungen und Gegnerarten sind **Daten** (`weapons.ts`, `classes.ts`, `progression.ts`,
+  `steigerung.ts`, `config.ts`). Neue Inhalte sind meist ein weiterer Eintrag, kein neuer Code-Pfad.
 - Die Welt entsteht deterministisch aus einem Seed (`createRandom` in `src/core/random.ts`). Wer die Welt, die Kulisse
   oder das Spawnen ändert, nimmt diesen Zufall und nicht `Math.random`. `Math.random` ist nur für rein Optisches erlaubt.
 - Im Kampf entstehen keine neuen Objekte: Teilchen, Gegner und Geschosse liegen in Pools bzw. Instanznetzen. Neue Effekte
@@ -79,7 +79,9 @@ Ob das Spiel im Browser bleibt oder als Desktop-Programm erscheint, ist noch nic
     (`.github/workflows/pages.yml`); ein absoluter Pfad würde dort ins Leere laufen.
   - Eingabe nur über die Aktionen in `src/core/input.ts` (Gamepad kommt später dazu), nicht über verstreute Tastenabfragen.
   - Browser-APIs, die in einer Hülle fehlen können (etwa Vollbild, Zeigersperre, Speicher), nur mit Rückfall verwenden.
-    Spielstände oder Einstellungen später hinter einer kleinen Schicht ablegen, die sich austauschen lässt.
+    Spielstand und Einstellungen liegen hinter einer kleinen Schicht, die sich austauschen lässt (`src/core/storage.ts`,
+    `savegame.ts`, `settings.ts`); neue Daten, die bleiben sollen, gehören in den Spielstand und nicht direkt in `localStorage`.
+    Das Format des Spielstands trägt eine Versionsnummer; wer es ändert, hebt sie an und hebt alte Stände in `parseSavegame` an.
   - Keine Node- oder Electron-Pakete in `src/` einziehen. Desktop-Code käme später in einen eigenen Ordner.
 - Wer etwas ändert, das diese Linie berührt, erwähnt es im Pull Request.
 

@@ -19,6 +19,7 @@
         <span id="hp-text"></span>
       </div>
       <div id="xp" class="bar"><div id="xp-fill"></div></div>
+      <div id="gold"><span class="coin"></span><span id="gold-text">0</span></div>
     </div>
 
     <div id="clock">
@@ -67,14 +68,29 @@
       <h1 id="choice-title"></h1>
       <p id="choice-subtitle"></p>
       <div id="choice-cards"></div>
-      <p class="keys">1 · 2 · 3 oder Pfeiltasten und Enter</p>
+      <p id="choice-gold" hidden></p>
+      <button id="choice-steigern" class="button" type="button" hidden>Klassen steigern (U)</button>
+      <p id="choice-keys" class="keys">1 · 2 · 3 oder Pfeiltasten und Enter</p>
+    </div>
+
+    <div id="steigerung" class="overlay" hidden>
+      <h1>Steigerung</h1>
+      <p id="steigerung-gold"></p>
+      <div id="steigerung-tabs"></div>
+      <div id="steigerung-list"></div>
+      <button id="steigerung-back" class="button" type="button">Zurück (Esc)</button>
+      <p class="keys">
+        Auf und Ab: Steigerung wählen · Enter: Rang kaufen · Links und Rechts oder 1 · 2 · 3: Klasse wechseln · Esc oder U: zurück
+      </p>
     </div>
 
     <div id="end" class="overlay" hidden>
       <h1 id="end-title"></h1>
       <p id="end-text"></p>
       <p id="end-stats"></p>
-      <p class="keys">Enter: Klasse wählen und neue Nacht beginnen</p>
+      <p id="end-gold"></p>
+      <button id="end-steigern" class="button" type="button">Gold ausgeben (U)</button>
+      <p class="keys">Enter: Klasse wählen und neue Nacht beginnen · U: Gold für Steigerungen ausgeben</p>
     </div>
 
     <div id="error" class="overlay" hidden></div>

@@ -468,6 +468,30 @@ def sfx_eingesammelt(rng, variant):
     return out
 
 
+def sfx_muenze(rng, variant):
+    # Eine Muenze klingt hell und kurz; ein zweiter, leiserer Klang dahinter ist die Muenze, auf die sie faellt.
+    f = [2093.0, 2349.3, 2637.0][variant]
+    out = np.zeros(n_of(0.4))
+    partials = ((1, 1), (2.4, 0.6), (3.9, 0.35), (5.6, 0.18))
+    place(out, chime(f, 0.4, 0.07, partials, rng), 0, 0.9)
+    place(out, noise_hit(rng, 5000, 12000, 0.03, 0.006), 0, 0.35)
+    place(out, chime(f * 1.5, 0.3, 0.05, partials, rng), 0.05, 0.45)
+    return out
+
+
+def sfx_steigerung(rng):
+    # Gold klirrt auf den Tisch, danach ein warmer Klang: Der Rang ist bezahlt.
+    out = np.zeros(n_of(1.0))
+    partials = ((1, 1), (2.4, 0.6), (3.9, 0.35), (5.6, 0.18))
+    for index, f in enumerate([2093.0, 2637.0, 2349.3, 3136.0]):
+        place(out, chime(f, 0.4, 0.07, partials, rng), 0.05 * index, 0.5)
+        place(out, noise_hit(rng, 5000, 12000, 0.03, 0.006), 0.05 * index, 0.2)
+    place(out, thump(250, 130, 0.2, 0.06), 0.1, 0.6)
+    place(out, chime(523.25, 0.9, 0.35, ((1, 1), (2.0, 0.4), (3.0, 0.15)), rng), 0.18, 0.7)
+    place(out, chime(783.99, 0.8, 0.3, ((1, 1), (2.0, 0.3)), rng), 0.24, 0.5)
+    return out
+
+
 def sfx_stufe(rng):
     out = np.zeros(n_of(3.0))
     for index, f in enumerate([440.0, 523.25, 659.25, 880.0]):
@@ -1341,8 +1365,10 @@ def build_catalogue():
     sfx('sfx/schild-bereit', sfx_schild_bereit, -22.0)
     many('sfx/schritt', sfx_schritt, 3, -24.0)
     many('sfx/eingesammelt', sfx_eingesammelt, 3, -21.0)
+    many('sfx/muenze', sfx_muenze, 3, -24.0)
     sfx('sfx/stufe', sfx_stufe, -19.0)
     sfx('sfx/segen', sfx_segen, -19.0)
+    sfx('sfx/steigerung', sfx_steigerung, -20.0)
     sfx('sfx/auswahl', sfx_auswahl, -24.0)
     sfx('sfx/bestaetigen', sfx_bestaetigen, -20.0)
     sfx('sfx/pause', sfx_pause, -22.0)

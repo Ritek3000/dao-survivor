@@ -9,6 +9,7 @@ import { Arsenal, type CombatTraits } from './arsenal';
 import { Boss } from './boss';
 import { CameraRig } from './cameraRig';
 import { CLASSES, TRAITS, type ClassDef } from './classes';
+import { Coins } from './coins';
 import { finsternisUniforms } from './darkness';
 import { Dust } from './dust';
 import { Enemies, type EnemyHooks } from './enemies';
@@ -16,6 +17,7 @@ import { loadModels, type Models } from './models';
 import { Pickups } from './pickups';
 import { Player } from './player';
 import { Progression, SEGEN_EVERY_LEVELS } from './progression';
+import { Steigerungen, STEIGERUNGEN } from './steigerung';
 import { Threats } from './threats';
 import { MAX_RANK } from './weapons';
 import { World } from './world';
@@ -31,8 +33,11 @@ const SEGEN_SUBTITLE = 'Eine Höhere Macht antwortet. Wähle einen Segen';
 /** Sekunden zwischen dem Sturz des Verschlingers und der Wahl des Segens. */
 const BOSS_SEGEN_SECONDS = 3;
 
-/** 'loading' = Modelle werden geladen, 'select' = Klassenwahl vor der Nacht, 'levelup' = Wahl einer Stärkung. */
-type Phase = 'loading' | 'select' | 'playing' | 'paused' | 'levelup' | 'ended';
+/**
+ * 'loading' = Modelle werden geladen, 'select' = Klassenwahl vor der Nacht, 'levelup' = Wahl einer Stärkung,
+ * 'steigerung' = Menü, in dem man zwischen den Nächten Gold für dauerhafte Ränge der Klassen ausgibt.
+ */
+type Phase = 'loading' | 'select' | 'playing' | 'paused' | 'levelup' | 'steigerung' | 'ended';
 
 /** Eine wählbare Stärkung beim Stufenaufstieg: neuer Angriff, höherer Rang oder Segen. */
 interface Offer {
@@ -56,6 +61,9 @@ export class Game {
   private readonly zones: Zones;
   private readonly enemies = new Enemies();
   private readonly pickups = new Pickups();
+  private readonly coins = new Coins();
+  /** Geldbörse und Ränge der Klassen; bleiben über die Nächte hinweg bestehen und werden gespeichert. */
+  private readonly steigerungen = new Steigerungen();
   private readonly arsenal: Arsenal;
   private readonly threats = new Threats();
   private readonly boss = new Boss();
@@ -82,6 +90,11 @@ export class Game {
   private shownLight = 0;
   private offers: Offer[] = [];
   private selected = 0;
+  /** Gold, das in dieser Nacht eingesammelt wurde, schon mit dem Faktor der Steigerungen. */
+  private goldRun = 0;
+  /** Im Menü der Steigerungen: die gewählte Klasse und die markierte Zeile. */
+  private menuClass = 0;
+  private menuRow = 0;
   /** Kämpfer: stand im letzten Frame im Licht. */
   private wasInLight = false;
   /** Kämpfer: Restzeit der Schwäche nach erloschenem Feuer. */
@@ -121,6 +134,7 @@ export class Game {
       this.enemies.group,
       this.boss.group,
       this.pickups.group,
+      this.coins.group,
       this.player.object,
       this.threats.group,
       this.arsenal.group,
@@ -128,6 +142,14 @@ export class Game {
     );
 
     this.hud.onPick = (index) => this.pick(index);
+    this.hud.onSteigern = () => this.openSteigerungFromMenu();
+    this.hud.onSteigerungBuy = (index) => {
+      if (this.phase !== 'steigerung') return;
+      this.menuRow = index;
+      this.buySteigerung();
+    };
+    this.hud.onSteigerungClass = (index) => this.selectSteigerungClass(index);
+    this.hud.onSteigerungBack = () => this.closeSteigerung();
     this.settings = loadSettings({ sound: { ...CONFIG.audio.defaults, muted: false } });
     audio.setVolumes(this.settings.sound);
     audio.muffleAt = (x, z) => this.zones.finsternisAt(x, z);
@@ -188,11 +210,15 @@ export class Game {
       case 'levelup':
         this.updateChoice();
         break;
+      case 'steigerung':
+        this.updateSteigerung();
+        break;
       case 'ended':
         this.player.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         this.boss.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         this.arsenal.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         if (this.input.wasPressed('confirm')) this.openSelect();
+        else if (this.input.wasPressed('upgrade')) this.openSteigerungFromMenu();
         break;
       case 'loading':
         break;
@@ -236,10 +262,17 @@ export class Game {
         this.zones.eachBurning((island) => this.arsenal.sear(island.x, island.z, CONFIG.islands.radius, amount));
       }
     }
-    const gained = this.pickups.update(dt, this.time, position, CONFIG.player.pickupRadius * stats.pickup);
+    const pickupRadius = CONFIG.player.pickupRadius * stats.pickup;
+    const gained = this.pickups.update(dt, this.time, position, pickupRadius);
     if (gained > 0) {
       this.pendingLevels += this.progression.addXp(gained * stats.xp);
       audio.play('eingesammelt', position.x, position.z);
+    }
+    const coined = this.coins.update(dt, this.time, position, pickupRadius);
+    if (coined > 0) {
+      this.goldRun += coined * stats.gold;
+      this.hud.setGold(Math.floor(this.goldRun));
+      audio.play('muenze', position.x, position.z);
     }
 
     this.rig.update(dt, position);
@@ -318,15 +351,24 @@ export class Game {
     death: (enemy) => {
       if (enemy !== this.boss.enemy) {
         this.pickups.drop(enemy.x, enemy.z, enemy.type.xp);
+        const { gold } = enemy.type;
+        if (gold && this.random() < gold.chance) this.coins.drop(enemy.x, enemy.z, gold.value);
         audio.play(`gegner-tod.${enemy.type.id}`, enemy.x, enemy.z);
         return;
       }
-      // Der Verschlinger fällt: Erfahrung in einem Kranz von Edelsteinen und ein Segen.
+      // Der Verschlinger fällt: Erfahrung in einem Kranz von Edelsteinen, Gold in einem Kranz von Münzen und ein Segen.
       const { xp, gems, name } = CONFIG.boss;
       for (let i = 0; i < gems; i++) {
         const angle = (i / gems) * Math.PI * 2;
         const distance = 1.6 + this.random() * 2;
         this.pickups.drop(enemy.x + Math.cos(angle) * distance, enemy.z + Math.sin(angle) * distance, xp / gems);
+      }
+      const { coins, value } = CONFIG.gold.boss;
+      for (let i = 0; i < coins; i++) {
+        // Zwischen den Edelsteinen, etwas weiter außen.
+        const angle = ((i + 0.5) / coins) * Math.PI * 2;
+        const distance = 2.4 + this.random() * 1.6;
+        this.coins.drop(enemy.x + Math.cos(angle) * distance, enemy.z + Math.sin(angle) * distance, value);
       }
       this.boss.fall();
       // Erst stürzt er, dann antwortet die Höhere Macht.
@@ -345,15 +387,26 @@ export class Game {
     audio.play('pause');
   }
 
-  private openSelect(): void {
+  /** Die Klassenwahl vor der Nacht; `selected` markiert eine Klasse, sonst die zuletzt gespielte. */
+  private openSelect(selected = Math.max(0, CLASSES.indexOf(this.playerClass))): void {
     this.phase = 'select';
-    this.selected = Math.max(0, CLASSES.indexOf(this.playerClass));
+    this.selected = selected;
     this.hud.hideEnd();
+    this.hud.hideSteigerung();
     this.hud.showChoice(
       'Die Abendglocke läutet',
       'Wer steht heute Nacht vor der Mauer?',
-      CLASSES.map((playerClass) => ({ name: playerClass.name, text: playerClass.text, note: playerClass.home })),
+      CLASSES.map((playerClass) => {
+        const ranks = this.steigerungen.totalRanks(playerClass.id);
+        return {
+          name: playerClass.name,
+          text: playerClass.text,
+          note: playerClass.home,
+          extra: ranks > 0 ? `Gesteigert: ${ranks} Ränge` : 'Noch nicht gesteigert',
+        };
+      }),
       this.selected,
+      this.steigerungen.gold,
     );
   }
 
@@ -367,12 +420,15 @@ export class Game {
     this.shownLight = 0;
     this.wasInLight = false;
     this.weakened = 0;
-    this.progression.reset(playerClass);
+    this.goldRun = 0;
+    this.hud.setGold(0);
+    this.progression.reset(playerClass, (stats) => this.steigerungen.apply(playerClass.id, stats));
     this.player.setClass(playerClass, this.models?.heroes.get(playerClass.id) ?? null);
     this.player.reset();
     this.dust.setLightColor(playerClass.lightColor);
     this.enemies.reset();
     this.pickups.reset();
+    this.coins.reset();
     this.zones.reset();
     this.syncLight();
     this.applyBlessings();
@@ -477,6 +533,10 @@ export class Game {
     if (this.selected !== before) audio.play('auswahl');
     this.hud.select(this.selected);
 
+    if (this.phase === 'select' && this.input.wasPressed('upgrade')) {
+      this.openSteigerung(this.selected);
+      return;
+    }
     if (this.input.wasPressed('choice1')) this.pick(0);
     else if (this.input.wasPressed('choice2')) this.pick(1);
     else if (this.input.wasPressed('choice3')) this.pick(2);
@@ -513,6 +573,7 @@ export class Game {
     // Der letzte Frame läuft knapp über das Ende der Nacht hinaus.
     const survived = Math.min(this.time, CONFIG.run.nightSeconds);
     const stats = `${this.playerClass.name} · Überlebt: ${formatTime(survived)} · Stufe ${this.progression.level} · Erschlagen: ${this.enemies.kills}`;
+    const gold = this.settle(won, survived);
     this.hud.setBoss(null);
     if (won) {
       this.world.setDawn(1);
@@ -522,15 +583,120 @@ export class Game {
         : this.boss.appeared
           ? ` ${name} weicht mit der Finsternis.`
           : '';
-      this.hud.showEnd('Sor geht auf', `Du hast die Nacht vor der Mauer überstanden.${fate}`, stats);
+      this.hud.showEnd('Sor geht auf', `Du hast die Nacht vor der Mauer überstanden.${fate}`, stats, gold);
     } else {
       this.player.die();
       if (this.player.lastDamage === 'verstaubung') {
-        this.hud.showEnd('Verstaubt', 'Die Finsternis hat dich behalten.', stats);
+        this.hud.showEnd('Verstaubt', 'Die Finsternis hat dich behalten.', stats, gold);
       } else {
-        this.hud.showEnd('Gefallen', 'Die Nacht hat dich geholt.', stats);
+        this.hud.showEnd('Gefallen', 'Die Nacht hat dich geholt.', stats, gold);
       }
     }
+  }
+
+  /**
+   * Rechnet den Ertrag der Nacht ab und schreibt ihn der Geldbörse gut: die eingesammelten Münzen, den Sold für die
+   * überlebte Zeit und, wenn die Sonne aufgeht, die Prämie. Wer fällt, behält `CONFIG.gold.deathKeep` davon.
+   * Gibt die Zeile für die Endanzeige zurück.
+   */
+  private settle(won: boolean, survived: number): string {
+    const { perMinute, victory, deathKeep } = CONFIG.gold;
+    const factor = this.progression.stats.gold;
+    const loot = Math.round(this.goldRun);
+    const pay = Math.round(Math.floor(survived / 60) * perMinute * factor);
+    const bonus = won ? Math.round(victory * factor) : 0;
+    const kept = won ? 1 : deathKeep;
+    const total = Math.round((loot + pay + bonus) * kept);
+    this.steigerungen.credit(total);
+    const parts = [`Beute ${loot}`, `Sold ${pay}`];
+    if (won) parts.push(`Sonnenaufgang ${bonus}`);
+    const cut = kept < 1 ? ` · davon behalten: ${Math.round(kept * 100)} %` : '';
+    return `${parts.join(' · ')}${cut} · Ertrag: +${total} Gold · Börse: ${this.steigerungen.gold}`;
+  }
+
+  /** Öffnet die Steigerungen aus der Klassenwahl (für die markierte Klasse) oder vom Ende der Nacht (für die gespielte). */
+  private openSteigerungFromMenu(): void {
+    if (this.phase === 'select') this.openSteigerung(this.selected);
+    else if (this.phase === 'ended') this.openSteigerung(Math.max(0, CLASSES.indexOf(this.playerClass)));
+  }
+
+  private openSteigerung(classIndex: number): void {
+    if (classIndex !== this.menuClass) this.menuRow = 0;
+    this.menuClass = classIndex;
+    this.phase = 'steigerung';
+    this.hud.hideChoice();
+    this.hud.hideEnd();
+    audio.play('auswahl');
+    this.refreshSteigerung();
+  }
+
+  /** Zeichnet das Menü der Steigerungen neu, etwa nach einem Kauf. */
+  private refreshSteigerung(): void {
+    const playerClass = CLASSES[this.menuClass];
+    if (!playerClass) return;
+    const { steigerungen } = this;
+    this.hud.showSteigerung({
+      gold: steigerungen.gold,
+      classes: CLASSES.map((entry) => ({ name: entry.name, ranks: steigerungen.totalRanks(entry.id) })),
+      active: this.menuClass,
+      rows: STEIGERUNGEN.map((steigerung) => {
+        const cost = steigerungen.cost(playerClass.id, steigerung);
+        return {
+          name: steigerung.name,
+          text: steigerung.text,
+          rank: steigerungen.rank(playerClass.id, steigerung),
+          max: steigerung.max,
+          cost,
+          affordable: cost !== null && cost <= steigerungen.gold,
+        };
+      }),
+      selected: this.menuRow,
+    });
+  }
+
+  private selectSteigerungClass(index: number): void {
+    if (this.phase !== 'steigerung' || index === this.menuClass || !CLASSES[index]) return;
+    this.menuClass = index;
+    audio.play('auswahl');
+    this.refreshSteigerung();
+  }
+
+  private buySteigerung(): void {
+    const playerClass = CLASSES[this.menuClass];
+    const steigerung = STEIGERUNGEN[this.menuRow];
+    if (!playerClass || !steigerung) return;
+    if (this.steigerungen.buy(playerClass.id, steigerung)) audio.play('steigerung');
+    else this.hud.denySteigerung();
+    this.refreshSteigerung();
+  }
+
+  /** Zurück zur Klassenwahl, mit der gesteigerten Klasse markiert. */
+  private closeSteigerung(): void {
+    if (this.phase !== 'steigerung') return;
+    audio.play('auswahl');
+    this.openSelect(this.menuClass);
+  }
+
+  /** Bedienung des Menüs: Auf und Ab wählen die Steigerung, Links und Rechts die Klasse, Enter kauft. */
+  private updateSteigerung(): void {
+    const rows = STEIGERUNGEN.length;
+    const row = this.menuRow;
+    if (this.input.wasPressed('up')) this.menuRow = (this.menuRow + rows - 1) % rows;
+    if (this.input.wasPressed('down')) this.menuRow = (this.menuRow + 1) % rows;
+    if (this.menuRow !== row) {
+      audio.play('auswahl');
+      this.hud.selectSteigerung(this.menuRow);
+    }
+
+    const count = CLASSES.length;
+    if (this.input.wasPressed('left')) this.selectSteigerungClass((this.menuClass + count - 1) % count);
+    else if (this.input.wasPressed('right')) this.selectSteigerungClass((this.menuClass + 1) % count);
+    else if (this.input.wasPressed('choice1')) this.selectSteigerungClass(0);
+    else if (this.input.wasPressed('choice2')) this.selectSteigerungClass(1);
+    else if (this.input.wasPressed('choice3')) this.selectSteigerungClass(2);
+
+    if (this.input.wasPressed('confirm')) this.buySteigerung();
+    else if (this.input.wasPressed('pause') || this.input.wasPressed('upgrade')) this.closeSteigerung();
   }
 
   /** In den letzten Sekunden der Nacht hellt der Staub zum Zwielicht des Tages auf. */
@@ -548,6 +714,7 @@ export class Game {
     switch (this.phase) {
       case 'loading':
       case 'select':
+      case 'steigerung':
         return 'menue';
       case 'ended':
         return this.won ? 'sieg' : 'niederlage';

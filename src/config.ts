@@ -45,6 +45,14 @@ export interface EnemyCast {
   damage: number;
 }
 
+/** Was eine Gegnerart an Münzen fallen lässt. */
+export interface EnemyGold {
+  /** Wahrscheinlichkeit von 0 bis 1, dass ein erschlagener Gegner eine Münze fallen lässt. */
+  chance: number;
+  /** Wert der Münze in Gold (vor dem Faktor der Steigerung „Kaufmannsblick“). */
+  value: number;
+}
+
 export interface EnemyType {
   id: string;
   radius: number;
@@ -56,6 +64,8 @@ export interface EnemyType {
   hp: number;
   damage: number;
   xp: number;
+  /** Fehlt der Eintrag, fallen keine Münzen. */
+  gold?: EnemyGold;
   color: number;
   /** Ab welcher Sekunde der Nacht dieser Typ auftaucht. */
   from: number;
@@ -204,24 +214,28 @@ export const CONFIG = {
         id: 'walker',
         model: { file: 'schaender.glb', height: 1.8, clip: 'Walking', stride: 1.5 },
         radius: 0.4, scale: 1, speed: 2.3, hp: 14, damage: 8, xp: 1, color: 0x6a3b35, from: 0, weight: 10,
+        gold: { chance: 0.12, value: 1 },
       },
       // Schnell: der Behemoth.
       {
         id: 'runner',
         model: { file: 'behemoth.glb', height: 1, clip: 'Walking', stride: 2.2 },
         radius: 0.45, scale: 0.72, speed: 4.3, hp: 8, damage: 5, xp: 1, color: 0x7a5a2c, from: 60, weight: 4,
+        gold: { chance: 0.12, value: 1 },
       },
       // Groß: der Troll.
       {
         id: 'brute',
         model: { file: 'troll.glb', height: 2.5, clip: 'Walking', stride: 2.2 },
         radius: 0.75, scale: 1.75, speed: 1.6, hp: 90, damage: 18, xp: 6, color: 0x3d2a3f, from: 180, weight: 1,
+        gold: { chance: 0.6, value: 5 },
       },
       // Dhargass-Priester: hält Abstand und wirkt den Schwarzen Sog. Noch ohne Modell (Kapsel).
       {
         id: 'priester',
         model: { file: '', height: 1.9, clip: 'Walking', stride: 1.5 },
         radius: 0.42, scale: 1.1, speed: 2.6, hp: 30, damage: 6, xp: 4, color: 0x5563c8, from: 240, weight: 0.6,
+        gold: { chance: 0.6, value: 4 },
         maxAlive: 4,
         cast: { keep: 9, range: 13, cooldown: 4.5, windup: 1.3, radius: 2.6, damage: 9 },
       },
@@ -230,6 +244,7 @@ export const CONFIG = {
         id: 'mantel',
         model: { file: '', height: 2.1, clip: 'Walking', stride: 1.6 },
         radius: 0.5, scale: 1.25, speed: 1.9, hp: 60, damage: 10, xp: 5, color: 0x7a4f9e, from: 360, weight: 0.35,
+        gold: { chance: 0.7, value: 6 },
         maxAlive: 2,
         mantle: 6,
       },
@@ -264,6 +279,35 @@ export const CONFIG = {
     sog: { trigger: 7, radius: 8.5, damage: 18, windup: 1.6, cooldown: 11 },
     /** Das Verschlingen: Unter diesem Anteil seines Lebens hüllt er sich zeitweise in Finsternis. */
     verschlingen: { belowHp: 0.5, radius: 10, seconds: 8, cooldown: 22 },
+  },
+  /**
+   * Gold: Münzen aus Gegnern, Sold für die überlebte Zeit und die Siegprämie. Es bezahlt zwischen den Nächten die
+   * Steigerungen der Klassen (game/steigerung.ts). Was eine Gegnerart fallen lässt, steht bei ihr (`gold`).
+   * Alle Beträge sind Gold vor dem Faktor der Steigerung „Kaufmannsblick“.
+   */
+  gold: {
+    /** So viele Münzen liegen höchstens zugleich da; der Wert weiterer geht in eine vorhandene Münze. */
+    maxCoins: 160,
+    /**
+     * Aussehen der Münze: Durchmesser in Metern und Farbe je Stufe, nach Kupferpfennig, Silbermark und Goldkrone der Lore.
+     * Abweichung von der Lore: Im Spiel gilt 1 zu 5 zu 25 statt 1 zu 100 zu 10 000; sonst gäbe es keine Goldkronen zu sehen.
+     */
+    coin: {
+      size: 0.56,
+      colors: { copper: 0xeb9b5c, silver: 0xd3d8e0, gold: 0xffc83d },
+      silverFrom: 5,
+      goldFrom: 25,
+    },
+    /** Der Verschlinger lässt beim Sturz einen Kranz von Münzen fallen: Anzahl und Wert je Münze. */
+    boss: { coins: 8, value: 12 },
+    /** Sold je volle Minute, die man überlebt hat; er wird am Ende der Nacht gutgeschrieben. */
+    perMinute: 3,
+    /** Prämie, wenn die Sonne aufgeht. */
+    victory: 60,
+    /** Anteil des Ertrags, den man behält, wenn man fällt. 1 = alles, 0,5 = die Hälfte. */
+    deathKeep: 1,
+    /** Jeder weitere Rang einer Steigerung kostet so viel mal mehr als der vorige. */
+    upgradeGrowth: 1.2,
   },
   /**
    * Ton und Musik. Welche Datei zu welchem Ereignis klingt, steht nicht hier, sondern in
