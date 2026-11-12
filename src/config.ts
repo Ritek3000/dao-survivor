@@ -8,8 +8,18 @@ export interface EnemyModel {
   height: number;
   /** Name der Lauf-Animation in der Datei. Gibt es ihn nicht, gilt die erste Animation. */
   clip: string;
-  /** Meter, die ein Durchlauf der Lauf-Animation überbrückt. Größer = langsamere Beine. */
+  /** Meter, die ein Durchlauf der Lauf-Animation überbrückt. Größer = langsamere Beine. Ohne Wirkung bei `hover`. */
   stride: number;
+  /**
+   * Wer schwebt, hat keine Beine, die der Strecke folgen: Seine Animation `clip` läuft dann nach der Zeit, auch wenn er
+   * steht, und er hängt `lift` Meter über dem Boden (zusätzlich zu `height`).
+   */
+  hover?: { lift: number };
+  /**
+   * Name der Zauber-Animation in der Datei. Sie läuft einmal von vorn bis hinten, gedehnt auf die Sekunden des Zaubers
+   * (`cast.windup`): Am Ende der Animation schlägt der Zauber ein. Fehlt sie, wirkt er in der Haltung des Gehens.
+   */
+  castClip?: string;
 }
 
 /** Ein Modell für die Kulisse: Felsen, Totholz, Gestrüpp. */
@@ -230,10 +240,18 @@ export const CONFIG = {
         radius: 0.75, scale: 1.75, speed: 1.6, hp: 90, damage: 18, xp: 6, color: 0x3d2a3f, from: 180, weight: 1,
         gold: { chance: 0.6, value: 5 },
       },
-      // Dhargass-Priester: hält Abstand und wirkt den Schwarzen Sog. Noch ohne Modell (Kapsel).
+      // Dhargass-Priester: hält Abstand und wirkt den Schwarzen Sog. Er schwebt und hebt zum Zaubern die Arme.
       {
         id: 'priester',
-        model: { file: '', height: 1.9, clip: 'Walking', stride: 1.5 },
+        model: {
+          file: 'priester.glb',
+          // Vom Saum des Gewandes bis zum Haarschopf; dazu kommen die 0,3 m, die er über dem Boden hängt.
+          height: 1.7,
+          clip: 'Schweben',
+          stride: 0,
+          hover: { lift: 0.3 },
+          castClip: 'Zaubern',
+        },
         radius: 0.42, scale: 1.1, speed: 2.6, hp: 30, damage: 6, xp: 4, color: 0x5563c8, from: 240, weight: 0.6,
         gold: { chance: 0.6, value: 4 },
         maxAlive: 4,

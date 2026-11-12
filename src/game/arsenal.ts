@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { audio, type SoundId } from '../audio';
+import type { EnemyModel } from '../config';
 import type { Random } from '../core/random';
 import type { ClassDef } from './classes';
 import { Effects, type StrikeKind } from './effects';
@@ -46,6 +47,11 @@ function strikeKind(def: WeaponDef): StrikeKind {
 
 /** Der Ton zu jeder Trefferart; fest hinterlegt, weil Treffer das häufigste Ereignis im Kampf sind. */
 const HIT_SOUNDS: Record<StrikeKind, SoundId> = { stahl: 'treffer.stahl', staub: 'treffer.staub', brand: 'treffer.brand' };
+
+/** Höhe eines Punktes am Körper des Gegners als Anteil seiner Größe; wer schwebt, steht entsprechend höher. */
+function bodyHeight(model: EnemyModel, fraction: number): number {
+  return (model.hover?.lift ?? 0) + model.height * fraction;
+}
 
 /** Alle Angriffe der Spielfigur: was sie besitzt, wann es auslöst und wen es trifft. */
 export class Arsenal {
@@ -141,7 +147,7 @@ export class Arsenal {
     this.enemies.queryRadius(x, z, radius, (enemy) => {
       if (enemy.hp <= 0 || Math.hypot(enemy.x - x, enemy.z - z) > radius + enemy.type.radius) return;
       this.enemies.damage(enemy, amount, 0, 0);
-      this.effects.strike(enemy.x, enemy.type.model.height * 0.5, enemy.z, 'brand');
+      this.effects.strike(enemy.x, bodyHeight(enemy.type.model, 0.5), enemy.z, 'brand');
     });
   }
 
@@ -331,7 +337,7 @@ export class Arsenal {
         if (Math.hypot(enemy.x - origin.x, enemy.z - origin.z) <= this.player.light) amount *= litDamage;
       }
       const kind = strikeKind(def);
-      this.effects.strike(enemy.x, enemy.type.model.height * 0.6, enemy.z, kind);
+      this.effects.strike(enemy.x, bodyHeight(enemy.type.model, 0.6), enemy.z, kind);
       audio.play(HIT_SOUNDS[kind], enemy.x, enemy.z);
     }
 

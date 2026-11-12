@@ -3,7 +3,7 @@ import { CONFIG, type EnemyType } from '../config';
 import { createRandom, type Random } from '../core/random';
 import { SpatialGrid } from '../core/spatialGrid';
 import { swallowedByFinsternis } from './darkness';
-import type { HordeModel } from './models';
+import type { HordeClip, HordeModel } from './models';
 import type { Player } from './player';
 import { animatedByTexture, shadowByTexture } from './vat';
 import type { World } from './world';
@@ -26,7 +26,7 @@ export interface Enemy {
   slow: number;
   /** Restsekunden, in denen er mehr Schaden erleidet. */
   weak: number;
-  /** Wo er im Schritt ist: 0 bis 1 über einen Durchlauf der Lauf-Animation. */
+  /** Wo er in der Schleife ist: 0 bis 1 über einen Durchlauf. Beim Gehen folgt sie der Strecke, beim Schweben der Zeit. */
   stride: number;
   /** Nach dem Tod: 0 bis 1, während er zu Staub zerfällt. */
   fade: number;
@@ -51,9 +51,11 @@ export interface EnemyHooks {
 interface Horde {
   type: EnemyType;
   mesh: THREE.InstancedMesh;
-  /** Je Gegner: Bild der Laufbewegung und Zerfall. Der Platzhalter hat beides nicht. */
+  /** Je Gegner: Bild der Bewegung und Zerfall. Der Platzhalter hat beides nicht. */
   anim: THREE.InstancedBufferAttribute | null;
-  frames: number;
+  /** Wo Schleife und Zauber in der Bewegungstextur liegen. */
+  loop: HordeClip;
+  cast: HordeClip | null;
   /** So viele Gegner dieser Art werden in diesem Frame gezeichnet ... */
   count: number;
   /** ... und die ersten so vielen stehen im Lichtschein und werfen einen Schatten. */
@@ -73,6 +75,9 @@ const FADE_SECONDS = 0.5;
 const FLASH_GAIN = 3;
 /** Gegner knapp außerhalb des Lichtscheins werfen ihren Schatten noch hinein. */
 const SHADOW_MARGIN = 2;
+/** Ein Zauber beginnt in der Animation bei 0 und endet kurz vor 1, damit das Überblenden nicht über das Schlussbild hinausgreift. */
+const CAST_END = 0.999;
+const PLACEHOLDER_CLIP: HordeClip = { start: 0, frames: 1, seconds: 1 };
 const pose = new THREE.Object3D();
 const tint = new THREE.Color();
 
@@ -101,7 +106,7 @@ export class Enemies {
     geometry.translate(0, 0.85, 0);
     const material = swallowedByFinsternis(new THREE.MeshStandardMaterial({ roughness: 0.8 }), true);
     for (const type of TYPES) {
-      this.adopt(type, new THREE.InstancedMesh(geometry, material, CONFIG.enemies.max), null, 1);
+      this.adopt(type, new THREE.InstancedMesh(geometry, material, CONFIG.enemies.max), null, PLACEHOLDER_CLIP, null);
     }
     this.reset();
   }
@@ -118,21 +123,22 @@ export class Enemies {
       CONFIG.enemies.max,
     );
     mesh.customDistanceMaterial = shadowByTexture(new THREE.MeshDistanceMaterial(), model);
-    this.adopt(type, mesh, anim, model.frames);
+    this.adopt(type, mesh, anim, model.loop, model.cast);
   }
 
   private adopt(
     type: EnemyType,
     mesh: THREE.InstancedMesh,
     anim: THREE.InstancedBufferAttribute | null,
-    frames: number,
+    loop: HordeClip,
+    cast: HordeClip | null,
   ): void {
     const before = this.hordes.get(type);
     if (before) {
       this.group.remove(before.mesh);
       before.mesh.dispose();
     }
-    const horde: Horde = { type, mesh, anim, frames, count: 0, lit: 0 };
+    const horde: Horde = { type, mesh, anim, loop, cast, count: 0, lit: 0 };
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     // Die Instanzen bewegen sich, die einmal berechnete Hüllkugel wäre falsch.
@@ -236,13 +242,16 @@ export class Enemies {
         }
       }
       if (distance > 1e-4) enemy.heading = Math.atan2(dx, dz);
+      const hovers = enemy.type.model.hover !== undefined;
       if (distance > 1e-4 && walking) {
         const step = (speed * dt) / distance;
         enemy.x += dx * step;
         enemy.z += dz * step;
         // Die Beine laufen so schnell, wie er vorankommt; wer festgehalten wird, erstarrt im Schritt.
-        enemy.stride = (enemy.stride + (speed * dt) / enemy.type.model.stride) % 1;
+        if (!hovers) enemy.stride = (enemy.stride + (speed * dt) / enemy.type.model.stride) % 1;
       }
+      // Wer schwebt, wiegt sich nach der Zeit, auch wenn er auf Abstand steht; festgehalten erstarrt er.
+      if (hovers && !held) enemy.stride = (enemy.stride + dt / (this.hordes.get(enemy.type)?.loop.seconds ?? 1)) % 1;
 
       this.current = enemy;
       this.grid.query(enemy.x, enemy.z, enemy.type.radius + LARGEST_RADIUS, this.separate);
@@ -440,6 +449,17 @@ export class Enemies {
     }
   }
 
+  /** Welches Bild der Bewegungstextur der Gegner zeigt: den Zauber, solange er wirkt, sonst die Schleife. */
+  private frameOf(enemy: Enemy, horde: Horde): number {
+    const cast = enemy.type.cast;
+    if (enemy.casting > 0 && horde.cast && cast && cast.windup > 0) {
+      // Die Animation läuft genau über die Sekunden, in denen der Zauber heranreift; am Ende schlägt er ein.
+      const progress = Math.min(CAST_END, 1 - enemy.casting / cast.windup);
+      return horde.cast.start + progress * horde.cast.frames;
+    }
+    return horde.loop.start + enemy.stride * horde.loop.frames;
+  }
+
   private write(enemy: Enemy): void {
     const horde = this.hordes.get(enemy.type);
     if (!horde) return;
@@ -452,7 +472,7 @@ export class Enemies {
     if (horde.anim) {
       // Das Modell bringt Größe und Farbe mit; ein Treffer lässt es aufleuchten.
       pose.scale.setScalar(grow);
-      horde.anim.setXY(index, enemy.stride * horde.frames, enemy.fade);
+      horde.anim.setXY(index, this.frameOf(enemy, horde), enemy.fade);
       tint.copy(WHITE);
       if (enemy.hold > 0) tint.lerp(HELD, 0.55);
       if (enemy.casting > 0) tint.lerp(CASTING, 0.6).multiplyScalar(1.6);
