@@ -1,0 +1,7 @@
+node_modules
+dist
+*.local
+
+# Rohe Modelle aus Meshy: über 500 MB, einzelne Dateien über GitHubs Grenze von 100 MB.
+# Die spielfertigen Kopien liegen in public/models.
+modelle-original/

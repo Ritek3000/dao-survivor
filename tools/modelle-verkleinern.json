@@ -1,0 +1,93 @@
+[
+  {
+    "src": "feuerschale.glb",
+    "dst": "welt/feuerschale.glb",
+    "tris": 6000,
+    "tex": 1024,
+    "normal": true
+  },
+  {
+    "src": "Baum/Meshy_AI_Create_a_highly_detai_1111175631_texture.glb",
+    "dst": "welt/baum-stamm-1.glb",
+    "tris": 1500,
+    "tex": 512
+  },
+  {
+    "src": "Baum/Meshy_AI_Create_a_highly_detai_1111175642_texture.glb",
+    "dst": "welt/baum-stamm-2.glb",
+    "tris": 1500,
+    "tex": 512
+  },
+  {
+    "src": "Baum/Meshy_AI_Großer_Baum_mit_Löc_1111163951_texture.glb",
+    "dst": "welt/baum-stumpf.glb",
+    "tris": 3000,
+    "tex": 1024
+  },
+  {
+    "src": "Baum/Meshy_AI_Low_Poly_tree_green_1111163857_texture.glb",
+    "dst": "welt/baum-laub.glb",
+    "tris": 2500,
+    "tex": 512
+  },
+  {
+    "src": "Fels/Meshy_AI_Create_a_highly_detai_1110215217_texture.glb",
+    "dst": "welt/fels-geroell.glb",
+    "tris": 1500,
+    "tex": 512
+  },
+  {
+    "src": "Fels/Meshy_AI_Stone_Elegance_1111175710_texture.glb",
+    "dst": "welt/fels-platte-1.glb",
+    "tris": 900,
+    "tex": 512
+  },
+  {
+    "src": "Fels/Meshy_AI_Stone_Elegance_1111175721_texture.glb",
+    "dst": "welt/fels-brocken.glb",
+    "tris": 1000,
+    "tex": 512
+  },
+  {
+    "src": "Fels/Meshy_AI_Stone_Elegance_1111175803_texture.glb",
+    "dst": "welt/fels-platte-moos.glb",
+    "tris": 1000,
+    "tex": 512
+  },
+  {
+    "src": "Fels/Meshy_AI_The_object_is_the_big_1111175933_texture.glb",
+    "dst": "welt/fels-moosblock.glb",
+    "tris": 1200,
+    "tex": 512
+  },
+  {
+    "src": "Fels/Meshy_AI_The_object_is_the_big_1111175941_texture.glb",
+    "dst": "welt/fels-mooshaufen.glb",
+    "tris": 1500,
+    "tex": 512
+  },
+  {
+    "src": "Fels/Meshy_AI_The_object_is_the_big_1111175948_texture.glb",
+    "dst": "welt/fels-platte-hell.glb",
+    "tris": 800,
+    "tex": 512
+  },
+  {
+    "src": "Fels/Meshy_AI_realistic_rugged_rock_1111175534_texture.glb",
+    "dst": "welt/fels-haufen-rot.glb",
+    "tris": 1500,
+    "tex": 512
+  },
+  {
+    "src": "Gem/Meshy_AI_Blue_Crystal_Gem_1111163751_texture.glb",
+    "dst": "welt/gem-klein.glb",
+    "tris": 320,
+    "tex": 256
+  },
+  {
+    "src": "Gem/Meshy_AI_Cyber_Sapphire_Gem_1111163640_texture.glb",
+    "dst": "welt/gem-gross.glb",
+    "tris": 320,
+    "tex": 256
+  }
+]

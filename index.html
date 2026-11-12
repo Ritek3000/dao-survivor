@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Survivor-like – Prototyp</title>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <div id="finsternis-veil"></div>
+    <div id="hurt-veil"></div>
+
+    <div id="vitals">
+      <div id="level">Stufe 1</div>
+      <div id="hp" class="bar">
+        <div id="hp-fill"></div>
+        <div id="hp-dust"></div>
+        <span id="hp-text"></span>
+      </div>
+      <div id="xp" class="bar"><div id="xp-fill"></div></div>
+    </div>
+
+    <div id="clock">
+      <div id="clock-label">Sonnenaufgang in</div>
+      <div id="clock-time">15:00</div>
+      <div id="zone">Nacht</div>
+      <div id="trait"></div>
+    </div>
+
+    <div id="boss" hidden>
+      <div id="boss-name"></div>
+      <div class="bar"><div id="boss-fill"></div></div>
+    </div>
+
+    <div id="banner"></div>
+
+    <div id="compass" hidden><div id="compass-arrow"></div></div>
+
+    <div id="ignite" hidden>
+      <div>Feuer entzünden</div>
+      <div class="bar"><div id="ignite-fill"></div></div>
+    </div>
+
+    <div id="hint">WASD oder Pfeiltasten: bewegen · Esc: Pause</div>
+    <div id="debug" hidden></div>
+
+    <div id="pause" class="overlay" hidden><h1>Pause</h1></div>
+
+    <div id="loading" class="overlay" hidden>
+      <h1>Die Nacht zieht auf</h1>
+      <p id="loading-text"></p>
+    </div>
+
+    <div id="choice" class="overlay" hidden>
+      <h1 id="choice-title"></h1>
+      <p id="choice-subtitle"></p>
+      <div id="choice-cards"></div>
+      <p class="keys">1 · 2 · 3 oder Pfeiltasten und Enter</p>
+    </div>
+
+    <div id="end" class="overlay" hidden>
+      <h1 id="end-title"></h1>
+      <p id="end-text"></p>
+      <p id="end-stats"></p>
+      <p class="keys">Enter: Klasse wählen und neue Nacht beginnen</p>
+    </div>
+
+    <div id="error" class="overlay" hidden></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
