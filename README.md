@@ -86,7 +86,7 @@ src/
   game/               Spiellogik und Darstellung (siehe unten)
   ui/hud.ts           Anzeigen, Auswahlkarten, Pause, Ende
   tools/              Entwicklungswerkzeuge: Messlauf und Modell-Prüfer
-tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester animieren; Python: Klänge erzeugen)
+tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren; Python: Klänge erzeugen)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
 ```
 
@@ -234,6 +234,12 @@ Dateien mit gleichem Namen. Neu erzeugte OGG-Dateien nur einchecken, wenn sich d
   „Schweben“ (Schleife) und „Zaubern“ (einmalig) an seinem Skelett an und schreibt `public/models/priester.glb`
   (`blender --background --factory-startup --python tools/priester-animieren.py -- modelle-original/priester.glb public/models/priester.glb`).
   Die Bewegung steht als Zahlen im Skript. Das Spiel spielt „Schweben“ nach der Zeit und „Zaubern“ gedehnt über `cast.windup`.
+- **Mantelträger animieren**: Auch das Modell des Mantelträgers kam ohne Animationen. `tools/manteltraeger-animieren.py` legt in
+  Blender „Laufen“ (Schleife, Fußsohlen bleiben beim Schritt am Boden) und „Krallenhieb“ (einmalig) an und schreibt
+  `public/models/manteltraeger.glb`; Netz und Texturen bleiben unverändert
+  (`blender --background --factory-startup --python tools/manteltraeger-animieren.py -- modelle-original/manteltraeger.glb public/models/manteltraeger.glb`).
+  Das Spiel spielt „Laufen“ nach der zurückgelegten Strecke (`stride`) und „Krallenhieb“ in Echtzeit: Der Gegner holt aus, am
+  Boden erscheint die Warnfläche, und der Treffer fällt `strike.hitAt` Sekunden nach Beginn des Hiebs. Wer ausweicht, bleibt unverletzt.
 
 ## Lore
 

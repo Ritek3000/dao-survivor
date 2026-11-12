@@ -379,6 +379,10 @@ export class Game {
       const cast = enemy.type.cast;
       if (cast) this.threats.sog(x, z, cast.radius, cast.windup, cast.damage, enemy);
     },
+    strike: (enemy) => {
+      const strike = enemy.type.strike;
+      if (strike) this.threats.arc(enemy.x, enemy.z, enemy.heading, strike.arc, strike.reach, strike.hitAt);
+    },
   };
 
   private setPaused(paused: boolean): void {

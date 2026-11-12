@@ -67,6 +67,8 @@ export interface HordeModel {
   loop: HordeClip;
   /** Der Zauber, falls die Art einen hat. */
   cast: HordeClip | null;
+  /** Der Hieb, falls die Art zuschlägt. */
+  strike: HordeClip | null;
 }
 
 /** Ein Clip in der Bewegungstextur. Hinter seinen Bildern liegt ein Schlussbild, damit das Überblenden nie in den nächsten Clip greift. */
@@ -305,8 +307,8 @@ function bakedTexture(data: Float32Array, width: number, height: number): THREE.
 
 /**
  * Rechnet die Bewegungen einer Gegnerart einmal aus und legt sie als Textur ab: zuerst die Schleife (Gehen oder
- * Schweben), danach, falls es sie gibt, der Zauber. Jeder Clip bekommt ein Bild mehr als er Bilder hat: Bei der Schleife
- * ist es eine Kopie des ersten (sie schließt an), beim Zauber das Endbild.
+ * Schweben), danach, falls es sie gibt, der Zauber und der Hieb. Jeder Clip bekommt ein Bild mehr als er Bilder hat: Bei
+ * der Schleife ist es eine Kopie des ersten (sie schließt an), bei Zauber und Hieb das Endbild.
  */
 function bakeHorde(gltf: GLTF, spec: EnemyModel): HordeModel {
   const scene = gltf.scene;
@@ -315,6 +317,8 @@ function bakeHorde(gltf: GLTF, spec: EnemyModel): HordeModel {
   const loopClip = gltf.animations.find((candidate) => candidate.name === spec.clip) ?? gltf.animations[0] ?? null;
   const castClip = spec.castClip ? (gltf.animations.find((candidate) => candidate.name === spec.castClip) ?? null) : null;
   if (spec.castClip && !castClip) console.warn(`Animation ${spec.castClip} fehlt in ${spec.file}.`);
+  const strikeClip = spec.strikeClip ? (gltf.animations.find((candidate) => candidate.name === spec.strikeClip) ?? null) : null;
+  if (spec.strikeClip && !strikeClip) console.warn(`Animation ${spec.strikeClip} fehlt in ${spec.file}.`);
 
   const clipFrames = (clip: THREE.AnimationClip | null, fps: number): number =>
     clip ? Math.max(1, Math.round(clip.duration * fps)) : 1;
@@ -323,10 +327,17 @@ function bakeHorde(gltf: GLTF, spec: EnemyModel): HordeModel {
     frames: clipFrames(loopClip, spec.hover ? HOVER_FPS : BAKE_FPS),
     seconds: loopClip?.duration ?? 1,
   };
-  const cast: HordeClip | null = castClip
-    ? { start: loop.frames + 1, frames: clipFrames(castClip, BAKE_FPS), seconds: castClip.duration }
-    : null;
-  const total = (cast ? cast.start + cast.frames : loop.frames) + 1;
+  // Zauber und Hieb liegen hinter der Schleife, jeder mit seinem Schlussbild.
+  let next = loop.frames + 1;
+  const oneShot = (clip: THREE.AnimationClip | null): HordeClip | null => {
+    if (!clip) return null;
+    const segment: HordeClip = { start: next, frames: clipFrames(clip, BAKE_FPS), seconds: clip.duration };
+    next += segment.frames + 1;
+    return segment;
+  };
+  const cast = oneShot(castClip);
+  const strike = oneShot(strikeClip);
+  const total = next;
 
   const width = Math.min(sampler.count, BAKE_WIDTH);
   const rows = Math.ceil(sampler.count / width);
@@ -361,10 +372,11 @@ function bakeHorde(gltf: GLTF, spec: EnemyModel): HordeModel {
   };
   bake(loopClip, loop, true);
   if (cast) bake(castClip, cast, false);
+  if (strike) bake(strikeClip, strike, false);
   mixer.stopAllAction();
   mixer.uncacheRoot(scene);
 
-  // Hüllbox über den ganzen Lauf: Daran werden Größe, Bodenhöhe und Mitte ausgerichtet. Der Zauber geht nicht
+  // Hüllbox über den ganzen Lauf: Daran werden Größe, Bodenhöhe und Mitte ausgerichtet. Zauber und Hieb gehen nicht
   // ein: Mit erhobenen Armen wäre die Figur sonst höher als beim Gehen und würde kleiner eingemessen.
   const box = new THREE.Box3();
   const point = new THREE.Vector3();
@@ -418,6 +430,7 @@ function bakeHorde(gltf: GLTF, spec: EnemyModel): HordeModel {
     layout: new THREE.Vector3(width, rows, total),
     loop,
     cast,
+    strike,
   };
 }
 
