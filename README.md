@@ -28,6 +28,20 @@ npm run dev        # Entwicklungsserver auf http://localhost:5173
 Es gibt noch keine automatischen Tests. Vor jedem Pull Request müssen `npm run typecheck` und
 `npm run build` fehlerfrei laufen.
 
+## Online ausprobieren (GitHub Pages)
+
+Nach jedem Merge auf `main` baut GitHub das Spiel und veröffentlicht den Stand unter
+**<https://ritek3000.github.io/dao-survivor/>**. So lässt sich jede Änderung sofort im Browser testen, ohne etwas zu installieren.
+
+- Der Ablauf steht in `.github/workflows/pages.yml`: `npm ci`, `npm run build` (inklusive Typprüfung), dann Veröffentlichen von `dist/`.
+  Schlägt der Build fehl, bleibt die zuletzt veröffentlichte Seite unverändert. Den Stand der Läufe zeigt der Reiter **Actions**;
+  dort lässt sich die Veröffentlichung auch von Hand starten („Run workflow“).
+- Nach einem Merge dauert es in der Regel wenige Minuten, bis der neue Stand online ist. Danach hilft bei Bedarf ein hartes Neuladen
+  (Strg + F5), weil der Browser alte Dateien behalten kann.
+- Die Modelle sind zusammen etwa 107 MB groß. Beim ersten Aufruf lädt das Spiel deshalb eine Weile; spätere Aufrufe kommen aus dem Browser-Cache.
+- Einmalig muss in den Repository-Einstellungen unter **Settings → Pages → Build and deployment → Source** der Wert
+  **GitHub Actions** gewählt sein. Bei einem kostenlosen GitHub-Konto muss das Repository dafür öffentlich sein.
+
 ## Steuerung
 
 | Taste                      | Aktion                                  |
@@ -67,6 +81,7 @@ src/
   ui/hud.ts           Anzeigen, Auswahlkarten, Pause, Ende
   tools/              Entwicklungswerkzeuge: Messlauf und Modell-Prüfer
 tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern; Python: Klänge erzeugen)
+.github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
 ```
 
 Wichtige Teile von `src/game/`:
@@ -183,6 +198,7 @@ darf das Spiel davon abweichen.
 Offen ist, ob das Spiel im Browser bleibt oder als Desktop-Programm erscheint. Bis das entschieden ist, läuft es im Browser,
 und nichts im Code soll eine spätere Desktop-Hülle (etwa Electron oder Tauri) verbauen. Der Build verwendet deshalb
 relative Pfade (`base: './'` in `vite.config.ts`), und Dateien (Modelle, Klänge) werden über `import.meta.env.BASE_URL` geladen.
+Dieselben relativen Pfade tragen auch die Seite auf GitHub Pages, die unter dem Unterpfad `/dao-survivor/` liegt.
 
 ## Mitarbeit
 
