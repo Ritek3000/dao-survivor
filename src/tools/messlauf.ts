@@ -6,6 +6,8 @@
  * Nur für die Entwicklung. In der Browser-Konsole:
  *   __messlauf.start()                               alle Klassen, je drei Nächte
  *   __messlauf.start({ nights: 5, classes: [2] })    nur der Magier, fünf Nächte
+ *   __messlauf.start({ steigerung: 'max' })          alle Steigerungen der Klassen voll ausgereizt
+ *   __messlauf.start({ steigerung: 3 })              alle Steigerungen auf Rang 3 (oder darunter, wenn es weniger gibt)
  *   __messlauf.results                               alle Messwerte
  *   __messlauf.config.enemies.ratePerMinute = 0.3  einen Wert nur für diese Sitzung ändern
  *   __messlauf.weapon('bogenschuss').damage = 20     ebenso einen Angriff
@@ -23,6 +25,7 @@ import { CLASSES, type ClassId } from '../game/classes';
 import type { Enemy } from '../game/enemies';
 import type { Game } from '../game/game';
 import type { Stats } from '../game/progression';
+import { STEIGERUNGEN, type Steigerungen } from '../game/steigerung';
 import { weaponById } from '../game/weapons';
 import type { Zone } from '../game/zones';
 
@@ -55,6 +58,7 @@ interface Internals {
     hit(enemy: Enemy, weapon: OwnedWeapon, fromX: number, fromZ: number): void;
   };
   progression: { level: number; stats: Stats; blessed: { name: string }[] };
+  steigerungen: Steigerungen;
   input: { getMove(out: MoveVector): MoveVector };
   hud: { hideEnd(): void };
 }
@@ -121,6 +125,8 @@ export interface NightResult {
   boss: string;
   /** Die Segen, die in dieser Nacht gewählt wurden. */
   segen: string[];
+  /** Gold, das die Nacht der Geldbörse eingebracht hat (Münzen, Sold und Prämie). */
+  gold: number;
 }
 
 interface Options {
@@ -130,6 +136,11 @@ interface Options {
   classes?: number[];
   /** Bricht jede Nacht nach so vielen Sekunden ab; zum schnellen Probieren. */
   maxSeconds?: number;
+  /**
+   * Rang aller Steigerungen jeder Klasse während der Messung: eine Zahl oder 'max'. Ohne Angabe gelten 0, damit die Werte
+   * unabhängig vom Spielstand vergleichbar bleiben. Der echte Spielstand wird weder gelesen noch verändert.
+   */
+  steigerung?: number | 'max';
   seed?: number;
 }
 
@@ -237,7 +248,9 @@ async function playNight(game: Game, classIndex: number, random: Random, maxSeco
     entzuendeteFeuer: 0,
     boss: 'nicht erschienen',
     segen: [],
+    gold: 0,
   };
+  const goldBefore = g.steigerungen.gold;
 
   g.hud.hideEnd();
   g.openSelect();
@@ -333,6 +346,7 @@ async function playNight(game: Game, classIndex: number, random: Random, maxSeco
   result.erschlagen = g.enemies.kills;
   result.boss = g.boss.slain ? 'erschlagen' : g.boss.appeared ? 'überlebt' : 'nicht erschienen';
   result.segen = g.progression.blessed.map((segen) => segen.name);
+  result.gold = g.steigerungen.gold - goldBefore;
   for (const weapon of g.arsenal.owned) {
     const name = weapon.def.name;
     result.raenge[name] = weapon.rank;
@@ -366,6 +380,14 @@ export function installMesslauf(game: Game): void {
       const random = createRandom(options.seed ?? 12345);
       const nights = options.nights ?? 3;
       const classes = options.classes ?? CLASSES.map((_, index) => index);
+      // Die Ränge gelten nur für die Messung und werden nicht gespeichert; am Ende gilt wieder der echte Spielstand.
+      const steigerungen = (game as unknown as Internals).steigerungen;
+      steigerungen.persist = false;
+      for (const playerClass of CLASSES) {
+        for (const steigerung of STEIGERUNGEN) {
+          steigerungen.setRank(playerClass.id, steigerung, options.steigerung === 'max' ? steigerung.max : (options.steigerung ?? 0));
+        }
+      }
       try {
         for (const classIndex of classes) {
           for (let night = 1; night <= nights; night++) {
@@ -380,6 +402,8 @@ export function installMesslauf(game: Game): void {
       } finally {
         api.running = false;
         audio.silenced = false;
+        steigerungen.persist = true;
+        steigerungen.reload();
         (game as unknown as Internals).hud.hideEnd();
         (game as unknown as Internals).openSelect();
       }

@@ -13,6 +13,7 @@ export type SoundId =
   | 'pause'
   | 'stufe'
   | 'segen'
+  | 'steigerung'
   // Spielfigur
   | 'spieler-treffer'
   | 'spieler-verstaubt'
@@ -20,6 +21,7 @@ export type SoundId =
   | 'schild.bereit'
   | 'schritt'
   | 'eingesammelt'
+  | 'muenze'
   // Feuerschalen
   | 'feuer.entzuenden'
   | 'feuer.entzuendet'

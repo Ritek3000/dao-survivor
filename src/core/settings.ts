@@ -6,6 +6,8 @@
  * mit `useSettingsStore` eine Datei an die Stelle setzen, ohne dass sich am Spiel etwas ändert.
  */
 
+import { browserTextStore, type TextStore } from './storage';
+
 export interface SoundSettings {
   /** Reglerstellungen von 0 bis 1. */
   master: number;
@@ -18,35 +20,11 @@ export interface Settings {
   sound: SoundSettings;
 }
 
-export interface SettingsStore {
-  read(): string | null;
-  write(text: string): void;
-}
+export type SettingsStore = TextStore;
 
 const KEY = 'dao-survivor.einstellungen';
 
-function browserStore(): SettingsStore {
-  const memory: { text: string | null } = { text: null };
-  return {
-    read() {
-      try {
-        return window.localStorage.getItem(KEY) ?? memory.text;
-      } catch {
-        return memory.text;
-      }
-    },
-    write(text) {
-      memory.text = text;
-      try {
-        window.localStorage.setItem(KEY, text);
-      } catch {
-        // Gesperrt oder voll: Die Einstellung gilt dann nur bis zum Schließen der Seite.
-      }
-    },
-  };
-}
-
-let store: SettingsStore = browserStore();
+let store: SettingsStore = browserTextStore(KEY);
 
 /** Ersetzt den Speicher, etwa durch eine Datei in einer Desktop-Hülle. */
 export function useSettingsStore(next: SettingsStore): void {

@@ -36,6 +36,8 @@ export interface Stats {
   xp: number;
   /** Faktor auf Treffer gegen Gegner, die festgehalten sind. */
   heldDamage: number;
+  /** Faktor auf alles Gold, das ein Lauf einbringt. */
+  gold: number;
 }
 
 /** Ein Segen einer Höheren Macht: stärker als eine Stärkung, je Nacht nur einmal zu haben. */
@@ -205,6 +207,7 @@ function baseStats(): Stats {
     bigGame: 1,
     xp: 1,
     heldDamage: 1,
+    gold: 1,
   };
 }
 
@@ -224,8 +227,11 @@ export class Progression {
   /** Die Segen, die in dieser Nacht schon gewährt wurden. */
   readonly blessed: Segen[] = [];
 
-  /** Neue Nacht mit den Grundwerten der gewählten Klasse. */
-  reset(playerClass: ClassDef): void {
+  /**
+   * Neue Nacht mit den Grundwerten der gewählten Klasse. `boost` setzt noch darauf, was die Klasse
+   * zwischen den Nächten dauerhaft hinzugewonnen hat (Steigerungen); die Stärkungen der Nacht kommen danach.
+   */
+  reset(playerClass: ClassDef, boost?: (stats: Stats) => void): void {
     this.level = 1;
     this.xp = 0;
     this.needed = xpNeeded(1);
@@ -233,6 +239,7 @@ export class Progression {
     this.stats.maxHp = Math.round(CONFIG.player.maxHp * playerClass.hpFactor);
     this.stats.speed = playerClass.speedFactor;
     this.stats.verstaubung = playerClass.verstaubungFactor;
+    boost?.(this.stats);
     this.ranks.clear();
     this.blessed.length = 0;
   }

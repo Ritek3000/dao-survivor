@@ -7,6 +7,7 @@
   --dust: #7b766c;
   --ember: #ffb45e;
   --shard: #9fe3d0;
+  --gold: #ffc83d;
 }
 
 html,
@@ -52,6 +53,26 @@ body {
   margin-bottom: 6px;
   font-size: 15px;
   letter-spacing: 0.08em;
+}
+
+/* Gold dieser Nacht unter der Erfahrungsleiste. */
+#gold {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 7px;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 4px #000;
+}
+
+.coin {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff0b8, var(--gold) 55%, #a9741c);
+  box-shadow: 0 0 5px rgba(255, 200, 61, 0.45);
 }
 
 .bar {
@@ -392,6 +413,10 @@ body {
   font-size: 19px;
 }
 
+.card .extra {
+  color: var(--gold);
+}
+
 .card .text {
   min-height: 2.6em;
   font-size: 14px;
@@ -454,4 +479,190 @@ body {
 
 #sound-panel input[type='checkbox'] {
   accent-color: var(--ember);
+}
+
+.button {
+  margin-top: 14px;
+  padding: 8px 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.button:hover {
+  border-color: var(--ember);
+}
+
+/* Geldbörse unter der Klassenwahl und Ertrag am Ende der Nacht. */
+#choice-gold,
+#steigerung-gold {
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+
+#end-gold {
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+}
+
+/* Steigerungen: Reiter für die Klassen, darunter die Liste in zwei Spalten. */
+#steigerung {
+  justify-content: safe center;
+  overflow-y: auto;
+  /* Fast deckend, damit die Anzeigen der Nacht (Uhr, Leisten) nicht durch den Titel scheinen. */
+  background: rgba(3, 3, 4, 0.97);
+}
+
+#steigerung-gold.deny {
+  animation: deny 0.4s ease-out;
+}
+
+@keyframes deny {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-7px);
+    color: #d4604f;
+  }
+  75% {
+    transform: translateX(7px);
+    color: #d4604f;
+  }
+}
+
+#steigerung-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+  padding: 8px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.tab.selected {
+  border-color: var(--ember);
+  box-shadow: 0 0 18px rgba(255, 180, 94, 0.25);
+}
+
+.tab .name {
+  font-size: 18px;
+}
+
+.tab .note {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+#steigerung-list {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rows, 6), auto);
+  gap: 8px 14px;
+  width: min(900px, 94vw);
+  margin-top: 10px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row.selected {
+  border-color: var(--ember);
+  box-shadow: 0 0 18px rgba(255, 180, 94, 0.25);
+}
+
+.row .name {
+  font-size: 16px;
+}
+
+.row .rank {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.row .text {
+  font-size: 13px;
+  line-height: 1.25;
+  color: var(--text-dim);
+}
+
+.row .cost {
+  font-size: 14px;
+  color: var(--gold);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Zu teuer: der Preis wird rot. Voll gesteigert: die Zeile tritt zurück. */
+.row.poor .cost {
+  color: #c9604f;
+}
+
+.row.maxed {
+  opacity: 0.7;
+}
+
+.row.maxed .cost {
+  color: var(--text-dim);
+}
+
+.row .pips {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.pip {
+  flex: 1;
+  max-width: 24px;
+  height: 5px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--line);
+}
+
+.pip.on {
+  background: var(--ember);
+  border-color: var(--ember);
+}
+
+@media (max-width: 760px) {
+  #steigerung-list {
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
 }

@@ -3,7 +3,19 @@
  * "wohin bewegen?" und "wurde bestätigt?"; ein Gamepad kommt später
  * als weitere Quelle in dieser Klasse dazu, ohne dass die Spiellogik sich ändert.
  */
-export type Action = 'pause' | 'mute' | 'confirm' | 'left' | 'right' | 'choice1' | 'choice2' | 'choice3';
+export type Action =
+  | 'pause'
+  | 'mute'
+  | 'confirm'
+  | 'left'
+  | 'right'
+  | 'up'
+  | 'down'
+  /** Öffnet die Steigerungen der Klassen (Menü zwischen den Nächten). */
+  | 'upgrade'
+  | 'choice1'
+  | 'choice2'
+  | 'choice3';
 
 export interface MoveVector {
   /** Rechts ist positiv. */
@@ -24,7 +36,7 @@ const MOVE_KEYS: Readonly<Record<string, readonly [number, number]>> = {
   ArrowRight: [1, 0],
 };
 
-// Eine Taste darf zugleich bewegen und eine Aktion auslösen: Links und Rechts blättern in Menüs.
+// Eine Taste darf zugleich bewegen und eine Aktion auslösen: Die Richtungen blättern in Menüs.
 const ACTION_KEYS: Readonly<Record<string, Action>> = {
   Escape: 'pause',
   KeyP: 'pause',
@@ -36,6 +48,11 @@ const ACTION_KEYS: Readonly<Record<string, Action>> = {
   ArrowLeft: 'left',
   KeyD: 'right',
   ArrowRight: 'right',
+  KeyW: 'up',
+  ArrowUp: 'up',
+  KeyS: 'down',
+  ArrowDown: 'down',
+  KeyU: 'upgrade',
   Digit1: 'choice1',
   Numpad1: 'choice1',
   Digit2: 'choice2',

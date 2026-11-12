@@ -9,6 +9,33 @@ export interface ChoiceCard {
   note: string;
   /** Ein Segen einer Höheren Macht wird hervorgehoben. */
   segen?: boolean;
+  /** Zweites Kleingedrucktes, etwa wie weit die Klasse schon gesteigert ist. */
+  extra?: string;
+}
+
+/** Eine Zeile im Menü der Steigerungen. */
+export interface SteigerungRow {
+  name: string;
+  /** Was ein Rang bewirkt. */
+  text: string;
+  rank: number;
+  max: number;
+  /** Preis des nächsten Rangs in Gold; `null`, wenn der höchste Rang erreicht ist. */
+  cost: number | null;
+  /** Reicht das Gold für den nächsten Rang? */
+  affordable: boolean;
+}
+
+/** Alles, was das Menü der Steigerungen zeigt. */
+export interface SteigerungView {
+  gold: number;
+  /** Die Klassen als Reiter, mit der Zahl ihrer Ränge. */
+  classes: readonly { name: string; ranks: number }[];
+  /** Stelle der gewählten Klasse in `classes`. */
+  active: number;
+  rows: readonly SteigerungRow[];
+  /** Stelle der markierten Zeile. */
+  selected: number;
 }
 
 const ZONE_LABELS: Record<Zone, string> = {
@@ -39,11 +66,17 @@ function formatTime(seconds: number): string {
 export class Hud {
   /** Wird aufgerufen, wenn eine Karte einer Auswahl angeklickt wird. */
   onPick: (index: number) => void = () => {};
+  /** Die Knöpfe der Auswahl und des Steigerungsmenüs. */
+  onSteigern: () => void = () => {};
+  onSteigerungBuy: (index: number) => void = () => {};
+  onSteigerungClass: (index: number) => void = () => {};
+  onSteigerungBack: () => void = () => {};
   private readonly hpFill = element('hp-fill');
   private readonly hpDust = element('hp-dust');
   private readonly hpText = element('hp-text');
   private readonly xpFill = element('xp-fill');
   private readonly level = element('level');
+  private readonly gold = element('gold-text');
   private readonly clockTime = element('clock-time');
   private readonly zone = element('zone');
   private readonly trait = element('trait');
@@ -68,17 +101,38 @@ export class Hud {
   private readonly choiceTitle = element('choice-title');
   private readonly choiceSubtitle = element('choice-subtitle');
   private readonly choiceCards = element('choice-cards');
+  private readonly choiceGold = element('choice-gold');
+  private readonly choiceSteigern = element('choice-steigern');
+  private readonly choiceKeys = element('choice-keys');
   private readonly end = element('end');
   private readonly endTitle = element('end-title');
   private readonly endText = element('end-text');
   private readonly endStats = element('end-stats');
+  private readonly endGold = element('end-gold');
+  private readonly steigerung = element('steigerung');
+  private readonly steigerungGold = element('steigerung-gold');
+  private readonly steigerungTabs = element('steigerung-tabs');
+  private readonly steigerungList = element('steigerung-list');
   private readonly debug: HTMLElement | null;
   private readonly shown = new Map<HTMLElement, string>();
   private cards: HTMLButtonElement[] = [];
+  private steigerungRows: HTMLButtonElement[] = [];
 
   constructor(showDebug: boolean) {
     this.debug = showDebug ? element('debug') : null;
     if (this.debug) this.debug.hidden = false;
+    // Der Fokus bliebe sonst am Knopf hängen; Leertaste und Enter gehören aber dem Spiel.
+    for (const [id, action] of [
+      ['choice-steigern', () => this.onSteigern()],
+      ['end-steigern', () => this.onSteigern()],
+      ['steigerung-back', () => this.onSteigerungBack()],
+    ] as const) {
+      const button = element(id);
+      button.addEventListener('click', () => {
+        button.blur();
+        action();
+      });
+    }
   }
 
   setVitals(hp: number, verstaubung: number, maxHp: number): void {
@@ -90,6 +144,11 @@ export class Hud {
   setProgress(level: number, fraction: number): void {
     this.text(this.level, `Stufe ${level}`);
     this.style(this.xpFill, 'width', percent(fraction));
+  }
+
+  /** Gold, das in dieser Nacht eingesammelt wurde. */
+  setGold(gold: number): void {
+    this.text(this.gold, String(gold));
   }
 
   setClock(secondsLeft: number): void {
@@ -181,7 +240,11 @@ export class Hud {
     this.loadingText.textContent = text ?? '';
   }
 
-  showChoice(title: string, subtitle: string, cards: readonly ChoiceCard[], selected: number): void {
+  /**
+   * Zeigt eine Auswahl. Mit `gold` (der Klassenwahl) steht darunter die Geldbörse samt Knopf zu den Steigerungen;
+   * bei der Wahl einer Stärkung gibt es sie nicht.
+   */
+  showChoice(title: string, subtitle: string, cards: readonly ChoiceCard[], selected: number, gold: number | null = null): void {
     this.choiceTitle.textContent = title;
     this.choiceSubtitle.textContent = subtitle;
     this.cards = cards.map((card, index) => {
@@ -193,11 +256,17 @@ export class Hud {
         span('name', card.name),
         span('text', card.text),
         span('note', card.note),
+        ...(card.extra ? [span('note extra', card.extra)] : []),
       );
       button.addEventListener('click', () => this.onPick(index));
       return button;
     });
     this.choiceCards.replaceChildren(...this.cards);
+    this.choiceGold.hidden = gold === null;
+    this.choiceSteigern.hidden = gold === null;
+    if (gold !== null) this.choiceGold.textContent = `Gold: ${gold}`;
+    this.choiceKeys.textContent =
+      gold === null ? '1 · 2 · 3 oder Pfeiltasten und Enter' : '1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen · U: Klassen steigern';
     this.select(selected);
     this.choice.hidden = false;
   }
@@ -212,15 +281,71 @@ export class Hud {
     this.choice.hidden = true;
   }
 
-  showEnd(title: string, text: string, stats: string): void {
+  /** `gold` beschreibt in einer Zeile den Ertrag der Nacht und die Geldbörse danach. */
+  showEnd(title: string, text: string, stats: string, gold: string): void {
     this.endTitle.textContent = title;
     this.endText.textContent = text;
     this.endStats.textContent = stats;
+    this.endGold.textContent = gold;
     this.end.hidden = false;
   }
 
   hideEnd(): void {
     this.end.hidden = true;
+  }
+
+  /** Zeigt das Menü der Steigerungen oder baut es nach einem Kauf neu auf. */
+  showSteigerung(view: SteigerungView): void {
+    this.steigerungGold.textContent = `Gold: ${view.gold}`;
+    this.steigerungTabs.replaceChildren(
+      ...view.classes.map((entry, index) => {
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = index === view.active ? 'tab selected' : 'tab';
+        tab.append(span('name', entry.name), span('note', `${entry.ranks} Ränge`));
+        tab.addEventListener('click', () => this.onSteigerungClass(index));
+        return tab;
+      }),
+    );
+    this.steigerungRows = view.rows.map((row, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = row.cost === null ? 'row maxed' : row.affordable ? 'row' : 'row poor';
+      const pips = span('pips', '');
+      for (let i = 0; i < row.max; i++) pips.append(span(i < row.rank ? 'pip on' : 'pip', ''));
+      button.append(
+        span('name', row.name),
+        span('rank', `Rang ${row.rank} von ${row.max}`),
+        span('text', row.text),
+        span('cost', row.cost === null ? 'Voll' : `${row.cost} Gold`),
+        pips,
+      );
+      button.addEventListener('click', () => this.onSteigerungBuy(index));
+      return button;
+    });
+    // Zwei Spalten, die Zeilen laufen spaltenweise: So führen Auf und Ab durch die Liste, ohne zur Seite zu springen.
+    this.steigerungList.style.setProperty('--rows', String(Math.ceil(this.steigerungRows.length / 2)));
+    this.steigerungList.replaceChildren(...this.steigerungRows);
+    this.selectSteigerung(view.selected);
+    this.steigerung.hidden = false;
+  }
+
+  selectSteigerung(index: number): void {
+    for (const [rowIndex, row] of this.steigerungRows.entries()) {
+      row.classList.toggle('selected', rowIndex === index);
+      if (rowIndex === index) row.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  /** Lässt die Geldbörse kurz aufleuchten, wenn das Gold für einen Rang nicht reicht. */
+  denySteigerung(): void {
+    this.steigerungGold.classList.remove('deny');
+    void this.steigerungGold.offsetWidth;
+    this.steigerungGold.classList.add('deny');
+  }
+
+  hideSteigerung(): void {
+    this.steigerung.hidden = true;
   }
 
   setDebug(text: string): void {
