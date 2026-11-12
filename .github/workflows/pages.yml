@@ -48,7 +48,7 @@ jobs:
       - name: Größe der Seite ausgeben
         run: du -sh dist && find dist -type f -printf '%s %p\n' | sort -n | tail -5
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
 
       - uses: actions/upload-pages-artifact@v4
         with:
