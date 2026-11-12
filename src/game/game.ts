@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+import { audio, type Duck, type MusicId } from '../audio';
 import { CONFIG } from '../config';
 import { Input, type MoveVector } from '../core/input';
 import { createRandom } from '../core/random';
+import { loadSettings, saveSettings, type Settings } from '../core/settings';
 import { formatTime, type Hud } from '../ui/hud';
 import { Arsenal, type CombatTraits } from './arsenal';
 import { Boss } from './boss';
@@ -17,7 +19,7 @@ import { Progression, SEGEN_EVERY_LEVELS } from './progression';
 import { Threats } from './threats';
 import { MAX_RANK } from './weapons';
 import { World } from './world';
-import { Zones, type IslandBearing, type Zone } from './zones';
+import { Zones, type IslandBearing, type Site, type Zone } from './zones';
 
 /** Obergrenze je Frame, damit ein Ruckler oder Tab-Wechsel keinen Sprung auslöst. */
 const MAX_FRAME_SECONDS = 0.05;
@@ -85,6 +87,15 @@ export class Game {
   /** Kämpfer: Restzeit der Schwäche nach erloschenem Feuer. */
   private weakened = 0;
   private traitLabel = '';
+  /** Hat die Spielfigur die letzte Nacht überstanden? Bestimmt das Stück zum Ende. */
+  private won = false;
+  private settings: Settings;
+  /** Sekunden bis zum nächsten Ruf aus der Horde. */
+  private callIn = 2;
+  /** Nächste brennende Feuerschale, für das Knistern: Ort und Abstand zur Spielfigur. */
+  private fireX = 0;
+  private fireZ = 0;
+  private fireDistance = Infinity;
   private fpsFrames = 0;
   private fpsSeconds = 0;
 
@@ -117,6 +128,15 @@ export class Game {
     );
 
     this.hud.onPick = (index) => this.pick(index);
+    this.settings = loadSettings({ sound: { ...CONFIG.audio.defaults, muted: false } });
+    audio.setVolumes(this.settings.sound);
+    audio.muffleAt = (x, z) => this.zones.finsternisAt(x, z);
+    audio.onVolumes = (volumes) => {
+      this.settings.sound = { ...volumes };
+      saveSettings(this.settings);
+      this.hud.showSound(volumes);
+    };
+    this.hud.bindSound(this.settings.sound, (volumes) => audio.setVolumes(volumes));
     this.rig.snapTo(this.player.position);
     window.addEventListener('resize', this.resize);
     this.resize();
@@ -127,7 +147,11 @@ export class Game {
   /** Holt die GLB-Modelle, bevor die Klassenwahl erscheint. Was fehlt, bleibt Platzhalter. */
   private async load(): Promise<void> {
     this.hud.setLoading('Die Figuren werden geladen …');
-    const models = await loadModels((done, total) => this.hud.setLoading(`Figuren geladen: ${done} von ${total}`));
+    // Die Klänge laden daneben her; fehlen sie, bleibt das Spiel stumm, aber spielbar.
+    const [models] = await Promise.all([
+      loadModels((done, total) => this.hud.setLoading(`Figuren geladen: ${done} von ${total}`)),
+      audio.load(),
+    ]);
     this.models = models;
     for (const [type, model] of models.hordes) this.enemies.setModel(type, model);
     this.boss.setModel(models.boss);
@@ -151,6 +175,7 @@ export class Game {
     const frameSeconds = (now - this.lastFrame) / 1000;
     this.lastFrame = now;
 
+    if (this.input.wasPressed('mute')) audio.toggleMute();
     switch (this.phase) {
       case 'playing':
         if (this.input.wasPressed('pause')) this.setPaused(true);
@@ -173,6 +198,7 @@ export class Game {
         break;
     }
     this.input.endFrame();
+    this.updateAudio();
 
     this.renderer.render(this.scene, this.rig.camera);
     this.updateDebug(frameSeconds);
@@ -193,6 +219,7 @@ export class Game {
     this.player.applyZone(dt, zone, finsternis);
 
     this.enemies.update(dt, this.time, this.player, this.world, this.hooks);
+    this.callHorde(dt);
     this.boss.update(dt, this.time, this.player, this.enemies, this.threats, this.world, this.random);
     this.threats.update(dt, this.player, this.zones);
     this.reportBoss();
@@ -210,7 +237,10 @@ export class Game {
       }
     }
     const gained = this.pickups.update(dt, this.time, position, CONFIG.player.pickupRadius * stats.pickup);
-    if (gained > 0) this.pendingLevels += this.progression.addXp(gained * stats.xp);
+    if (gained > 0) {
+      this.pendingLevels += this.progression.addXp(gained * stats.xp);
+      audio.play('eingesammelt', position.x, position.z);
+    }
 
     this.rig.update(dt, position);
     this.dust.update(this.time, position, this.player.light);
@@ -288,6 +318,7 @@ export class Game {
     death: (enemy) => {
       if (enemy !== this.boss.enemy) {
         this.pickups.drop(enemy.x, enemy.z, enemy.type.xp);
+        audio.play(`gegner-tod.${enemy.type.id}`, enemy.x, enemy.z);
         return;
       }
       // Der Verschlinger fällt: Erfahrung in einem Kranz von Edelsteinen und ein Segen.
@@ -311,6 +342,7 @@ export class Game {
   private setPaused(paused: boolean): void {
     this.phase = paused ? 'paused' : 'playing';
     this.hud.setPaused(paused);
+    audio.play('pause');
   }
 
   private openSelect(): void {
@@ -354,6 +386,7 @@ export class Game {
     this.updateDawn();
     this.refreshHud();
     this.phase = 'playing';
+    audio.play('abendglocke');
   }
 
   /** Überträgt, was Klasse und Segen an den Feuerschalen ändern. */
@@ -383,6 +416,7 @@ export class Game {
     this.selected = 0;
     this.phase = 'levelup';
     this.hud.showChoice(title, SEGEN_SUBTITLE, this.offers, this.selected);
+    audio.play('segen');
     return true;
   }
 
@@ -431,13 +465,16 @@ export class Game {
       this.offers,
       this.selected,
     );
+    audio.play('stufe');
   }
 
   /** Gemeinsame Bedienung beider Auswahlen: Klasse und Stärkung. */
   private updateChoice(): void {
     const count = this.phase === 'select' ? CLASSES.length : this.offers.length;
+    const before = this.selected;
     if (this.input.wasPressed('left')) this.selected = (this.selected + count - 1) % count;
     if (this.input.wasPressed('right')) this.selected = (this.selected + 1) % count;
+    if (this.selected !== before) audio.play('auswahl');
     this.hud.select(this.selected);
 
     if (this.input.wasPressed('choice1')) this.pick(0);
@@ -459,6 +496,7 @@ export class Game {
     if (this.phase !== 'levelup' || !offer) return;
     const stats = this.progression.stats;
     const maxHpBefore = stats.maxHp;
+    audio.play('bestaetigen');
     offer.take();
     this.player.grantHp(stats.maxHp - maxHpBefore);
     this.applyBlessings();
@@ -471,6 +509,7 @@ export class Game {
 
   private end(won: boolean): void {
     this.phase = 'ended';
+    this.won = won;
     // Der letzte Frame läuft knapp über das Ende der Nacht hinaus.
     const survived = Math.min(this.time, CONFIG.run.nightSeconds);
     const stats = `${this.playerClass.name} · Überlebt: ${formatTime(survived)} · Stufe ${this.progression.level} · Erschlagen: ${this.enemies.kills}`;
@@ -502,6 +541,68 @@ export class Game {
     this.world.setDawn(amount);
     this.background.lerpColors(NIGHT_BACKGROUND, DAWN_BACKGROUND, amount);
     this.fog.color.copy(this.background);
+  }
+
+  /** Welche Musik zu dem passt, was gerade läuft. */
+  private wantedMusic(): MusicId {
+    switch (this.phase) {
+      case 'loading':
+      case 'select':
+        return 'menue';
+      case 'ended':
+        return this.won ? 'sieg' : 'niederlage';
+      default:
+        if (this.boss.enemy) return 'boss';
+        return this.time >= CONFIG.audio.music.lateFrom ? 'nacht-spaet' : 'nacht';
+    }
+  }
+
+  /** Das Ohr der Spielfigur, Musik und Dauerklänge; einmal je Frame, in jeder Phase. */
+  private updateAudio(): void {
+    const { x, z } = this.player.position;
+    const night = this.phase === 'playing' || this.phase === 'levelup' || this.phase === 'paused';
+    // Die Finsternis dämpft jeden Laut, aber nur in der Nacht und nicht in den Menüs davor und danach.
+    const finsternis = night ? this.zones.finsternisAt(x, z) : 0;
+    const duck: Duck = this.phase === 'paused' ? 'paused' : this.phase === 'levelup' ? 'choice' : 'none';
+    audio.setDuck(duck);
+    audio.setMusic(this.wantedMusic());
+    audio.update(x, z, finsternis);
+
+    // Die Welt klingt nur, solange sie sich bewegt; in der Pause schweigt sie bis auf die Musik.
+    if (this.phase !== 'playing' && this.phase !== 'levelup') return;
+    audio.loop('wind.nacht', 1);
+    audio.loop('finsternis.brummen', Math.min(1, finsternis * 1.25));
+    this.fireDistance = Infinity;
+    this.zones.eachBurning(this.measureFire);
+    if (this.fireDistance < Infinity) audio.loop('feuer.knistern', 1, this.fireX, this.fireZ);
+  }
+
+  /** Merkt sich die brennende Feuerschale, die der Spielfigur am nächsten steht. */
+  private readonly measureFire = (island: Site): void => {
+    const position = this.player.position;
+    const distance = Math.hypot(island.x - position.x, island.z - position.z);
+    if (distance >= this.fireDistance) return;
+    this.fireDistance = distance;
+    this.fireX = island.x;
+    this.fireZ = island.z;
+  };
+
+  /** Hin und wieder ruft ein Gegner in Hörweite; je dichter die Horde, desto öfter. */
+  private callHorde(dt: number): void {
+    this.callIn -= dt;
+    if (this.callIn > 0) return;
+    const { callEvery, range, busy } = CONFIG.audio.horde;
+    const { alive } = this.enemies;
+    this.callIn = (callEvery.min + Math.random() * (callEvery.max - callEvery.min)) / (1 + alive.length / busy);
+    const position = this.player.position;
+    // Ein paar Versuche reichen: Wer weit weg steht, wird ohnehin nicht gehört. Der Zufall gehört nur dem Ohr.
+    for (let attempt = 0; attempt < 6 && alive.length > 0; attempt++) {
+      const enemy = alive[Math.floor(Math.random() * alive.length)];
+      if (!enemy || enemy.hp <= 0 || enemy === this.boss.enemy) continue;
+      if (Math.hypot(enemy.x - position.x, enemy.z - position.z) > range) continue;
+      audio.play(`gegner-laut.${enemy.type.id}`, enemy.x, enemy.z);
+      return;
+    }
   }
 
   private refreshHud(): void {

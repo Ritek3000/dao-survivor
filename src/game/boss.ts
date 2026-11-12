@@ -10,6 +10,7 @@
  * Die beiden Zauber stammen aus der Vorlage (Domäne Finsternis). Alles kündigt sich am Boden an.
  */
 import * as THREE from 'three';
+import { audio } from '../audio';
 import { CONFIG } from '../config';
 import type { Random } from '../core/random';
 import { extendShader, swallowedByFinsternis } from './darkness';
@@ -172,6 +173,7 @@ export class Boss {
 
   /** Die Spielfigur hat ihn erschlagen: Er stürzt und zerfällt zu Staub. */
   fall(): void {
+    audio.play('boss.faellt', this.group.position.x, this.group.position.z);
     this.enemy = null;
     this.slain = true;
     this.mode = 'dying';
@@ -212,6 +214,7 @@ export class Boss {
     this.dissolve.value = 0;
     this.group.visible = true;
     this.event = 'erschienen';
+    audio.play('boss.erscheint', x, z);
   }
 
   /** Das Verschlingen: Unter der Schwelle hüllt er sich immer wieder für einige Sekunden in Finsternis. */
@@ -231,6 +234,7 @@ export class Boss {
     this.engulfLeft = seconds;
     enemy.mantle = radius;
     this.event = 'verschlingen';
+    audio.play('boss.verschlingen', enemy.x, enemy.z);
   }
 
   private act(dt: number, enemy: Enemy, player: Player, threats: Threats, world: World): void {
@@ -256,6 +260,7 @@ export class Boss {
           this.mode = 'hookWind';
           this.timer = hook.windup;
           this.play('hook', 0.1, false, BOSS.hookStrikeAt / hook.windup);
+          audio.play('boss.hieb-ausholen', enemy.x, enemy.z);
           threats.arc(enemy.x, enemy.z, this.heading, hook.arc, hook.reach, hook.windup);
           break;
         }
@@ -274,6 +279,7 @@ export class Boss {
           this.chargeHit = false;
           this.play('idle');
           threats.lane(enemy.x, enemy.z, this.heading, this.chargeLeft, charge.width, charge.windup);
+          audio.play('boss.ansturm', enemy.x, enemy.z);
           break;
         }
         // Er geht dorthin, wohin er blickt; steht die Spielfigur seitlich, dreht er sich erst.
@@ -323,6 +329,7 @@ export class Boss {
         }
         if (this.chargeLeft > 0 && Math.hypot(enemy.x, enemy.z) < CONFIG.world.radius - 2) break;
         threats.thud(enemy.x, enemy.z, 2.6);
+        audio.play('boss.aufprall', enemy.x, enemy.z);
         this.mode = 'rest';
         this.timer = rest;
         this.chargeIn = cooldown;
@@ -361,6 +368,7 @@ export class Boss {
     const { reach, arc, damage } = BOSS.hook;
     const off = Math.abs(wrap(toPlayer - this.heading));
     if (distance <= reach + CONFIG.player.radius * 0.5 && off <= arc / 2) player.hurt(damage, false, true);
+    audio.play('boss.hieb', enemy.x, enemy.z);
     threats.thud(enemy.x + Math.sin(this.heading) * reach * 0.6, enemy.z + Math.cos(this.heading) * reach * 0.6, 1.8);
   }
 

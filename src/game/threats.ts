@@ -7,6 +7,7 @@
  * der kalte Rand, denn die Finsternis gibt kein Licht.
  */
 import * as THREE from 'three';
+import { audio } from '../audio';
 import type { Enemy } from './enemies';
 import { Particles, type Particle } from './particles';
 import type { Player } from './player';
@@ -91,6 +92,7 @@ export class Threats {
       life: delay + 0.05,
     });
     this.sogs.push({ x, z, radius, delay, damage, quench, owner, field, rim });
+    audio.play('sog.ankuendigung', x, z);
   }
 
   /** Kündigt den Hieb des Verschlingers an: die Fläche vor ihm, die seine Faust gleich trifft. */
@@ -181,6 +183,7 @@ export class Threats {
 
   private strike(sog: Sog, player: Player, zones: Zones): void {
     const { x, z, radius } = sog;
+    audio.play('sog.wirkung', x, z);
     // Der Ring schnürt sich zu: Was er einschließt, verliert seine Wärme.
     this.strips.spawn({
       look: 'ring',

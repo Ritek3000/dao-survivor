@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { audio } from '../audio';
 import { CONFIG } from '../config';
 import { createRandom, type Random } from '../core/random';
 import { MAX_CLOUDS, clearCloudUniform, cloudAmount, finsternisUniforms, swallowedByFinsternis } from './darkness';
@@ -180,6 +181,7 @@ export class Zones {
       if (island.state !== 'burning' || Math.hypot(island.x - x, island.z - z) > radius) continue;
       island.state = 'spent';
       island.timer = CONFIG.islands.spentSeconds;
+      audio.play('feuer.geloescht', island.x, island.z);
       count++;
     }
     return count;
@@ -410,6 +412,7 @@ export class Zones {
           const burnedOut = island.state === 'burning';
           island.state = burnedOut ? 'spent' : 'unlit';
           island.timer = burnedOut ? spentSeconds : 0;
+          if (burnedOut) audio.play('feuer.erlischt', island.x, island.z);
         }
       }
       if (island.state === 'unlit') {
@@ -436,12 +439,14 @@ export class Zones {
     if (candidate !== this.igniting) {
       this.igniting = candidate;
       this.igniteProgress = 0;
+      if (candidate) audio.play('feuer.entzuenden', candidate.x, candidate.z);
     }
     if (candidate) {
       this.igniteProgress += (dt * this.igniteFactor) / igniteSeconds;
       if (this.igniteProgress >= 1) {
         candidate.state = 'burning';
         candidate.timer = burnSeconds * this.burnFactor;
+        audio.play('feuer.entzuendet', candidate.x, candidate.z);
         this.igniting = null;
         this.igniteProgress = 0;
       }
