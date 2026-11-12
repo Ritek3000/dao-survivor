@@ -10,6 +10,9 @@ try {
   // Zugriff aus der Browser-Konsole beim Entwickeln und Testen.
   if (import.meta.env.DEV) {
     (window as unknown as { __game: Game }).__game = game;
+    void import('./audio').then(({ audio }) => {
+      (window as unknown as { __audio: typeof audio }).__audio = audio;
+    });
     // Der Messlauf gehört nicht ins fertige Spiel und wird deshalb nur hier nachgeladen.
     void import('./tools/messlauf').then(({ installMesslauf }) => installMesslauf(game));
   }

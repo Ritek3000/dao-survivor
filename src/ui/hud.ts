@@ -1,3 +1,4 @@
+import type { Volumes } from '../audio';
 import type { IslandBearing, Zone } from '../game/zones';
 
 /** Eine Karte in einer Auswahl: Klasse zu Beginn, Stärkung beim Stufenaufstieg. */
@@ -56,6 +57,11 @@ export class Hud {
   private readonly bossFill = element('boss-fill');
   private readonly banner = element('banner');
   private readonly pause = element('pause');
+  private readonly volMaster = element<HTMLInputElement>('vol-master');
+  private readonly volEffects = element<HTMLInputElement>('vol-effects');
+  private readonly volMusic = element<HTMLInputElement>('vol-music');
+  private readonly volMute = element<HTMLInputElement>('vol-mute');
+  private readonly soundOff = element('sound-off');
   private readonly loading = element('loading');
   private readonly loadingText = element('loading-text');
   private readonly choice = element('choice');
@@ -142,6 +148,31 @@ export class Hud {
 
   setPaused(paused: boolean): void {
     this.pause.hidden = !paused;
+  }
+
+  /** Verbindet die Tonregler im Pausenbild; `onChange` erfährt jede Änderung. */
+  bindSound(volumes: Readonly<Volumes>, onChange: (volumes: Volumes) => void): void {
+    const read = (): Volumes => ({
+      master: Number(this.volMaster.value) / 100,
+      effects: Number(this.volEffects.value) / 100,
+      music: Number(this.volMusic.value) / 100,
+      muted: this.volMute.checked,
+    });
+    for (const control of [this.volMaster, this.volEffects, this.volMusic, this.volMute]) {
+      control.addEventListener('input', () => onChange(read()));
+      // Der Fokus bliebe sonst am Regler hängen; die Pfeiltasten gehören aber dem Spiel.
+      control.addEventListener('change', () => control.blur());
+    }
+    this.showSound(volumes);
+  }
+
+  /** Zeigt die Reglerstellungen, auch wenn sie über die Taste M geändert wurden. */
+  showSound(volumes: Readonly<Volumes>): void {
+    this.volMaster.value = String(Math.round(volumes.master * 100));
+    this.volEffects.value = String(Math.round(volumes.effects * 100));
+    this.volMusic.value = String(Math.round(volumes.music * 100));
+    this.volMute.checked = volumes.muted;
+    this.soundOff.hidden = !volumes.muted;
   }
 
   /** Hinweis, solange die Modelle geladen werden; `null` blendet ihn aus. */

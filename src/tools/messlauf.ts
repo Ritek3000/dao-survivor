@@ -14,6 +14,7 @@
  * in der es am ruhigsten ist, sammelt dabei Edelsteine, sucht bei Not eine Feuerschale und wählt
  * Stärkungen zufällig. Ihre Zahlen taugen zum Vergleichen, nicht als Maßstab.
  */
+import { audio } from '../audio';
 import { CONFIG } from '../config';
 import type { MoveVector } from '../core/input';
 import { createRandom, type Random } from '../core/random';
@@ -360,6 +361,8 @@ export function installMesslauf(game: Game): void {
       if (api.running) return api.results;
       api.running = true;
       api.results = [];
+      // Im Zeitraffer wäre jeder Ton ein Rauschen und die Wiedergabe eine Last.
+      audio.silenced = true;
       const random = createRandom(options.seed ?? 12345);
       const nights = options.nights ?? 3;
       const classes = options.classes ?? CLASSES.map((_, index) => index);
@@ -376,6 +379,7 @@ export function installMesslauf(game: Game): void {
         throw error;
       } finally {
         api.running = false;
+        audio.silenced = false;
         (game as unknown as Internals).hud.hideEnd();
         (game as unknown as Internals).openSelect();
       }

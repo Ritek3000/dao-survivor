@@ -3,7 +3,7 @@
  * "wohin bewegen?" und "wurde bestätigt?"; ein Gamepad kommt später
  * als weitere Quelle in dieser Klasse dazu, ohne dass die Spiellogik sich ändert.
  */
-export type Action = 'pause' | 'confirm' | 'left' | 'right' | 'choice1' | 'choice2' | 'choice3';
+export type Action = 'pause' | 'mute' | 'confirm' | 'left' | 'right' | 'choice1' | 'choice2' | 'choice3';
 
 export interface MoveVector {
   /** Rechts ist positiv. */
@@ -28,6 +28,7 @@ const MOVE_KEYS: Readonly<Record<string, readonly [number, number]>> = {
 const ACTION_KEYS: Readonly<Record<string, Action>> = {
   Escape: 'pause',
   KeyP: 'pause',
+  KeyM: 'mute',
   Enter: 'confirm',
   NumpadEnter: 'confirm',
   Space: 'confirm',

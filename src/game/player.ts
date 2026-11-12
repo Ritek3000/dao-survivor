@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { audio } from '../audio';
 import { CONFIG } from '../config';
 import type { MoveVector } from '../core/input';
 import type { ClassDef, SwingDef } from './classes';
@@ -20,6 +21,8 @@ const HURT_TINT = new THREE.Color(0xff2a1a);
 /** Die Fackel steckt hinter der Schulter am Rücken: so weit ragt die Flamme über den Kopf. */
 const FLAME_ABOVE_HEAD = 0.42;
 const SHAFT_LENGTH = 1.1;
+/** Meter zwischen zwei Schritten, die zu hören sind. */
+const STEP_METERS = 1.6;
 /** Ein Durchlauf der Renn-Animation überbrückt etwa so viele Körperhöhen. */
 const RUN_STRIDE_PER_HEIGHT = 1.7;
 /** Sekunden, in denen eine Figur ohne eigene Sterbe-Animation zu Boden geht. */
@@ -91,6 +94,8 @@ export class Player {
   private kerzenwort = false;
   private heading = 0;
   private stride = 0;
+  /** Seit dem letzten Schritt zurückgelegte Meter; bestimmt, wann der nächste Schritt zu hören ist. */
+  private stepMeters = 0;
   private invulnerable = 0;
   private hurtGlow = 0;
   private wasHit = false;
@@ -413,6 +418,11 @@ export class Player {
 
     const currentSpeed = Math.hypot(this.velocity.x, this.velocity.z);
     const course = Math.atan2(this.velocity.x, this.velocity.z);
+    this.stepMeters += currentSpeed * dt;
+    if (this.stepMeters >= STEP_METERS) {
+      this.stepMeters -= STEP_METERS;
+      audio.play('schritt', position.x, position.z);
+    }
     this.updateSwing(dt);
     // Beim Angriff blickt die Figur zum Ziel, sonst dorthin, wohin sie läuft.
     const swing = this.swing;
@@ -484,6 +494,7 @@ export class Player {
     this.invulnerable = CONFIG.player.invulnerableSeconds * this.stats.grace;
     if (this.shield) {
       this.shield = false;
+      audio.play('schild.faengt', this.position.x, this.position.z);
       return;
     }
     const taken = Math.max(1, amount * this.takenFactor - this.stats.armor);
@@ -496,6 +507,7 @@ export class Player {
     }
     this.hurtGlow = 1;
     this.wasHit = true;
+    audio.play(verstaubt ? 'spieler-verstaubt' : 'spieler-treffer', this.position.x, this.position.z);
   }
 
   /** Mehr Höchstleben durch eine Verbesserung bringt die Punkte gleich mit. */

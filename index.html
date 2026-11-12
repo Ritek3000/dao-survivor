@@ -42,10 +42,21 @@
       <div class="bar"><div id="ignite-fill"></div></div>
     </div>
 
-    <div id="hint">WASD oder Pfeiltasten: bewegen · Esc: Pause</div>
+    <div id="hint">WASD oder Pfeiltasten: bewegen · Esc: Pause · M: Ton an/aus</div>
+    <div id="sound-off" hidden>Ton aus · M</div>
     <div id="debug" hidden></div>
 
-    <div id="pause" class="overlay" hidden><h1>Pause</h1></div>
+    <div id="pause" class="overlay" hidden>
+      <h1>Pause</h1>
+      <div id="sound-panel">
+        <h2>Ton</h2>
+        <label><span>Gesamt</span><input id="vol-master" type="range" min="0" max="100" step="1" /></label>
+        <label><span>Effekte</span><input id="vol-effects" type="range" min="0" max="100" step="1" /></label>
+        <label><span>Musik</span><input id="vol-music" type="range" min="0" max="100" step="1" /></label>
+        <label class="mute"><input id="vol-mute" type="checkbox" /><span>Ton aus</span></label>
+      </div>
+      <p class="keys">Esc oder P: weiter · M: Ton an/aus</p>
+    </div>
 
     <div id="loading" class="overlay" hidden>
       <h1>Die Nacht zieht auf</h1>

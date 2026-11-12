@@ -265,6 +265,42 @@ export const CONFIG = {
     /** Das Verschlingen: Unter diesem Anteil seines Lebens hüllt er sich zeitweise in Finsternis. */
     verschlingen: { belowHp: 0.5, radius: 10, seconds: 8, cooldown: 22 },
   },
+  /**
+   * Ton und Musik. Welche Datei zu welchem Ereignis klingt, steht nicht hier, sondern in
+   * public/audio/audio.json; hier stehen nur die Regeln der Abmischung. Einheiten: Meter und Sekunden.
+   */
+  audio: {
+    /** Ordner mit den Klängen und der Zuordnungsliste, unterhalb von public. */
+    folder: 'audio/',
+    manifest: 'audio.json',
+    /** Startwerte der Regler von 0 bis 1, bis der Spieler sie verstellt. */
+    defaults: { master: 0.8, effects: 0.9, music: 0.7 },
+    /** So viele Töne klingen höchstens zugleich; ein wichtigerer verdrängt dafür einen unwichtigeren. */
+    voices: 24,
+    /** Töne mit Ort sind bis `near` voll zu hören und ab `range` stumm; je Ereignis in audio.json änderbar. */
+    range: 30,
+    near: 3,
+    /** Seitlicher Abstand, ab dem ein Ton ganz auf einer Seite liegt. */
+    panWidth: 14,
+    /**
+     * Die Finsternis dämpft jeden Laut (finsternis.md): Mitten in ihr sinkt die Grenzfrequenz auf `cutoff` (Hz),
+     * die Lautstärke auf den Anteil `gain`, und die Reichweite schrumpft um den Anteil `range`.
+     * `distance`: so viel Dumpfheit kommt am Rand der Reichweite durch die Luft dazu.
+     */
+    muffle: { cutoff: 380, gain: 0.45, range: 0.5, distance: 0.3 },
+    music: {
+      /** Sekunden der Überblendung zwischen zwei Stücken. */
+      fade: 2.5,
+      /** Anteil der Musiklautstärke in der Pause und bei der Wahl einer Stärkung; in der Pause auch dumpfer. */
+      pausedGain: 0.3,
+      choiceGain: 0.55,
+      pausedCutoff: 650,
+      /** Ab dieser Sekunde der Nacht spielt die dichtere Fassung der Nachtmusik. */
+      lateFrom: 480,
+    },
+    /** Gegner rufen ab und zu; je mehr unterwegs sind, desto öfter. Nur Gegner in `range` Metern werden gehört. */
+    horde: { callEvery: { min: 1.6, max: 3.6 }, range: 18, busy: 80 },
+  },
   // Angriffe stehen in game/weapons.ts, Klassen und ihre Besonderheiten in game/classes.ts.
   xp: {
     /** Bedarf für die nächste Stufe: base + linear * Stufe + quadratic * Stufe². */

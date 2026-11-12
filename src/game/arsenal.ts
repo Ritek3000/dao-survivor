@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { audio, type SoundId } from '../audio';
 import type { Random } from '../core/random';
 import type { ClassDef } from './classes';
 import { Effects, type StrikeKind } from './effects';
@@ -42,6 +43,9 @@ function strikeKind(def: WeaponDef): StrikeKind {
   if (def.kind === 'projectile' || def.kind === 'volley' || def.kind === 'trap') return 'stahl';
   return def.look === 'hieb' || def.look === 'wucht' || def.look === 'wirbel' ? 'stahl' : 'staub';
 }
+
+/** Der Ton zu jeder Trefferart; fest hinterlegt, weil Treffer das häufigste Ereignis im Kampf sind. */
+const HIT_SOUNDS: Record<StrikeKind, SoundId> = { stahl: 'treffer.stahl', staub: 'treffer.staub', brand: 'treffer.brand' };
 
 /** Alle Angriffe der Spielfigur: was sie besitzt, wann es auslöst und wen es trifft. */
 export class Arsenal {
@@ -174,12 +178,14 @@ export class Arsenal {
     if (def.kind === 'trap') {
       this.traps.push({ x: origin.x, z: origin.z, weapon, delay: 0 });
       if (this.traps.length > Math.min(def.maxActive ?? TRAP_CAPACITY, TRAP_CAPACITY)) this.traps.shift();
+      audio.play(`angriff.${def.id}`, origin.x, origin.z);
       return true;
     }
     if (def.kind === 'aura') {
       const radius = this.auraRadius(weapon);
       this.burst(weapon, origin.x, origin.z, radius);
       this.effects.emberPulse(origin.x, origin.z, radius);
+      audio.play(`angriff.${def.id}`, origin.x, origin.z);
       return true;
     }
 
@@ -188,6 +194,7 @@ export class Arsenal {
     const angle = Math.atan2(target.x - origin.x, target.z - origin.z);
     const swing = this.swings[def.id];
     if (swing) this.player.strike(swing, angle);
+    audio.play(`angriff.${def.id}`, origin.x, origin.z);
 
     switch (def.kind) {
       case 'arc': {
@@ -323,7 +330,9 @@ export class Arsenal {
         const origin = this.player.position;
         if (Math.hypot(enemy.x - origin.x, enemy.z - origin.z) <= this.player.light) amount *= litDamage;
       }
-      this.effects.strike(enemy.x, enemy.type.model.height * 0.6, enemy.z, strikeKind(def));
+      const kind = strikeKind(def);
+      this.effects.strike(enemy.x, enemy.type.model.height * 0.6, enemy.z, kind);
+      audio.play(HIT_SOUNDS[kind], enemy.x, enemy.z);
     }
 
     let pushX = 0;
@@ -354,7 +363,10 @@ export class Arsenal {
       this.shieldCharging = weapon.def.cooldown * this.stats.cooldown * COOLDOWN_PER_RANK ** (weapon.rank - 1);
     }
     this.shieldCharging -= dt * this.traits.haste;
-    if (this.shieldCharging <= 0) this.player.shield = true;
+    if (this.shieldCharging <= 0) {
+      this.player.shield = true;
+      audio.play('schild.bereit', this.player.position.x, this.player.position.z);
+    }
   }
 
   private updateVolleys(dt: number): void {
@@ -366,6 +378,7 @@ export class Arsenal {
       const radius = this.area(volley.weapon.def);
       this.burst(volley.weapon, volley.x, volley.z, radius);
       this.effects.hailImpact(volley.x, volley.z, radius);
+      audio.play(`einschlag.${volley.weapon.def.id}`, volley.x, volley.z);
       this.volleys.splice(i, 1);
     }
   }
@@ -378,6 +391,7 @@ export class Arsenal {
       if (!this.enemies.nearest(trap.x, trap.z, radius)) continue;
       this.burst(trap.weapon, trap.x, trap.z, radius);
       this.effects.trapSnap(trap.x, trap.z, radius);
+      audio.play(`einschlag.${trap.weapon.def.id}`, trap.x, trap.z);
       this.traps.splice(i, 1);
     }
   }

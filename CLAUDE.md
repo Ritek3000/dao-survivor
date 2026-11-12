@@ -41,6 +41,11 @@ Es gibt keine automatischen Tests und keinen Linter. **Bevor ein Pull Request au
   oder das Spawnen ändert, nimmt diesen Zufall und nicht `Math.random`. `Math.random` ist nur für rein Optisches erlaubt.
 - Im Kampf entstehen keine neuen Objekte: Teilchen, Gegner und Geschosse liegen in Pools bzw. Instanznetzen. Neue Effekte
   folgen diesem Muster, damit die Horde flüssig bleibt.
+- Ton und Musik sind Dateien in `public/audio/`, die `public/audio/audio.json` den Ereignissen zuordnet. Im Code stehen keine
+  Dateinamen, sondern Ereignisse: `audio.play('treffer.stahl', x, z)` (`src/audio/`; neue Namen kommen in `src/audio/ids.ts`).
+  So lässt sich jeder Klang ohne Codeänderung austauschen. Mischregeln (Reichweite, Dämpfung in der Finsternis) stehen in
+  `CONFIG.audio`. Es werden nur selbst erzeugte oder frei lizenzierte Klänge verwendet; ihre Herkunft steht in
+  `public/audio/LIZENZEN.md`. Die mitgelieferten Dateien erzeugt `tools/audio-erzeugen.py` (ASCII-only, deterministisch).
 - Entwicklungswerkzeuge (`src/tools/`, `modell.html`) gehören nicht ins fertige Spiel. Sie werden nur im Dev-Modus
   (`import.meta.env.DEV`) nachgeladen.
 

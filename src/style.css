@@ -32,6 +32,7 @@ body {
 #ignite,
 #hint,
 #debug,
+#sound-off,
 #compass,
 #finsternis-veil,
 #hurt-veil {
@@ -254,6 +255,15 @@ body {
   white-space: nowrap;
 }
 
+/* Erinnerung, warum nichts zu hören ist. */
+#sound-off {
+  right: 16px;
+  bottom: 18px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
 #debug {
   bottom: 10px;
   left: 12px;
@@ -392,4 +402,56 @@ body {
 /* Das Attribut "hidden" verliert sonst gegen "display: flex". */
 [hidden] {
   display: none !important;
+}
+
+/* Tonregler im Pausenbild. */
+#sound-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px 22px 16px;
+  min-width: min(340px, 80vw);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+#sound-panel h2 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+#sound-panel label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+}
+
+#sound-panel label > span {
+  width: 64px;
+}
+
+#sound-panel input[type='range'] {
+  flex: 1;
+  accent-color: var(--ember);
+}
+
+#sound-panel .mute {
+  gap: 8px;
+  margin-top: 2px;
+  color: var(--text-dim);
+}
+
+#sound-panel .mute > span {
+  width: auto;
+}
+
+#sound-panel input[type='checkbox'] {
+  accent-color: var(--ember);
 }
