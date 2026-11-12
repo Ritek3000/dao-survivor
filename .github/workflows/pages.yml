@@ -1,0 +1,65 @@
+# Baut das Spiel nach jedem Merge auf main und veröffentlicht es auf GitHub Pages,
+# damit sich jeder Stand sofort im Browser ausprobieren lässt.
+#
+# Einmalig nötig (Repository-Einstellung, nicht per Datei möglich):
+# Settings → Pages → Build and deployment → Source: „GitHub Actions“.
+name: Spiel auf GitHub Pages veröffentlichen
+
+on:
+  push:
+    branches: [main]
+  # Zum Nachholen oder Neuveröffentlichen von Hand (Reiter „Actions“ → „Run workflow“).
+  workflow_dispatch:
+
+# Nur die Rechte, die das Veröffentlichen braucht.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Immer nur eine Veröffentlichung gleichzeitig. Eine laufende wird nicht abgebrochen,
+# damit keine halbfertige Seite entsteht; ein später gestarteter Lauf wartet und überholt
+# ältere wartende Läufe.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  bauen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Wie in der README: getestet mit Node 22.
+          node-version: 22
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      # Prüft die Typen und baut nach dist/. Schlägt das fehl, wird nichts veröffentlicht.
+      # base ist './' (vite.config.ts), der Build läuft daher unter jedem Unterpfad,
+      # auch unter https://<Konto>.github.io/<Repository>/.
+      - name: Bauen
+        run: npm run build
+
+      - name: Größe der Seite ausgeben
+        run: du -sh dist && find dist -type f -printf '%s %p\n' | sort -n | tail -5
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  veroeffentlichen:
+    needs: bauen
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

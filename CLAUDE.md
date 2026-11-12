@@ -74,7 +74,9 @@ Ob das Spiel im Browser bleibt oder als Desktop-Programm erscheint, ist noch nic
 - Es darf **nichts eingebaut werden, was eine spätere Desktop-Hülle (Electron, Tauri o. ä.) verhindert**. Das heißt:
   - Der Build bleibt mit relativen Pfaden lauffähig (`base: './'` in `vite.config.ts` nicht ändern); Dateien aus `public/`
     werden über `import.meta.env.BASE_URL` geladen und nicht über absolute Pfade wie `/models/…`.
-  - Keine Abhängigkeit von einem Server, Cookies oder einem festen Host. Alles Nötige steckt in `dist/`.
+  - Keine Abhängigkeit von einem Server, Cookies oder einem festen Host. Alles Nötige steckt in `dist/`. Aus demselben Grund
+    läuft der Stand von `main` nach jedem Merge unter dem Unterpfad `/dao-survivor/` auf GitHub Pages
+    (`.github/workflows/pages.yml`); ein absoluter Pfad würde dort ins Leere laufen.
   - Eingabe nur über die Aktionen in `src/core/input.ts` (Gamepad kommt später dazu), nicht über verstreute Tastenabfragen.
   - Browser-APIs, die in einer Hülle fehlen können (etwa Vollbild, Zeigersperre, Speicher), nur mit Rückfall verwenden.
     Spielstände oder Einstellungen später hinter einer kleinen Schicht ablegen, die sich austauschen lässt.
