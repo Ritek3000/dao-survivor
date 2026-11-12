@@ -61,9 +61,22 @@ export interface HordeModel {
   side: THREE.Side;
   positions: THREE.DataTexture;
   normals: THREE.DataTexture;
-  /** x = Breite der Textur, y = Zeilen je Bild, z = Anzahl der Bilder. */
+  /** x = Breite der Textur, y = Zeilen je Bild, z = Anzahl der Bilder (alle Clips zusammen). */
   layout: THREE.Vector3;
+  /** Die Schleife: Gehen, bei Schwebenden das Schweben. */
+  loop: HordeClip;
+  /** Der Zauber, falls die Art einen hat. */
+  cast: HordeClip | null;
+}
+
+/** Ein Clip in der Bewegungstextur. Hinter seinen Bildern liegt ein Schlussbild, damit das Überblenden nie in den nächsten Clip greift. */
+export interface HordeClip {
+  /** Erstes Bild des Clips in der Textur. */
+  start: number;
+  /** Anzahl der Bilder ohne das Schlussbild. */
   frames: number;
+  /** Dauer des Clips in der Datei; dem Zauber dient sie nur als Maß, im Spiel wird er auf die Zauberzeit gedehnt. */
+  seconds: number;
 }
 
 /** Ein unbewegter Gegenstand der Welt: Fels, Totholz, Feuerschale, Edelstein. */
@@ -105,6 +118,12 @@ export interface Models {
 
 /** Bilder je Sekunde, mit denen die Laufbewegung der Gegner abgelegt wird. */
 const BAKE_FPS = 30;
+/**
+ * Wer schwebt, bewegt sich langsam und weich; die Grafikkarte blendet zwischen den Bildern über. Mit der Hälfte der
+ * Bilder spart die Schleife Grafikspeicher, ohne dass man es sieht (bei diesem Netz kostet jedes Bild gut 0,2 MB
+ * für Positionen und Normalen).
+ */
+const HOVER_FPS = 15;
 /** Breite der Bewegungstextur; mehr Eckpunkte laufen in weitere Zeilen. */
 const BAKE_WIDTH = 1024;
 
@@ -284,47 +303,86 @@ function bakedTexture(data: Float32Array, width: number, height: number): THREE.
   return texture;
 }
 
-/** Rechnet die Laufbewegung einer Gegnerart einmal aus und legt sie als Textur ab. */
+/**
+ * Rechnet die Bewegungen einer Gegnerart einmal aus und legt sie als Textur ab: zuerst die Schleife (Gehen oder
+ * Schweben), danach, falls es sie gibt, der Zauber. Jeder Clip bekommt ein Bild mehr als er Bilder hat: Bei der Schleife
+ * ist es eine Kopie des ersten (sie schließt an), beim Zauber das Endbild.
+ */
 function bakeHorde(gltf: GLTF, spec: EnemyModel): HordeModel {
   const scene = gltf.scene;
   const mesh = firstSkinnedMesh(scene);
   const sampler = new PoseSampler(mesh);
-  const clip = gltf.animations.find((candidate) => candidate.name === spec.clip) ?? gltf.animations[0] ?? null;
+  const loopClip = gltf.animations.find((candidate) => candidate.name === spec.clip) ?? gltf.animations[0] ?? null;
+  const castClip = spec.castClip ? (gltf.animations.find((candidate) => candidate.name === spec.castClip) ?? null) : null;
+  if (spec.castClip && !castClip) console.warn(`Animation ${spec.castClip} fehlt in ${spec.file}.`);
 
-  const frames = clip ? Math.max(1, Math.round(clip.duration * BAKE_FPS)) : 1;
+  const clipFrames = (clip: THREE.AnimationClip | null, fps: number): number =>
+    clip ? Math.max(1, Math.round(clip.duration * fps)) : 1;
+  const loop: HordeClip = {
+    start: 0,
+    frames: clipFrames(loopClip, spec.hover ? HOVER_FPS : BAKE_FPS),
+    seconds: loopClip?.duration ?? 1,
+  };
+  const cast: HordeClip | null = castClip
+    ? { start: loop.frames + 1, frames: clipFrames(castClip, BAKE_FPS), seconds: castClip.duration }
+    : null;
+  const total = (cast ? cast.start + cast.frames : loop.frames) + 1;
+
   const width = Math.min(sampler.count, BAKE_WIDTH);
   const rows = Math.ceil(sampler.count / width);
-  const positions = new Float32Array(width * rows * frames * 4);
-  const normals = new Float32Array(width * rows * frames * 4);
+  const frameSize = width * rows * 4;
+  const positions = new Float32Array(frameSize * total);
+  const normals = new Float32Array(frameSize * total);
 
   const mixer = new THREE.AnimationMixer(scene);
-  if (clip) mixer.clipAction(clip).play();
-  for (let frame = 0; frame < frames; frame++) {
-    // Das letzte Bild schließt an das erste an, deshalb wird die Dauer nicht ganz ausgeschöpft.
-    if (clip) mixer.setTime((frame / frames) * clip.duration);
-    scene.updateMatrixWorld(true);
-    sampler.sample(positions, normals, frame * rows * width * 4);
-  }
+  const bake = (clip: THREE.AnimationClip | null, segment: HordeClip, repeats: boolean): void => {
+    mixer.stopAllAction();
+    if (clip) {
+      const action = mixer.clipAction(clip).reset();
+      // Das Schlussbild des Zaubers ist sein letzter Zustand; eine Schleife käme dort wieder am Anfang an.
+      if (!repeats) action.setLoop(THREE.LoopOnce, 1).clampWhenFinished = true;
+      action.play();
+    }
+    for (let frame = 0; frame < segment.frames; frame++) {
+      // Das letzte Bild einer Schleife schließt an das erste an, deshalb wird die Dauer nicht ganz ausgeschöpft.
+      if (clip) mixer.setTime((frame / segment.frames) * clip.duration);
+      scene.updateMatrixWorld(true);
+      sampler.sample(positions, normals, (segment.start + frame) * frameSize);
+    }
+    const last = (segment.start + segment.frames) * frameSize;
+    if (repeats || !clip) {
+      positions.copyWithin(last, segment.start * frameSize, (segment.start + 1) * frameSize);
+      normals.copyWithin(last, segment.start * frameSize, (segment.start + 1) * frameSize);
+    } else {
+      mixer.setTime(clip.duration);
+      scene.updateMatrixWorld(true);
+      sampler.sample(positions, normals, last);
+    }
+  };
+  bake(loopClip, loop, true);
+  if (cast) bake(castClip, cast, false);
   mixer.stopAllAction();
   mixer.uncacheRoot(scene);
 
-  // Hüllbox über den ganzen Lauf: Daran werden Größe, Bodenhöhe und Mitte ausgerichtet.
+  // Hüllbox über den ganzen Lauf: Daran werden Größe, Bodenhöhe und Mitte ausgerichtet. Der Zauber geht nicht
+  // ein: Mit erhobenen Armen wäre die Figur sonst höher als beim Gehen und würde kleiner eingemessen.
   const box = new THREE.Box3();
   const point = new THREE.Vector3();
-  for (let frame = 0; frame < frames; frame++) {
+  for (let frame = 0; frame < loop.frames; frame++) {
     for (let i = 0; i < sampler.count; i++) {
-      const at = (frame * rows * width + i) * 4;
+      const at = frame * frameSize + i * 4;
       box.expandByPoint(point.set(positions[at] as number, positions[at + 1] as number, positions[at + 2] as number));
     }
   }
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   const scale = size.y > 0 ? spec.height / size.y : 1;
-  for (let frame = 0; frame < frames; frame++) {
+  const lift = spec.hover?.lift ?? 0;
+  for (let frame = 0; frame < total; frame++) {
     for (let i = 0; i < sampler.count; i++) {
-      const at = (frame * rows * width + i) * 4;
+      const at = frame * frameSize + i * 4;
       positions[at] = ((positions[at] as number) - center.x) * scale;
-      positions[at + 1] = ((positions[at + 1] as number) - box.min.y) * scale;
+      positions[at + 1] = ((positions[at + 1] as number) - box.min.y) * scale + lift;
       positions[at + 2] = ((positions[at + 2] as number) - center.z) * scale;
     }
   }
@@ -346,7 +404,7 @@ function bakeHorde(gltf: GLTF, spec: EnemyModel): HordeModel {
   const halfWidth = Math.max(size.x, size.z) * scale * 0.5;
   geometry.boundingBox = new THREE.Box3(
     new THREE.Vector3(-halfWidth, 0, -halfWidth),
-    new THREE.Vector3(halfWidth, spec.height, halfWidth),
+    new THREE.Vector3(halfWidth, spec.height + lift, halfWidth),
   );
   geometry.boundingSphere = geometry.boundingBox.getBoundingSphere(new THREE.Sphere());
 
@@ -355,10 +413,11 @@ function bakeHorde(gltf: GLTF, spec: EnemyModel): HordeModel {
     geometry,
     map: source.map ?? null,
     side: source.side,
-    positions: bakedTexture(positions, width, rows * frames),
-    normals: bakedTexture(normals, width, rows * frames),
-    layout: new THREE.Vector3(width, rows, frames),
-    frames,
+    positions: bakedTexture(positions, width, rows * total),
+    normals: bakedTexture(normals, width, rows * total),
+    layout: new THREE.Vector3(width, rows, total),
+    loop,
+    cast,
   };
 }
 

@@ -86,7 +86,7 @@ src/
   game/               Spiellogik und Darstellung (siehe unten)
   ui/hud.ts           Anzeigen, Auswahlkarten, Pause, Ende
   tools/              Entwicklungswerkzeuge: Messlauf und Modell-Prüfer
-tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern; Python: Klänge erzeugen)
+tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester animieren; Python: Klänge erzeugen)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
 ```
 
@@ -230,6 +230,10 @@ Dateien mit gleichem Namen. Neu erzeugte OGG-Dateien nur einchecken, wenn sich d
 - **Modelle verkleinern**: `tools/modelle-verkleinern.py` macht aus schweren Meshy-Exporten spielfertige Kopien.
   Es läuft in Blender (`blender --background --factory-startup --python tools/modelle-verkleinern.py`). Die schweren
   Originale liegen im Ordner `modelle-original/`, der wegen seiner Größe nicht im Repository ist (siehe `.gitignore`).
+- **Priester animieren**: Die Datei des Priesters kam ohne Animationen aus Meshy. `tools/priester-animieren.py` legt in Blender
+  „Schweben“ (Schleife) und „Zaubern“ (einmalig) an seinem Skelett an und schreibt `public/models/priester.glb`
+  (`blender --background --factory-startup --python tools/priester-animieren.py -- modelle-original/priester.glb public/models/priester.glb`).
+  Die Bewegung steht als Zahlen im Skript. Das Spiel spielt „Schweben“ nach der Zeit und „Zaubern“ gedehnt über `cast.windup`.
 
 ## Lore
 
