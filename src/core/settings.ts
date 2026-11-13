@@ -1,5 +1,5 @@
 /**
- * Einstellungen des Spielers, die den Neustart überdauern sollen (bisher die Tonregler).
+ * Einstellungen des Spielers, die den Neustart überdauern sollen: die Tonregler und die Stelle der Lebensgruppe.
  *
  * Wo sie liegen, versteckt `SettingsStore`: im Browser in `localStorage`, und wo der fehlt oder gesperrt ist
  * (private Fenster, eingebettete Hüllen), nur im Speicher der laufenden Sitzung. Eine Desktop-Fassung kann
@@ -16,8 +16,18 @@ export interface SoundSettings {
   muted: boolean;
 }
 
+/** Die Stellen, an denen die Lebensgruppe (Stufe, Lebensbalken, Gold) stehen kann, in der Reihenfolge der Auswahl. */
+export const VITALS_POSITIONS = ['top-left', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'] as const;
+export type VitalsPosition = (typeof VITALS_POSITIONS)[number];
+
+export interface UiSettings {
+  /** Wo die Lebensgruppe auf dem Bildschirm steht. */
+  vitalsPosition: VitalsPosition;
+}
+
 export interface Settings {
   sound: SoundSettings;
+  ui: UiSettings;
 }
 
 export type SettingsStore = TextStore;
@@ -35,23 +45,36 @@ function fraction(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isVitalsPosition(value: unknown): value is VitalsPosition {
+  return VITALS_POSITIONS.some((position) => position === value);
+}
+
 /** Liest die gespeicherten Einstellungen; was fehlt oder unbrauchbar ist, bleibt beim Standardwert. */
 export function loadSettings(defaults: Settings): Settings {
-  let stored: Partial<Record<keyof SoundSettings, unknown>> = {};
+  let stored: Record<string, unknown> = {};
   try {
     const parsed: unknown = JSON.parse(store.read() ?? '{}');
-    const sound = typeof parsed === 'object' && parsed !== null ? (parsed as { sound?: unknown }).sound : null;
-    if (typeof sound === 'object' && sound !== null) stored = sound;
+    if (isRecord(parsed)) stored = parsed;
   } catch {
     // Beschädigter Text: Es gelten die Standardwerte.
   }
+  // Ältere Stände kennen `ui` noch nicht; dann gilt der Standardwert.
+  const sound = isRecord(stored.sound) ? stored.sound : {};
+  const ui = isRecord(stored.ui) ? stored.ui : {};
   const base = defaults.sound;
   return {
     sound: {
-      master: fraction(stored.master, base.master),
-      effects: fraction(stored.effects, base.effects),
-      music: fraction(stored.music, base.music),
-      muted: typeof stored.muted === 'boolean' ? stored.muted : base.muted,
+      master: fraction(sound.master, base.master),
+      effects: fraction(sound.effects, base.effects),
+      music: fraction(sound.music, base.music),
+      muted: typeof sound.muted === 'boolean' ? sound.muted : base.muted,
+    },
+    ui: {
+      vitalsPosition: isVitalsPosition(ui.vitalsPosition) ? ui.vitalsPosition : defaults.ui.vitalsPosition,
     },
   };
 }

@@ -8,6 +8,8 @@
   --ember: #ffb45e;
   --shard: #9fe3d0;
   --gold: #ffc83d;
+  /* Bronzebeschläge der Lebensgruppe und Zierlinien. */
+  --fitting: #8a7447;
 }
 
 html,
@@ -50,13 +52,54 @@ body {
 #vitals {
   --orb: 62px;
   --overlap: 12px;
-  --fitting: #8a7447;
-  top: 16px;
-  left: 16px;
   display: flex;
   align-items: center;
   width: min(360px, 42vw);
   height: var(--orb);
+}
+
+/* Die Stelle der Lebensgruppe wählt der Spieler in den Optionen (data-vitals am body). */
+body[data-vitals='top-left'] #vitals {
+  top: 16px;
+  left: 16px;
+}
+
+body[data-vitals='top-right'] #vitals {
+  top: 16px;
+  right: 16px;
+}
+
+body[data-vitals='bottom-left'] #vitals {
+  bottom: 16px;
+  left: 16px;
+}
+
+body[data-vitals='bottom-center'] #vitals {
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+body[data-vitals='bottom-right'] #vitals {
+  bottom: 16px;
+  right: 16px;
+}
+
+/* Unten teilt sich die Gruppe die Ecke mit Hinweisen; die weichen nach oben aus. */
+body[data-vitals='bottom-center'] #hint {
+  bottom: 92px;
+}
+
+body[data-vitals='bottom-center'] #ignite {
+  bottom: 124px;
+}
+
+body[data-vitals='bottom-right'] #sound-off {
+  bottom: 92px;
+}
+
+body[data-vitals='bottom-left'] #debug {
+  bottom: 92px;
 }
 
 /* Der Kreis: die Stufe in großen Ziffern, "Stufe" klein darüber. */
@@ -541,20 +584,82 @@ body {
   display: none !important;
 }
 
-/* Tonregler im Pausenbild. */
-#sound-panel {
+/* Undurchsichtiger Grund: Anleitung immer, Optionen und Rückfragen, wenn sie vom Startbildschirm kommen. */
+.overlay.solid,
+#options.solid,
+#help {
+  background: #030304;
+}
+
+/* Menüs (Pause, Optionen, Rückfragen): Einträge untereinander, der markierte hat den Rahmen der Auswahlkarten. */
+.menu {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: min(300px, 80vw);
   margin-top: 18px;
-  padding: 14px 22px 16px;
-  min-width: min(340px, 80vw);
+}
+
+.menu.choices {
+  flex-direction: row;
+  width: auto;
+}
+
+.menu-item {
+  padding: 11px 26px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.menu.choices .menu-item {
+  min-width: 190px;
+}
+
+.menu-item.danger {
+  color: #e0a097;
+}
+
+.menu-item.selected,
+.button.selected,
+.option.selected {
+  border-color: var(--ember);
+  box-shadow: 0 0 18px rgba(255, 180, 94, 0.25);
+}
+
+#confirm-text {
+  max-width: min(520px, 86vw);
+  line-height: 1.4;
+  color: var(--text);
+}
+
+/* Optionen: Gruppen mit Zeilen; sie decken bei Bedarf das Spiel dahinter zu. */
+#options {
+  justify-content: safe center;
+  overflow-y: auto;
+  /* Dichter als die anderen Overlays: Uhr und Hinweis dahinter sollen nicht durch den Titel scheinen. */
+  background: rgba(3, 3, 4, 0.86);
+}
+
+
+.option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  width: min(460px, 92vw);
+  margin-top: 12px;
+  padding: 12px 16px 14px;
   background: var(--panel);
   border: 1px solid var(--line);
   text-align: left;
 }
 
-#sound-panel h2 {
+.option-group h2 {
   margin: 0 0 2px;
   font-size: 13px;
   font-weight: normal;
@@ -563,34 +668,164 @@ body {
   color: var(--text-dim);
 }
 
-#sound-panel label {
+.option {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
   font-size: 15px;
 }
 
-#sound-panel label > span {
-  width: 64px;
+.option .option-label {
+  flex: none;
+  width: 70px;
 }
 
-#sound-panel input[type='range'] {
+.option input[type='range'] {
   flex: 1;
+  min-width: 0;
   accent-color: var(--ember);
 }
 
-#sound-panel .mute {
-  gap: 8px;
-  margin-top: 2px;
+.option output {
+  flex: none;
+  width: 44px;
+  font: 12px ui-monospace, Consolas, monospace;
+  text-align: right;
   color: var(--text-dim);
 }
 
-#sound-panel .mute > span {
+.option.mute {
+  gap: 8px;
+  color: var(--text-dim);
+}
+
+.option.mute .option-label {
   width: auto;
 }
 
-#sound-panel input[type='checkbox'] {
+.option input[type='checkbox'] {
   accent-color: var(--ember);
+}
+
+/* Lebensgruppe platzieren: ein kleiner Bildschirm, auf dem man die Stelle anklickt. */
+.option.position {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.option.position .option-label {
+  width: auto;
+}
+
+.screen-model {
+  position: relative;
+  align-self: center;
+  width: 288px;
+  height: 132px;
+  background: #060505;
+  border: 2px solid var(--line);
+  border-radius: 4px;
+}
+
+.model-clock {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  opacity: 0.5;
+}
+
+.spot {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  width: 78px;
+  height: 22px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  background: rgba(201, 193, 177, 0.07);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  cursor: pointer;
+}
+
+.spot[data-position='top-left'] {
+  top: 8px;
+  left: 8px;
+}
+
+.spot[data-position='top-right'] {
+  top: 8px;
+  right: 8px;
+}
+
+.spot[data-position='bottom-left'] {
+  bottom: 8px;
+  left: 8px;
+}
+
+.spot[data-position='bottom-center'] {
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.spot[data-position='bottom-right'] {
+  bottom: 8px;
+  right: 8px;
+}
+
+/* Das Stück im Kleinen: Kreis, Balken, Beutel. */
+.spot i {
+  flex: none;
+  background: var(--text-dim);
+  opacity: 0.6;
+}
+
+.spot i:nth-child(1) {
+  width: 12px;
+  height: 12px;
+  margin-right: -2px;
+  border-radius: 50%;
+}
+
+.spot i:nth-child(2) {
+  flex: 1;
+  height: 5px;
+}
+
+.spot i:nth-child(3) {
+  width: 11px;
+  height: 11px;
+  margin-left: -2px;
+  border-radius: 50% 50% 45% 45%;
+}
+
+.spot:hover {
+  border-color: var(--text-dim);
+}
+
+.spot.selected {
+  background: rgba(255, 180, 94, 0.14);
+  border-color: var(--ember);
+}
+
+.spot.selected i {
+  background: var(--ember);
+  opacity: 1;
+}
+
+.option-value {
+  align-self: center;
+  letter-spacing: 0.08em;
+  color: var(--ember);
 }
 
 .button {
@@ -607,6 +842,109 @@ body {
 
 .button:hover {
   border-color: var(--ember);
+}
+
+/* Knöpfe nebeneinander, etwa "Klassen steigern" und "Hauptmenü". */
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 14px;
+}
+
+/* Startbildschirm: deckt das Spiel dahinter ganz zu. */
+#title {
+  gap: 0;
+  background: radial-gradient(ellipse at 50% 36%, #2e1f11, #030304 72%);
+}
+
+#title h1 {
+  font-size: 64px;
+  letter-spacing: 0.3em;
+  text-shadow: 0 0 32px rgba(255, 160, 70, 0.28);
+}
+
+#title .tagline {
+  margin-top: 10px;
+  font-size: 16px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* Eine dünne Linie unter dem Titel, die an den Rändern ausläuft. */
+.rule {
+  width: min(420px, 70vw);
+  height: 1px;
+  margin-top: 22px;
+  background: linear-gradient(90deg, transparent, var(--fitting), transparent);
+}
+
+/* Anleitung: Abschnitte in zwei Spalten, auf schmalen Bildschirmen untereinander. */
+#help {
+  justify-content: safe center;
+  overflow-y: auto;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+  width: min(900px, 94vw);
+  margin-top: 14px;
+  text-align: left;
+}
+
+.help-grid section {
+  padding: 12px 16px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.help-grid h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ember);
+}
+
+.help-grid p,
+.help-grid li {
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+.help-grid p + p {
+  margin-top: 8px;
+}
+
+.help-grid ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-dim);
+}
+
+.help-grid b {
+  font-weight: normal;
+  color: var(--text);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.3em;
+  padding: 0 5px;
+  box-sizing: border-box;
+  background: rgba(201, 193, 177, 0.08);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font: 12px/1.5 ui-monospace, Consolas, monospace;
+  text-align: center;
+  color: var(--text);
 }
 
 /* Geldbörse unter der Klassenwahl und Ertrag am Ende der Nacht. */
@@ -772,6 +1110,10 @@ body {
 }
 
 @media (max-width: 760px) {
+  .help-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   #steigerung-list {
     grid-auto-flow: row;
     grid-template-columns: minmax(0, 1fr);

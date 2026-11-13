@@ -1,5 +1,6 @@
-import type { Volumes } from '../audio';
+import type { VitalsPosition } from '../core/settings';
 import type { IslandBearing, Zone } from '../game/zones';
+import { element, span } from './dom';
 
 /** Eine Karte in einer Auswahl: Klasse zu Beginn, Stärkung beim Stufenaufstieg. */
 export interface ChoiceCard {
@@ -47,12 +48,6 @@ const ZONE_LABELS: Record<Zone, string> = {
 /** Erst ab dieser Entfernung zeigt der Zeiger zur nächsten Feuerschale. */
 const COMPASS_MIN_DISTANCE = 9;
 
-function element<T extends HTMLElement = HTMLElement>(id: string): T {
-  const found = document.getElementById(id);
-  if (!found) throw new Error(`Element #${id} fehlt in index.html.`);
-  return found as T;
-}
-
 function percent(fraction: number): string {
   return `${(Math.min(1, Math.max(0, fraction)) * 100).toFixed(1)}%`;
 }
@@ -71,6 +66,8 @@ export class Hud {
   onSteigerungBuy: (index: number) => void = () => {};
   onSteigerungClass: (index: number) => void = () => {};
   onSteigerungBack: () => void = () => {};
+  /** Der Knopf "Hauptmenü" bei der Klassenwahl und am Ende der Nacht. */
+  onMainMenu: () => void = () => {};
   private readonly hpFill = element('hp-fill');
   private readonly hpDust = element('hp-dust');
   private readonly hpText = element('hp-text');
@@ -89,11 +86,6 @@ export class Hud {
   private readonly bossName = element('boss-name');
   private readonly bossFill = element('boss-fill');
   private readonly banner = element('banner');
-  private readonly pause = element('pause');
-  private readonly volMaster = element<HTMLInputElement>('vol-master');
-  private readonly volEffects = element<HTMLInputElement>('vol-effects');
-  private readonly volMusic = element<HTMLInputElement>('vol-music');
-  private readonly volMute = element<HTMLInputElement>('vol-mute');
   private readonly soundOff = element('sound-off');
   private readonly loading = element('loading');
   private readonly loadingText = element('loading-text');
@@ -103,6 +95,7 @@ export class Hud {
   private readonly choiceCards = element('choice-cards');
   private readonly choiceGold = element('choice-gold');
   private readonly choiceSteigern = element('choice-steigern');
+  private readonly choiceMainMenu = element('choice-main-menu');
   private readonly choiceKeys = element('choice-keys');
   private readonly end = element('end');
   private readonly endTitle = element('end-title');
@@ -126,6 +119,8 @@ export class Hud {
       ['choice-steigern', () => this.onSteigern()],
       ['end-steigern', () => this.onSteigern()],
       ['steigerung-back', () => this.onSteigerungBack()],
+      ['choice-main-menu', () => this.onMainMenu()],
+      ['end-main-menu', () => this.onMainMenu()],
     ] as const) {
       const button = element(id);
       button.addEventListener('click', () => {
@@ -209,33 +204,14 @@ export class Hud {
     this.hurtVeil.classList.add('active');
   }
 
-  setPaused(paused: boolean): void {
-    this.pause.hidden = !paused;
+  /** Stellt die Lebensgruppe (Stufe, Lebensbalken, Gold) an die gewählte Stelle des Bildschirms. */
+  setVitalsPosition(position: VitalsPosition): void {
+    if (document.body.dataset.vitals !== position) document.body.dataset.vitals = position;
   }
 
-  /** Verbindet die Tonregler im Pausenbild; `onChange` erfährt jede Änderung. */
-  bindSound(volumes: Readonly<Volumes>, onChange: (volumes: Volumes) => void): void {
-    const read = (): Volumes => ({
-      master: Number(this.volMaster.value) / 100,
-      effects: Number(this.volEffects.value) / 100,
-      music: Number(this.volMusic.value) / 100,
-      muted: this.volMute.checked,
-    });
-    for (const control of [this.volMaster, this.volEffects, this.volMusic, this.volMute]) {
-      control.addEventListener('input', () => onChange(read()));
-      // Der Fokus bliebe sonst am Regler hängen; die Pfeiltasten gehören aber dem Spiel.
-      control.addEventListener('change', () => control.blur());
-    }
-    this.showSound(volumes);
-  }
-
-  /** Zeigt die Reglerstellungen, auch wenn sie über die Taste M geändert wurden. */
-  showSound(volumes: Readonly<Volumes>): void {
-    this.volMaster.value = String(Math.round(volumes.master * 100));
-    this.volEffects.value = String(Math.round(volumes.effects * 100));
-    this.volMusic.value = String(Math.round(volumes.music * 100));
-    this.volMute.checked = volumes.muted;
-    this.soundOff.hidden = !volumes.muted;
+  /** Der Hinweis "Ton aus" unten im Bild, solange der Ton stumm geschaltet ist. */
+  setMuted(muted: boolean): void {
+    this.soundOff.hidden = !muted;
   }
 
   /** Hinweis, solange die Modelle geladen werden; `null` blendet ihn aus. */
@@ -268,9 +244,12 @@ export class Hud {
     this.choiceCards.replaceChildren(...this.cards);
     this.choiceGold.hidden = gold === null;
     this.choiceSteigern.hidden = gold === null;
+    this.choiceMainMenu.hidden = gold === null;
     if (gold !== null) this.choiceGold.textContent = `Gold: ${gold}`;
     this.choiceKeys.textContent =
-      gold === null ? '1 · 2 · 3 oder Pfeiltasten und Enter' : '1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen · U: Klassen steigern';
+      gold === null
+        ? '1 · 2 · 3 oder Pfeiltasten und Enter'
+        : '1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen · U: Klassen steigern · Esc: Hauptmenü';
     this.select(selected);
     this.choice.hidden = false;
   }
@@ -371,13 +350,6 @@ export class Hud {
     this.shown.set(target, value);
     target.style[property] = value;
   }
-}
-
-function span(className: string, text: string): HTMLSpanElement {
-  const node = document.createElement('span');
-  node.className = className;
-  node.textContent = text;
-  return node;
 }
 
 export { formatTime };

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Survivor-like – Prototyp</title>
   </head>
-  <body>
+  <body data-vitals="top-left">
     <canvas id="game"></canvas>
 
     <div id="finsternis-veil"></div>
@@ -73,16 +73,139 @@
     <div id="sound-off" hidden>Ton aus · M</div>
     <div id="debug" hidden></div>
 
+    <!--
+      Menüs: Jeder Eintrag mit data-item ist anwählbar (Maus oder Tasten, siehe src/ui/menus.ts); data-command nennt,
+      was der Knopf auslöst.
+    -->
+    <div id="title" class="overlay" hidden>
+      <h1>DAO Survivor</h1>
+      <p class="tagline">Überstehe die Nacht vor der Mauer</p>
+      <div class="rule"></div>
+      <div class="menu">
+        <button type="button" class="menu-item" data-item data-command="new">Neues Spiel</button>
+        <button type="button" class="menu-item" data-item data-command="continue" id="title-continue">Spiel fortsetzen</button>
+        <button type="button" class="menu-item" data-item data-command="options">Optionen</button>
+        <button type="button" class="menu-item" data-item data-command="help">Anleitung</button>
+      </div>
+      <p class="keys">Auf und Ab: wählen · Enter: bestätigen</p>
+    </div>
+
+    <div id="help" class="overlay" hidden>
+      <h1>Anleitung</h1>
+      <div class="help-grid">
+        <section>
+          <h2>Ziel</h2>
+          <p>
+            Eine Nacht dauert 15 Minuten. Überlebe sie von der Abendglocke bis zum Sonnenaufgang, wenn Sor aufgeht.
+            Gegen Ende der Nacht erscheint der Verschlinger.
+          </p>
+        </section>
+        <section>
+          <h2>Steuerung</h2>
+          <ul>
+            <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> oder Pfeiltasten: bewegen. Angegriffen wird von selbst.</li>
+            <li><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> oder Pfeile und <kbd>Enter</kbd>: wählen und bestätigen.</li>
+            <li><kbd>Esc</kbd> oder <kbd>P</kbd>: Pause · <kbd>M</kbd>: Ton an oder aus · <kbd>U</kbd>: Steigerungen.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>Licht und Finsternis</h2>
+          <p>
+            Tritt an eine Feuerschale und warte einen Augenblick, dann brennt sie. Im Licht heilst du, und der Staub fällt von dir ab;
+            der Zeiger am Rand zeigt zur nächsten Schale. Die Feuer brennen nach einiger Zeit aus.
+          </p>
+          <p>
+            In den Schwaden der Finsternis verstaubst du: Der graue Teil des Lebensbalkens wächst von rechts und nimmt dir Leben,
+            das erst im Licht zurückkehrt.
+          </p>
+        </section>
+        <section>
+          <h2>Stufen und Segen</h2>
+          <p>
+            Sammle die Edelsteine, die Gegner fallen lassen. Mit jeder Stufe wählst du eine Stärkung; auf jeder fünften
+            antwortet eine Höhere Macht mit einem Segen.
+          </p>
+        </section>
+        <section>
+          <h2>Gold und Steigerungen</h2>
+          <p>
+            Münzen aus Gegnern, Sold für jede überlebte Minute und eine Prämie bei Sonnenaufgang füllen den Geldbeutel.
+            Zwischen den Nächten gibst du das Gold bei der Klassenwahl (<kbd>U</kbd>) für dauerhafte Steigerungen aus; sie gelten je Klasse.
+          </p>
+        </section>
+        <section>
+          <h2>Die Klassen</h2>
+          <ul>
+            <li><b>Kämpfer:</b> stark im Licht der Feuer.</li>
+            <li><b>Wildnisläufer:</b> zu Hause am Rand der Finsternis.</li>
+            <li><b>Magier:</b> wirkt am schnellsten mitten in der Finsternis.</li>
+          </ul>
+        </section>
+      </div>
+      <button type="button" class="button" data-item data-command="back">Zurück (Esc)</button>
+    </div>
+
     <div id="pause" class="overlay" hidden>
       <h1>Pause</h1>
-      <div id="sound-panel">
-        <h2>Ton</h2>
-        <label><span>Gesamt</span><input id="vol-master" type="range" min="0" max="100" step="1" /></label>
-        <label><span>Effekte</span><input id="vol-effects" type="range" min="0" max="100" step="1" /></label>
-        <label><span>Musik</span><input id="vol-music" type="range" min="0" max="100" step="1" /></label>
-        <label class="mute"><input id="vol-mute" type="checkbox" /><span>Ton aus</span></label>
+      <div class="menu">
+        <button type="button" class="menu-item" data-item data-command="resume">Weiter</button>
+        <button type="button" class="menu-item" data-item data-command="options">Optionen</button>
+        <button type="button" class="menu-item" data-item data-command="abort">Lauf abbrechen</button>
       </div>
-      <p class="keys">Esc oder P: weiter · M: Ton an/aus</p>
+      <p class="keys">Auf und Ab: wählen · Enter: bestätigen · Esc oder P: weiter · M: Ton an/aus</p>
+    </div>
+
+    <div id="options" class="overlay" hidden>
+      <h1>Optionen</h1>
+      <section class="option-group">
+        <h2>Ton</h2>
+        <label class="option" data-item data-row="master">
+          <span class="option-label">Gesamt</span>
+          <input id="vol-master" type="range" min="0" max="100" step="1" />
+          <output id="vol-master-value"></output>
+        </label>
+        <label class="option" data-item data-row="effects">
+          <span class="option-label">Effekte</span>
+          <input id="vol-effects" type="range" min="0" max="100" step="1" />
+          <output id="vol-effects-value"></output>
+        </label>
+        <label class="option" data-item data-row="music">
+          <span class="option-label">Musik</span>
+          <input id="vol-music" type="range" min="0" max="100" step="1" />
+          <output id="vol-music-value"></output>
+        </label>
+        <label class="option mute" data-item data-row="mute">
+          <input id="vol-mute" type="checkbox" />
+          <span class="option-label">Ton aus</span>
+        </label>
+      </section>
+      <section class="option-group">
+        <h2>Oberfläche</h2>
+        <div class="option position" data-item data-row="position">
+          <span class="option-label">Lebensbalken platzieren</span>
+          <div id="position-picker" class="screen-model" role="radiogroup" aria-label="Lebensbalken platzieren">
+            <span class="model-clock">Uhr</span>
+            <button type="button" class="spot" data-position="top-left" role="radio" aria-label="Oben links"><i></i><i></i><i></i></button>
+            <button type="button" class="spot" data-position="top-right" role="radio" aria-label="Oben rechts"><i></i><i></i><i></i></button>
+            <button type="button" class="spot" data-position="bottom-left" role="radio" aria-label="Unten links"><i></i><i></i><i></i></button>
+            <button type="button" class="spot" data-position="bottom-center" role="radio" aria-label="Unten Mitte"><i></i><i></i><i></i></button>
+            <button type="button" class="spot" data-position="bottom-right" role="radio" aria-label="Unten rechts"><i></i><i></i><i></i></button>
+          </div>
+          <span id="position-name" class="option-value"></span>
+        </div>
+      </section>
+      <button type="button" class="button" data-item data-command="back">Zurück (Esc)</button>
+      <p class="keys">Auf und Ab: Zeile wählen · Links und Rechts: ändern · Enter: umschalten · Esc: zurück</p>
+    </div>
+
+    <div id="confirm" class="overlay" hidden>
+      <h1 id="confirm-title"></h1>
+      <p id="confirm-text"></p>
+      <div class="menu choices">
+        <button type="button" class="menu-item" data-item data-command="no" id="confirm-no"></button>
+        <button type="button" class="menu-item danger" data-item data-command="yes" id="confirm-yes"></button>
+      </div>
+      <p class="keys">Links und Rechts: wählen · Enter: bestätigen · Esc: zurück</p>
     </div>
 
     <div id="loading" class="overlay" hidden>
@@ -95,7 +218,10 @@
       <p id="choice-subtitle"></p>
       <div id="choice-cards"></div>
       <p id="choice-gold" hidden></p>
-      <button id="choice-steigern" class="button" type="button" hidden>Klassen steigern (U)</button>
+      <div class="buttons">
+        <button id="choice-steigern" class="button" type="button" hidden>Klassen steigern (U)</button>
+        <button id="choice-main-menu" class="button" type="button" hidden>Hauptmenü (Esc)</button>
+      </div>
       <p id="choice-keys" class="keys">1 · 2 · 3 oder Pfeiltasten und Enter</p>
     </div>
 
@@ -115,8 +241,11 @@
       <p id="end-text"></p>
       <p id="end-stats"></p>
       <p id="end-gold"></p>
-      <button id="end-steigern" class="button" type="button">Gold ausgeben (U)</button>
-      <p class="keys">Enter: Klasse wählen und neue Nacht beginnen · U: Gold für Steigerungen ausgeben</p>
+      <div class="buttons">
+        <button id="end-steigern" class="button" type="button">Gold ausgeben (U)</button>
+        <button id="end-main-menu" class="button" type="button">Hauptmenü (Esc)</button>
+      </div>
+      <p class="keys">Enter: Klasse wählen und neue Nacht beginnen · U: Gold für Steigerungen ausgeben · Esc: Hauptmenü</p>
     </div>
 
     <div id="error" class="overlay" hidden></div>
