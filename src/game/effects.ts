@@ -575,6 +575,7 @@ export class Effects {
     this.fireBed.spec.outer = radius;
     this.fireBed.opacity = (0.85 + 0.9 * surge) * flicker;
     this.fireRing.spec.outer = radius;
+    this.fireRing.spec.span = 1.9 + 0.9 * surge;
     this.fireRing.opacity = Math.min(1.25, (0.95 + 0.3 * surge) * flicker);
     this.fireCoals.spec.inner = radius - 0.5;
     this.fireCoals.spec.outer = radius + 0.5;
@@ -595,20 +596,13 @@ export class Effects {
     for (let i = 0; i < smoke; i++) this.fireSmoke(x, z, radius);
   }
 
-  /** Die Glut greift an: Alle im Kreis erleiden Schaden, und das ganze Feuer flammt auf. */
+  /**
+   * Die Glut greift an: Alle im Kreis erleiden Schaden, und das ganze Feuer flammt auf. Dafür gibt es keine
+   * eigene Fläche: Sie bliebe stehen, wo sie entstand, und der Magier ließe beim Laufen Ringe hinter sich zurück.
+   * Stattdessen schlagen die Flammen des mitlaufenden Feuers höher (`fireSurge` in `embers`).
+   */
   emberPulse(x: number, z: number, radius: number): void {
     this.fireSurge = 1;
-    this.strips.spawn({
-      look: 'fire',
-      x,
-      z,
-      inner: 0,
-      outer: radius,
-      y: 0.02,
-      span: 2.6,
-      opacity: 0.9,
-      life: 0.3,
-    });
     for (let i = 0; i < 22; i++) this.ember(x, z, radius, 2, i % 2 === 0);
   }
 
