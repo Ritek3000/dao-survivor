@@ -31,8 +31,25 @@ export interface GearDef {
    * Raum der Figur (+Z nach vorn, +X nach links), nicht im Raum des Handknochens. `minSide`: So weit links von der
    * Mitte der Figur bleibt der Griffpunkt mindestens, damit der Schild nicht in den Körper fährt, wenn die Hand
    * im Lauf nach innen schwingt (Meter, vor der Skalierung der Figur).
+   * `leash`: Die Leine hält den Schild nah am Körper, wenn die Hand weit ausholt (Wirbelschlag, Wuchthieb, Lauf).
    */
-  steady?: { weight: number; along: Triple; toward: Triple; minSide: number };
+  steady?: { weight: number; along: Triple; toward: Triple; minSide: number; leash?: Leash };
+}
+
+/**
+ * Wie weit sich der Schild von seiner Ruhelage am Körper entfernen darf. Die Ruhelage `rest` liegt an der Seite der
+ * Figur, gemessen von einem Knochen (`bone`, die Hüfte) in den Achsen der Figur (+X links, +Y oben, +Z vorn). Bis `near`
+ * Abstand folgt der Schild der Hand ungehindert; was darüber hinausgeht, zählt nur noch zu `soft` (0 bis 1). So bleibt die
+ * Bewegung der Hand erkennbar, der Schild fliegt aber nicht mit dem ausgestreckten Arm davon. `inward`: So weit darf der
+ * Schild der Hand entgegenrücken, in Richtung seiner Außenseite gemessen; weiter hinein, und die Hand ragte vorn durch
+ * das Brett. Alle Angaben in Metern, vor der Skalierung der Figur.
+ */
+export interface Leash {
+  bone: string;
+  rest: Triple;
+  near: number;
+  soft: number;
+  inward: number;
 }
 
 interface Built {
@@ -48,6 +65,10 @@ const wanted = new THREE.Quaternion();
 const origin = new THREE.Vector3();
 const handScale = new THREE.Vector3();
 const sideways = new THREE.Vector3();
+const restPoint = new THREE.Vector3();
+const pull = new THREE.Vector3();
+const gripPoint = new THREE.Vector3();
+const outward = new THREE.Vector3();
 const FORWARD = new THREE.Vector3(0, 0, 1);
 const direction = new THREE.Vector3();
 
@@ -259,6 +280,8 @@ export class Gear {
   private steadiness: number;
   /** Der Griffpunkt im Raum des Handknochens, wie ihn `setGrip` festlegt. */
   private readonly grip = new THREE.Vector3();
+  /** Der Knochen, an dem die Ruhelage der Leine hängt (nur mit `def.steady.leash` und wenn er da ist). */
+  private anchor: THREE.Object3D | null = null;
 
   constructor(
     private readonly def: GearDef,
@@ -271,6 +294,13 @@ export class Gear {
     this.setGrip(def.along, def.toward, def.offset);
     if (def.steady) this.held.copy(orientation(def.steady.along, def.steady.toward));
     this.steadiness = def.steady?.weight ?? 0;
+    const anchorName = def.steady?.leash?.bone;
+    if (anchorName) {
+      figure.traverse((object) => {
+        if (object instanceof THREE.Bone && object.name === anchorName) this.anchor ??= object;
+      });
+      // Fehlt der Knochen (anderes Skelett), bleibt der Schild ohne Leine.
+    }
     hand.add(this.built.object);
     this.update(0, false);
   }
@@ -284,11 +314,12 @@ export class Gear {
   }
 
   /**
-   * Richtet einen Gegenstand mit `def.steady` im Raum der Figur aus. Gehört hinter jeden Schritt der Animation,
-   * denn die Hand steht erst dann an ihrem neuen Platz.
+   * Richtet einen Gegenstand mit `def.steady` im Raum der Figur aus und hält ihn nah am Körper. Gehört hinter jeden
+   * Schritt der Animation, denn die Hand steht erst dann an ihrem neuen Platz.
    */
   settle(): void {
-    if (this.steadiness <= 0) return;
+    const steady = this.def.steady;
+    if (!steady || this.steadiness <= 0) return;
     this.hand.getWorldQuaternion(handRotation);
     this.figure.getWorldQuaternion(figureRotation);
     // Gesucht ist die Drehung im Raum der Hand, die in der Welt der gehaltenen Ausrichtung der Figur entspricht.
@@ -296,17 +327,43 @@ export class Gear {
     const object = this.built.object;
     object.quaternion.slerpQuaternions(this.rigid, wanted, this.steadiness);
 
-    // Schwingt die Hand nach innen, rückt der Schild nach außen, statt durch den Körper zu fahren.
     object.position.copy(this.grip);
     object.getWorldPosition(origin);
-    this.figure.worldToLocal(origin);
-    const missing = (this.def.steady?.minSide ?? 0) - origin.x;
-    if (missing <= 0) return;
-    object.getWorldPosition(origin);
-    sideways.setFromMatrixColumn(this.figure.matrixWorld, 0).normalize();
-    // Die Figur ist skaliert: Der Abstand gilt in ihrem eigenen Maß.
-    origin.addScaledVector(sideways, missing * this.figure.getWorldScale(handScale).x);
-    object.position.copy(this.hand.worldToLocal(origin));
+    // Die Figur ist skaliert: Abstände gelten in ihrem eigenen Maß.
+    const scale = this.figure.getWorldScale(handScale).x;
+    let moved = false;
+
+    // Holt die Hand weit aus, bleibt der Schild nah am Körper und fliegt nicht mit dem Arm davon. Die Ruhelage folgt der
+    // Hüfte, aber nicht deren Drehung: Beugt sich die Figur, bleibt die Seite die Seite.
+    const leash = steady.leash;
+    if (leash && this.anchor) {
+      this.anchor.getWorldPosition(restPoint);
+      pull.set(...leash.rest).multiplyScalar(scale).applyQuaternion(figureRotation);
+      restPoint.add(pull);
+      gripPoint.copy(origin);
+      pull.subVectors(origin, restPoint);
+      const distance = pull.length() / scale;
+      if (distance > leash.near) {
+        const kept = leash.near + (distance - leash.near) * leash.soft;
+        origin.copy(restPoint).addScaledVector(pull, kept / distance);
+        // Die Hand liegt hinter dem Brett an der Griffstange: Rückt der Schild ihr zu weit entgegen, ragt sie vorn heraus.
+        outward.set(0, 0, 1).applyQuaternion(object.quaternion).applyQuaternion(handRotation);
+        const shift = pull.subVectors(origin, gripPoint).dot(outward) / scale;
+        if (shift < -leash.inward) origin.addScaledVector(outward, (-leash.inward - shift) * scale);
+        moved = true;
+      }
+    }
+
+    // Schwingt die Hand nach innen, rückt der Schild nach außen, statt durch den Körper zu fahren.
+    pull.copy(origin);
+    this.figure.worldToLocal(pull);
+    const missing = steady.minSide - pull.x;
+    if (missing > 0) {
+      sideways.setFromMatrixColumn(this.figure.matrixWorld, 0).normalize();
+      origin.addScaledVector(sideways, missing * scale);
+      moved = true;
+    }
+    if (moved) object.position.copy(this.hand.worldToLocal(origin));
   }
 
   /** Lässt den Schild starr an der Hand sitzen, etwa wenn die Figur zu Boden geht. */
