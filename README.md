@@ -49,7 +49,7 @@ Nach jedem Merge auf `main` baut GitHub das Spiel und veröffentlicht den Stand 
 | Taste                      | Aktion                                  |
 | -------------------------- | --------------------------------------- |
 | WASD oder Pfeiltasten      | Bewegen                                 |
-| Esc oder P                 | Pause (Weiter, Optionen, Lauf abbrechen); in Menüs: zurück |
+| Esc oder P                 | Pause (Weiter, Optionen, Lauf abbrechen); in Menüs zurück; bei der Klassenwahl und am Ende der Nacht zum Startbildschirm |
 | M                          | Ton an oder aus                         |
 | 1, 2, 3 oder Pfeile, Enter | Klasse und Stärkungen wählen, Bestätigen |
 | U                          | Steigerungen öffnen (bei der Klassenwahl und am Ende der Nacht) |
@@ -84,7 +84,7 @@ src/
   core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Steigerungen)
   audio/              Ton und Musik: Engine, Ereignisnamen, Lesen von audio.json
   game/               Spiellogik und Darstellung (siehe unten)
-  ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Pause, Optionen, Rückfragen
+  ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Anleitung, Rückfragen
   tools/              Entwicklungswerkzeuge: Messlauf und Modell-Prüfer
 tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren; Python: Klänge erzeugen)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
@@ -94,7 +94,7 @@ Wichtige Teile von `src/game/`:
 
 | Datei                          | Inhalt                                                                  |
 | ------------------------------ | ----------------------------------------------------------------------- |
-| `game.ts`                      | Hauptschleife und Phasen (Laden, Klassenwahl, Spiel, Pause, Ende)       |
+| `game.ts`                      | Hauptschleife und Phasen (Laden, Startbildschirm, Klassenwahl, Spiel, Pause, Ende) |
 | `classes.ts`                   | Die drei Klassen mit Werten, Modell und Ausrüstung                      |
 | `weapons.ts`, `arsenal.ts`     | Alle Angriffe als Daten und ihre Ausführung                             |
 | `effects.ts`, `strips.ts`, `particles.ts`, `props.ts` | Wie die Angriffe aussehen                        |
@@ -106,6 +106,13 @@ Wichtige Teile von `src/game/`:
 | `models.ts`                    | Lädt GLB-Dateien und bringt sie auf die Maße, die das Spiel braucht     |
 
 ## Menüs und Oberfläche
+
+**Startbildschirm** (nach dem Laden): *Neues Spiel*, *Spiel fortsetzen*, *Optionen* und *Anleitung*. „Spiel fortsetzen“ erscheint nur, wenn es einen
+Spielstand gibt (Gold in der Börse oder gekaufte Ränge) und führt zur Klassenwahl. „Neues Spiel“ setzt den dauerhaften Fortschritt zurück
+(Gold und Steigerungen aller Klassen; die Optionen bleiben). Gibt es einen Fortschritt, warnt davor eine Rückfrage, die nennt, was verloren ginge
+(vorgewählt ist „Abbrechen“); ohne Fortschritt geht es sofort weiter. Von der Klassenwahl und vom Ende der Nacht führt **Esc** (oder der Knopf
+„Hauptmenü“) zurück zum Startbildschirm. Die **Anleitung** erklärt Ziel, Steuerung, Licht und Finsternis, Stufen, Gold und die Klassen
+(Text in `index.html`).
 
 **Pause** (Esc oder P): *Weiter*, *Optionen* und *Lauf abbrechen*. Wer den Lauf abbricht, bestätigt zuerst eine Rückfrage; die Nacht endet dann
 wie bei einem Sturz (Ertrag nach `CONFIG.gold.deathKeep`) mit der Endanzeige „Lauf abgebrochen“.
@@ -151,7 +158,7 @@ bzw. gerade gespielte Klasse.
 (`version`, jetzt 1). Der Zugriff steckt hinter `TextStore` in `src/core/storage.ts` und `src/core/savegame.ts`; wo `localStorage` fehlt oder
 gesperrt ist, gilt der Stand nur für die Sitzung. Eine Desktop-Fassung kann mit `useSavegameStore` eine Datei an die Stelle setzen.
 Ein unlesbarer Stand beginnt bei null; was das Spiel nicht kennt (etwa eine entfernte Steigerung), bleibt beim Speichern erhalten.
-Wer den Spielstand zurücksetzen will, löscht den Schlüssel in den Entwicklerwerkzeugen des Browsers (`localStorage.removeItem('dao-survivor.spielstand')`).
+Zurücksetzen lässt sich der Stand mit „Neues Spiel“ im Startbildschirm (mit Rückfrage); in den Entwicklerwerkzeugen genügt auch `localStorage.removeItem('dao-survivor.spielstand')`.
 
 **Gleichgewicht.** Der Messlauf rechnet standardmäßig ohne Steigerungen (so bleiben die Zahlen vergleichbar) und schreibt das Gold jeder Nacht
 mit (`gold`). `__messlauf.start({ steigerung: 'max' })` lässt alle Klassen voll gesteigert antreten, `{ steigerung: 3 }` auf Rang 3. Der
@@ -211,7 +218,7 @@ Bei Musik, die in der Schleife läuft, sollte das Stück nahtlos enden und begin
 
 In den Optionen (Pause: Esc oder P, dann **Optionen**) stehen drei Regler: Gesamt, Effekte, Musik, dazu das Häkchen „Ton aus“. Die Taste **M** schaltet den Ton überall an oder aus, auch im Menü; ein
 Hinweis unten rechts erinnert daran, solange er aus ist. Die Einstellung bleibt erhalten (`localStorage`, mit Rückfall auf den Speicher der Sitzung).
-Browser spielen erst nach der ersten Eingabe Ton ab: Bis zur ersten Taste oder dem ersten Klick bleibt die Klassenwahl still.
+Browser spielen erst nach der ersten Eingabe Ton ab: Bis zur ersten Taste oder dem ersten Klick bleibt der Startbildschirm still.
 
 ### Wie der Ton abgemischt wird
 
@@ -219,7 +226,7 @@ Browser spielen erst nach der ersten Eingabe Ton ab: Bis zur ersten Taste oder d
 - **In der Finsternis werden Geräusche gedämpft**, so wie es `finsternis.md` beschreibt („Schritte werden zu Flüstern und Rufe verhallen nach wenigen Metern“):
   In einer Schwade sinkt die Grenzfrequenz, die Lautstärke und die Reichweite; auch die Musik wird dumpf, und ein tiefes Brummen setzt ein.
   Töne, die in einer Schwade entstehen, klingen auch von außen dumpf.
-- Die Musik folgt dem Spiel: Klassenwahl, Nacht, dichtere Nacht ab der 8. Minute, Verschlinger, danach ein kurzes Stück für Sieg oder Niederlage.
+- Die Musik folgt dem Spiel: Startbildschirm und Klassenwahl, Nacht, dichtere Nacht ab der 8. Minute, Verschlinger, danach ein kurzes Stück für Sieg oder Niederlage.
   In der Pause und bei der Wahl einer Stärkung tritt sie zurück.
 - Alle Zahlen der Abmischung stehen in `CONFIG.audio` (`src/config.ts`).
 

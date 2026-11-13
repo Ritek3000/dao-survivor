@@ -66,6 +66,8 @@ export class Hud {
   onSteigerungBuy: (index: number) => void = () => {};
   onSteigerungClass: (index: number) => void = () => {};
   onSteigerungBack: () => void = () => {};
+  /** Der Knopf "Hauptmenü" bei der Klassenwahl und am Ende der Nacht. */
+  onMainMenu: () => void = () => {};
   private readonly hpFill = element('hp-fill');
   private readonly hpDust = element('hp-dust');
   private readonly hpText = element('hp-text');
@@ -93,6 +95,7 @@ export class Hud {
   private readonly choiceCards = element('choice-cards');
   private readonly choiceGold = element('choice-gold');
   private readonly choiceSteigern = element('choice-steigern');
+  private readonly choiceMainMenu = element('choice-main-menu');
   private readonly choiceKeys = element('choice-keys');
   private readonly end = element('end');
   private readonly endTitle = element('end-title');
@@ -116,6 +119,8 @@ export class Hud {
       ['choice-steigern', () => this.onSteigern()],
       ['end-steigern', () => this.onSteigern()],
       ['steigerung-back', () => this.onSteigerungBack()],
+      ['choice-main-menu', () => this.onMainMenu()],
+      ['end-main-menu', () => this.onMainMenu()],
     ] as const) {
       const button = element(id);
       button.addEventListener('click', () => {
@@ -239,9 +244,12 @@ export class Hud {
     this.choiceCards.replaceChildren(...this.cards);
     this.choiceGold.hidden = gold === null;
     this.choiceSteigern.hidden = gold === null;
+    this.choiceMainMenu.hidden = gold === null;
     if (gold !== null) this.choiceGold.textContent = `Gold: ${gold}`;
     this.choiceKeys.textContent =
-      gold === null ? '1 · 2 · 3 oder Pfeiltasten und Enter' : '1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen · U: Klassen steigern';
+      gold === null
+        ? '1 · 2 · 3 oder Pfeiltasten und Enter'
+        : '1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen · U: Klassen steigern · Esc: Hauptmenü';
     this.select(selected);
     this.choice.hidden = false;
   }

@@ -8,6 +8,8 @@
   --ember: #ffb45e;
   --shard: #9fe3d0;
   --gold: #ffc83d;
+  /* Bronzebeschläge der Lebensgruppe und Zierlinien. */
+  --fitting: #8a7447;
 }
 
 html,
@@ -50,7 +52,6 @@ body {
 #vitals {
   --orb: 62px;
   --overlap: 12px;
-  --fitting: #8a7447;
   display: flex;
   align-items: center;
   width: min(360px, 42vw);
@@ -583,6 +584,13 @@ body[data-vitals='bottom-left'] #debug {
   display: none !important;
 }
 
+/* Undurchsichtiger Grund: Anleitung immer, Optionen und Rückfragen, wenn sie vom Startbildschirm kommen. */
+.overlay.solid,
+#options.solid,
+#help {
+  background: #030304;
+}
+
 /* Menüs (Pause, Optionen, Rückfragen): Einträge untereinander, der markierte hat den Rahmen der Auswahlkarten. */
 .menu {
   display: flex;
@@ -637,9 +645,6 @@ body[data-vitals='bottom-left'] #debug {
   background: rgba(3, 3, 4, 0.86);
 }
 
-#options.solid {
-  background: rgba(3, 3, 4, 0.97);
-}
 
 .option-group {
   display: flex;
@@ -839,6 +844,109 @@ body[data-vitals='bottom-left'] #debug {
   border-color: var(--ember);
 }
 
+/* Knöpfe nebeneinander, etwa "Klassen steigern" und "Hauptmenü". */
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 14px;
+}
+
+/* Startbildschirm: deckt das Spiel dahinter ganz zu. */
+#title {
+  gap: 0;
+  background: radial-gradient(ellipse at 50% 36%, #2e1f11, #030304 72%);
+}
+
+#title h1 {
+  font-size: 64px;
+  letter-spacing: 0.3em;
+  text-shadow: 0 0 32px rgba(255, 160, 70, 0.28);
+}
+
+#title .tagline {
+  margin-top: 10px;
+  font-size: 16px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* Eine dünne Linie unter dem Titel, die an den Rändern ausläuft. */
+.rule {
+  width: min(420px, 70vw);
+  height: 1px;
+  margin-top: 22px;
+  background: linear-gradient(90deg, transparent, var(--fitting), transparent);
+}
+
+/* Anleitung: Abschnitte in zwei Spalten, auf schmalen Bildschirmen untereinander. */
+#help {
+  justify-content: safe center;
+  overflow-y: auto;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+  width: min(900px, 94vw);
+  margin-top: 14px;
+  text-align: left;
+}
+
+.help-grid section {
+  padding: 12px 16px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.help-grid h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ember);
+}
+
+.help-grid p,
+.help-grid li {
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+.help-grid p + p {
+  margin-top: 8px;
+}
+
+.help-grid ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-dim);
+}
+
+.help-grid b {
+  font-weight: normal;
+  color: var(--text);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.3em;
+  padding: 0 5px;
+  box-sizing: border-box;
+  background: rgba(201, 193, 177, 0.08);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font: 12px/1.5 ui-monospace, Consolas, monospace;
+  text-align: center;
+  color: var(--text);
+}
+
 /* Geldbörse unter der Klassenwahl und Ertrag am Ende der Nacht. */
 #choice-gold,
 #steigerung-gold {
@@ -1002,6 +1110,10 @@ body[data-vitals='bottom-left'] #debug {
 }
 
 @media (max-width: 760px) {
+  .help-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   #steigerung-list {
     grid-auto-flow: row;
     grid-template-columns: minmax(0, 1fr);

@@ -35,10 +35,11 @@ const SEGEN_SUBTITLE = 'Eine Höhere Macht antwortet. Wähle einen Segen';
 const BOSS_SEGEN_SECONDS = 3;
 
 /**
- * 'loading' = Modelle werden geladen, 'select' = Klassenwahl vor der Nacht, 'levelup' = Wahl einer Stärkung,
- * 'steigerung' = Menü, in dem man zwischen den Nächten Gold für dauerhafte Ränge der Klassen ausgibt.
+ * 'loading' = Modelle werden geladen, 'title' = Startbildschirm, 'select' = Klassenwahl vor der Nacht,
+ * 'levelup' = Wahl einer Stärkung, 'steigerung' = Menü, in dem man zwischen den Nächten Gold für dauerhafte Ränge
+ * der Klassen ausgibt. Der Startbildschirm und die Pause tragen die Menüs (Optionen, Anleitung, Rückfragen) als Unterseiten.
  */
-type Phase = 'loading' | 'select' | 'playing' | 'paused' | 'levelup' | 'steigerung' | 'ended';
+type Phase = 'loading' | 'title' | 'select' | 'playing' | 'paused' | 'levelup' | 'steigerung' | 'ended';
 
 /** Eine wählbare Stärkung beim Stufenaufstieg: neuer Angriff, höherer Rang oder Segen. */
 interface Offer {
@@ -106,6 +107,8 @@ export class Game {
   private won = false;
   /** Wurde die Nacht über das Pausenmenü abgebrochen? Dann spielt zum Ende die Musik des Menüs. */
   private aborted = false;
+  /** Worauf die offene Rückfrage antwortet: das Abbrechen der Nacht oder das Löschen des Spielstands. */
+  private confirming: 'abort' | 'new' | null = null;
   private settings: Settings;
   /** Sekunden bis zum nächsten Ruf aus der Horde. */
   private callIn = 2;
@@ -154,6 +157,7 @@ export class Game {
     };
     this.hud.onSteigerungClass = (index) => this.selectSteigerungClass(index);
     this.hud.onSteigerungBack = () => this.closeSteigerung();
+    this.hud.onMainMenu = () => this.openTitle();
     this.settings = loadSettings({
       sound: { ...CONFIG.audio.defaults, muted: false },
       ui: { vitalsPosition: 'top-left' },
@@ -197,7 +201,7 @@ export class Game {
       models.props.get(CONFIG.xp.gems.large.file) ?? null,
     );
     this.hud.setLoading(null);
-    this.openSelect();
+    this.openTitle();
   }
 
   start(): void {
@@ -216,6 +220,7 @@ export class Game {
         if (this.input.wasPressed('pause')) this.setPaused(true);
         else this.update(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         break;
+      case 'title':
       case 'paused':
         this.updateMenu();
         break;
@@ -232,6 +237,7 @@ export class Game {
         this.arsenal.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         if (this.input.wasPressed('confirm')) this.openSelect();
         else if (this.input.wasPressed('upgrade')) this.openSteigerungFromMenu();
+        else if (this.input.wasPressed('pause')) this.openTitle();
         break;
       case 'loading':
         break;
@@ -413,7 +419,7 @@ export class Game {
     if (save) saveSettings(this.settings);
   }
 
-  /** Bedienung der Menüs in der Pause: Auf und Ab wählen, Links und Rechts ändern, Enter bestätigt, Esc geht zurück. */
+  /** Bedienung der Menüs im Startbildschirm und in der Pause: Auf und Ab wählen, Links und Rechts ändern, Enter bestätigt, Esc geht zurück. */
   private updateMenu(): void {
     const { input, menus } = this;
     if (input.wasPressed('pause')) {
@@ -429,14 +435,26 @@ export class Game {
     if (input.wasPressed('confirm')) menus.activate();
   }
 
-  /** Esc im Menü: eine Ebene zurück; aus dem Pausenmenü selbst zurück ins Spiel. */
+  /** Esc im Menü: eine Ebene zurück; aus dem Pausenmenü selbst zurück ins Spiel, aus dem Startbildschirm nirgendwohin. */
   private menuBack(): void {
-    if (this.menus.screen === 'pause') {
-      this.setPaused(false);
-      return;
+    switch (this.menus.screen) {
+      case 'pause':
+        this.setPaused(false);
+        break;
+      case 'title':
+      case null:
+        break;
+      default:
+        this.confirming = null;
+        this.showMenuHome(true);
+        audio.play('auswahl');
     }
-    this.menus.showPause();
-    audio.play('auswahl');
+  }
+
+  /** Die Hauptseite des Menüs, von dem Optionen, Anleitung und Rückfragen ausgingen. */
+  private showMenuHome(back = false): void {
+    if (this.phase === 'title') this.openTitle(back);
+    else this.menus.showPause(back);
   }
 
   private onMenuCommand(command: MenuCommand): void {
@@ -445,11 +463,26 @@ export class Game {
         this.setPaused(false);
         break;
       case 'options':
-        this.menus.showOptions();
+        // Vom Startbildschirm aus liegt kein Spiel dahinter, das man sehen müsste.
+        this.menus.showOptions(this.phase === 'title');
         audio.play('auswahl');
+        break;
+      case 'help':
+        this.menus.showHelp();
+        audio.play('auswahl');
+        break;
+      case 'new':
+        if (this.steigerungen.hasProgress()) this.confirmNewGame();
+        else this.startNewGame();
+        break;
+      case 'continue':
+        this.menus.hide();
+        audio.play('bestaetigen');
+        this.openSelect();
         break;
       case 'abort': {
         const keep = Math.round(CONFIG.gold.deathKeep * 100);
+        this.confirming = 'abort';
         this.menus.showConfirm({
           title: 'Lauf abbrechen?',
           text:
@@ -462,15 +495,53 @@ export class Game {
         audio.play('auswahl');
         break;
       }
-      case 'yes':
+      case 'yes': {
+        const confirmed = this.confirming;
+        this.confirming = null;
         this.menus.hide();
-        this.end('aborted');
+        if (confirmed === 'abort') this.end('aborted');
+        else if (confirmed === 'new') this.startNewGame();
         break;
+      }
       case 'no':
       case 'back':
         this.menuBack();
         break;
     }
+  }
+
+  /** Warnt vor dem Löschen des Spielstands und nennt, was verloren ginge. */
+  private confirmNewGame(): void {
+    const ranks = CLASSES.reduce((sum, entry) => sum + this.steigerungen.totalRanks(entry.id), 0);
+    const lost: string[] = [];
+    if (this.steigerungen.gold > 0) lost.push(`${this.steigerungen.gold} Gold`);
+    if (ranks > 0) lost.push(`${ranks} Ränge der Steigerungen`);
+    this.confirming = 'new';
+    this.menus.showConfirm({
+      title: 'Neues Spiel beginnen?',
+      text: `Dein Fortschritt wird zurückgesetzt: ${lost.join(' und ')} gehen verloren. Das lässt sich nicht rückgängig machen. Die Optionen bleiben.`,
+      no: 'Abbrechen',
+      yes: 'Fortschritt löschen',
+    }, true);
+    audio.play('auswahl');
+  }
+
+  /** Beginnt bei null: leere Börse, keine Ränge, dann die Klassenwahl. */
+  private startNewGame(): void {
+    this.steigerungen.reset();
+    this.menus.hide();
+    audio.play('bestaetigen');
+    this.openSelect();
+  }
+
+  /** Der Startbildschirm; auch das Ziel von "Hauptmenü" bei der Klassenwahl und am Ende der Nacht. */
+  private openTitle(back = false): void {
+    this.phase = 'title';
+    this.hud.hideChoice();
+    this.hud.hideEnd();
+    this.hud.hideSteigerung();
+    this.confirming = null;
+    this.menus.showTitle(this.steigerungen.hasProgress(), back);
   }
 
   /** Die Klassenwahl vor der Nacht; `selected` markiert eine Klasse, sonst die zuletzt gespielte. */
@@ -621,6 +692,10 @@ export class Game {
 
     if (this.phase === 'select' && this.input.wasPressed('upgrade')) {
       this.openSteigerung(this.selected);
+      return;
+    }
+    if (this.phase === 'select' && this.input.wasPressed('pause')) {
+      this.openTitle();
       return;
     }
     if (this.input.wasPressed('choice1')) this.pick(0);
@@ -803,6 +878,7 @@ export class Game {
   private wantedMusic(): MusicId {
     switch (this.phase) {
       case 'loading':
+      case 'title':
       case 'select':
       case 'steigerung':
         return 'menue';
