@@ -1,6 +1,6 @@
 """
 Erzeugt den Rundschild des Kaempfers als spielfertige GLB-Datei: Modell, Farbtextur, Normalkarte und
-Rauheitskarte in einem Atlas, ein Material, gut 3000 Dreiecke.
+Rauheitskarte in einem Atlas, ein Material, rund 2900 Dreiecke.
 
 Der Schild ist ein Rundschild aus senkrechten Eichenbohlen mit Eisenrand und Buckel (die Lore nennt
 den Schild bei Ghens Schutzzaubern "Rundschildgroesse"). Auf der Flaeche steht das Sor-Symbol: der Buckel ist
