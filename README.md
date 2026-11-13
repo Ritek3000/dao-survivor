@@ -76,7 +76,7 @@ index.html            Seite des Spiels mit allen HUD-Elementen
 modell.html           Modell-Prüfer (nur für die Entwicklung, nicht Teil des Spiels)
 finsternis.md         Lore-Quelle: Staub und Finsternis
 magie_mystik/         Lore-Quelle: Katalog von Magie und Mystik, geordnet nach Domänen und Mächten
-public/models/        Spielfertige GLB-Modelle (Figuren, Gegner, Kulisse unter welt/)
+public/models/        Spielfertige GLB-Modelle (Figuren, Gegner, Kulisse unter welt/, Ausrüstung wie der Schild unter ausruestung/)
 public/audio/         Klänge und Musik (sfx/, schleifen/, musik/) und audio.json, die Zuordnung Ereignis → Datei
 src/
   main.ts             Einstieg: baut das Spiel und hängt Entwicklungswerkzeuge nur im Dev-Modus an
@@ -86,7 +86,7 @@ src/
   game/               Spiellogik und Darstellung (siehe unten)
   ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Anleitung, Rückfragen
   tools/              Entwicklungswerkzeuge: Messlauf und Modell-Prüfer
-tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten)
+tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
 ```
 
@@ -95,7 +95,7 @@ Wichtige Teile von `src/game/`:
 | Datei                          | Inhalt                                                                  |
 | ------------------------------ | ----------------------------------------------------------------------- |
 | `game.ts`                      | Hauptschleife und Phasen (Laden, Startbildschirm, Klassenwahl, Spiel, Pause, Ende) |
-| `classes.ts`                   | Die drei Klassen mit Werten, Modell und Ausrüstung                      |
+| `classes.ts`, `gear.ts`        | Die drei Klassen mit Werten, Modell und Ausrüstung; die Ausrüstung in den Händen (Axt, Bogen, Buch, Schild des Kämpfers) |
 | `weapons.ts`, `arsenal.ts`     | Alle Angriffe als Daten und ihre Ausführung                             |
 | `effects.ts`, `strips.ts`, `particles.ts`, `props.ts` | Wie die Angriffe aussehen                        |
 | `enemies.ts`, `boss.ts`, `threats.ts` | Horde, Verschlinger und die Zauber der Gegner                    |
@@ -265,6 +265,12 @@ Dateien mit gleichem Namen. Neu erzeugte OGG-Dateien nur einchecken, wenn sich d
   (`blender --background --factory-startup --python tools/manteltraeger-animieren.py -- modelle-original/manteltraeger.glb public/models/manteltraeger.glb`).
   Das Spiel spielt „Laufen“ nach der zurückgelegten Strecke (`stride`) und „Krallenhieb“ in Echtzeit: Der Gegner holt aus, am
   Boden erscheint die Warnfläche, und der Treffer fällt `strike.hitAt` Sekunden nach Beginn des Hiebs. Wer ausweicht, bleibt unverletzt.
+- **Schild erzeugen**: Der Schild in der linken Hand des Kämpfers (`public/models/ausruestung/schild.glb`) entsteht ganz aus Rechnung:
+  `tools/schild-erzeugen.py` baut in Blender einen Rundschild aus Brettern mit Eisenrand, Buckel und Messingnieten und backt Holz und
+  Eisen in eine Textur (`blender --background --factory-startup --python tools/schild-erzeugen.py`, optional mit `-- ziel.glb`).
+  Das Sor-Symbol auf der Fläche ist ein Vorschlag und lässt sich im Skript mit `EMBLEM = False` abschalten. Sitz und Haltung stehen im
+  Eintrag `offhand` des Kämpfers in `classes.ts`: Der Schild hängt am Handknochen, hält seine Ausrichtung aber im Raum der Figur
+  (`steady`), damit er im Lauf nicht mitwackelt und nicht im Körper steckt.
 
 ## Lore
 

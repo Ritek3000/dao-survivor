@@ -260,7 +260,9 @@ export class Player {
     }
     this.blendGait(0, 1);
     this.model?.gear?.update(0, false);
+    this.model?.offhand?.restore();
     this.mixer?.update(0);
+    this.model?.offhand?.settle();
   }
 
   /**
@@ -351,6 +353,8 @@ export class Player {
     this.shaft.visible = false;
     this.flame.position.y = Math.min(this.flame.position.y, KERZENWORT_OFFSET.y);
     this.model?.gear?.update(0, false);
+    // Stürzt die Figur, hängt der Schild wieder starr an der Hand.
+    this.model?.offhand?.release();
     if (!this.deadAction) return;
     this.swing?.action.fadeOut(0.15);
     this.swing = null;
@@ -368,6 +372,7 @@ export class Player {
       this.blendGait(0, 1);
       this.updateGear();
       this.mixer?.update(dt);
+      this.model?.offhand?.settle();
     } else if (this.deadAction) {
       this.mixer?.update(dt);
     } else if (this.model) {
@@ -444,6 +449,7 @@ export class Player {
       this.blendGait(Math.min(1, currentSpeed / (speed * 0.5)), backwards ? -pace : pace);
       this.updateGear();
       this.mixer.update(dt);
+      this.model?.offhand?.settle();
     } else {
       // Die Kapsel wippt leicht, als Ersatz für eine Laufanimation.
       this.stride += currentSpeed * dt * 2.2;

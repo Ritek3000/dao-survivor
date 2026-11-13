@@ -37,6 +37,8 @@ export interface HeroModel {
   clips: LayeredClip[];
   /** Die Waffe in der Hand; fehlt, wenn das Skelett keine Handknochen hat. */
   gear: Gear | null;
+  /** Was die andere Hand hält, etwa der Schild des Kämpfers. */
+  offhand: Gear | null;
 }
 
 /** Sucht einen Clip nach seinem Namen oder einem Teil davon. */
@@ -434,11 +436,40 @@ function bakeHorde(gltf: GLTF, spec: EnemyModel): HordeModel {
   };
 }
 
+/** Ein geladenes Modell für Ausrüstung, die nicht aus dem Code gebaut wird (der Schild). */
+interface GearModel {
+  object: THREE.Object3D;
+  materials: THREE.MeshStandardMaterial[];
+}
+
+/**
+ * Säubert das Material eines Ausrüstungsmodells wie das der Spielfigur: nicht selbstleuchtend, von der Finsternis
+ * verschluckt. Die Materialien kommen in die Liste der Figur, damit der Schild beim Treffer mit aufglüht.
+ */
+function prepareGearModel(gltf: GLTF): GearModel {
+  const materials = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+  const replace = (source: THREE.Material): THREE.MeshStandardMaterial => {
+    const known = materials.get(source);
+    if (known) return known;
+    const material = swallowedByFinsternis(litMaterial(source, true));
+    materials.set(source, material);
+    return material;
+  };
+  gltf.scene.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    object.material = Array.isArray(object.material) ? object.material.map(replace) : replace(object.material);
+    object.castShadow = true;
+    // Hängt an einem Knochen: Die Hüllkugel aus der Ruhelage stimmt in Bewegung nicht.
+    object.frustumCulled = false;
+  });
+  return { object: gltf.scene, materials: [...materials.values()] };
+}
+
 /**
  * Stellt die Spielfigur auf den Boden, bringt sie auf die Höhe ihrer Klasse, säubert das Material
  * und gibt ihr ihre Waffe in die Hand.
  */
-function prepareHero(gltf: GLTF, playerClass: ClassDef): HeroModel {
+function prepareHero(gltf: GLTF, playerClass: ClassDef, gearModels: ReadonlyMap<string, GearModel>): HeroModel {
   const scene = gltf.scene;
   const spec = playerClass.model;
   const upperBones = upperBodyBones(scene);
@@ -482,11 +513,16 @@ function prepareHero(gltf: GLTF, playerClass: ClassDef): HeroModel {
   scene.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
 
   // Erst nach dem Messen: Ein Bogen ragt über den Kopf hinaus und zählt nicht zur Körpergröße.
-  const gear = equip(playerClass.gear, scene);
+  const objects = new Map([...gearModels].map(([file, model]) => [file, model.object]));
+  const gear = equip(playerClass.gear, scene, objects);
+  const offhand = playerClass.offhand ? equip(playerClass.offhand, scene, objects) : null;
+  for (const def of [playerClass.gear, playerClass.offhand]) {
+    for (const material of (def?.model ? gearModels.get(def.model)?.materials : undefined) ?? []) materials.set(material, material);
+  }
 
   const root = new THREE.Group();
   root.add(scene);
-  return { root, height: spec.height, materials: [...materials.values()], idle, run, dead, clips, gear };
+  return { root, height: spec.height, materials: [...materials.values()], idle, run, dead, clips, gear, offhand };
 }
 
 /** Stellt den Verschlinger auf den Boden, bringt ihn auf seine Größe und säubert das Material. */
@@ -589,10 +625,31 @@ export async function loadModels(onProgress: (done: number, total: number) => vo
     { file: gems.small.file, fit: 'height', unlit: true },
     { file: gems.large.file, fit: 'height', unlit: true },
   ];
-  const tasks: [string, (gltf: GLTF) => void][] = [
-    ...CLASSES.map((playerClass): [string, (gltf: GLTF) => void] => [
+  // Die Ausrüstung lädt neben den Figuren und ist fertig, bevor eine Figur sie in die Hand nimmt.
+  const gearModels = new Map<string, GearModel>();
+  const gearFiles = [...new Set(CLASSES.flatMap((playerClass) => [playerClass.gear.model, playerClass.offhand?.model]))].filter(
+    (file): file is string => file !== undefined,
+  );
+  let done = 0;
+  const gearLoaded = Promise.all(
+    gearFiles.map(async (file) => {
+      try {
+        gearModels.set(file, prepareGearModel(await loader.loadAsync(modelUrl(file))));
+      } catch (error) {
+        // Ohne Modell greift die Figur zum Platzhalter aus gear.ts.
+        console.warn(`Modell ${file} nicht geladen, Platzhalter bleibt.`, error);
+        models.failed.push(file);
+      }
+      onProgress(++done, tasks.length + gearFiles.length);
+    }),
+  );
+  const tasks: [string, (gltf: GLTF) => void | Promise<void>][] = [
+    ...CLASSES.map((playerClass): [string, (gltf: GLTF) => void | Promise<void>] => [
       playerClass.model.file,
-      (gltf) => models.heroes.set(playerClass.id, prepareHero(gltf, playerClass)),
+      async (gltf) => {
+        await gearLoaded;
+        models.heroes.set(playerClass.id, prepareHero(gltf, playerClass, gearModels));
+      },
     ]),
     // Arten ohne Datei treten als Kapsel auf, bis es ihr Modell gibt.
     ...CONFIG.enemies.types
@@ -608,18 +665,18 @@ export async function loadModels(onProgress: (done: number, total: number) => vo
     ]),
   ];
 
-  let done = 0;
-  onProgress(done, tasks.length);
-  await Promise.all(
-    tasks.map(async ([file, use]) => {
+  onProgress(done, tasks.length + gearFiles.length);
+  await Promise.all([
+    gearLoaded,
+    ...tasks.map(async ([file, use]) => {
       try {
-        use(await loader.loadAsync(modelUrl(file)));
+        await use(await loader.loadAsync(modelUrl(file)));
       } catch (error) {
         console.warn(`Modell ${file} nicht geladen, Platzhalter bleibt.`, error);
         models.failed.push(file);
       }
-      onProgress(++done, tasks.length);
+      onProgress(++done, tasks.length + gearFiles.length);
     }),
-  );
+  ]);
   return models;
 }
