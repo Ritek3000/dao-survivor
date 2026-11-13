@@ -42,37 +42,134 @@ body {
   user-select: none;
 }
 
-/* Lebensleiste: rot das Leben, grau von rechts die Verstaubung. */
+/*
+ * Lebensgruppe: Stufe im Kreis, Lebensbalken, Gold im Geldbeutel. Kreis und Beutel liegen je OVERLAP über einem
+ * Ende des Balkens (die rechte Kreishälfte über seinem Anfang, die linke Seite des Beutels über seinem Ende);
+ * der Balken selbst läuft nur zwischen ihnen (#hp-track), damit die Prozente stimmen.
+ */
 #vitals {
+  --orb: 62px;
+  --overlap: 12px;
+  --fitting: #8a7447;
   top: 16px;
   left: 16px;
-  width: min(300px, 60vw);
-}
-
-#level {
-  margin-bottom: 6px;
-  font-size: 15px;
-  letter-spacing: 0.08em;
-}
-
-/* Gold dieser Nacht unter der Erfahrungsleiste. */
-#gold {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-top: 7px;
-  font-size: 14px;
-  letter-spacing: 0.06em;
-  font-variant-numeric: tabular-nums;
+  width: min(360px, 42vw);
+  height: var(--orb);
+}
+
+/* Der Kreis: die Stufe in großen Ziffern, "Stufe" klein darüber. */
+#level {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: var(--orb);
+  height: var(--orb);
+  box-sizing: border-box;
+  margin-right: calc(-1 * var(--overlap));
+  border: 2px solid var(--fitting);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, #3b3226, #17130e 72%);
+  box-shadow: 0 0 0 1px #000, 0 0 10px rgba(0, 0, 0, 0.7), inset 0 0 9px #000;
   text-shadow: 0 0 4px #000;
 }
 
-.coin {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff0b8, var(--gold) 55%, #a9741c);
-  box-shadow: 0 0 5px rgba(255, 200, 61, 0.45);
+#level .label {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+#level-text {
+  font-size: 24px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+#vitals-bars {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Gold dieser Nacht im Geldbeutel; die Ziffern stehen im Bauch des Beutels. */
+#gold {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  width: 72px;
+  height: 66px;
+  /* Der Bauch (breiteste Stelle) liegt etwas unter der Mitte des Beutels; so sitzt er auf der Höhe des Balkens. */
+  margin-left: calc(-1 * var(--overlap));
+  transform: translateY(-5px);
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.75));
+}
+
+#gold .purse {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+#gold .purse-body {
+  fill: url(#purse-fill);
+  stroke: var(--fitting);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+#gold .purse-neck {
+  fill: #2a2216;
+  stroke: var(--fitting);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+#gold .purse-tie {
+  fill: none;
+  stroke: #c9a45a;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+#gold .purse-knot {
+  fill: #c9a45a;
+}
+
+#gold .purse-shine {
+  fill: none;
+  stroke: rgba(255, 240, 200, 0.14);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+#gold-text {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+  text-shadow: 0 0 4px #000, 0 1px 1px #000;
+}
+
+/* Lange Zahlen schrumpfen, damit sie im Beutel bleiben. */
+#gold-text[data-long='1'] {
+  font-size: 13px;
+}
+
+#gold-text[data-long='2'] {
+  font-size: 11px;
 }
 
 .bar {
@@ -83,7 +180,18 @@ body {
 }
 
 #hp {
-  height: 18px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 2px solid var(--fitting);
+  background: #0b0908;
+  /* Der Balken reicht bis unter Kreis und Beutel; sichtbar ist nur #hp-track. */
+  overflow: visible;
+}
+
+#hp-track {
+  position: absolute;
+  inset: 0 calc(var(--overlap) - 3px);
+  overflow: hidden;
 }
 
 #hp-fill {
@@ -107,9 +215,13 @@ body {
   text-shadow: 0 0 3px #000;
 }
 
+/* Erfahrung: dünn unter dem Lebensbalken, zwischen Kreis und Beutel. */
 #xp {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: var(--overlap);
+  right: var(--overlap);
   height: 5px;
-  margin-top: 4px;
 }
 
 #xp-fill {

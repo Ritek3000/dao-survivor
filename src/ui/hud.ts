@@ -75,7 +75,7 @@ export class Hud {
   private readonly hpDust = element('hp-dust');
   private readonly hpText = element('hp-text');
   private readonly xpFill = element('xp-fill');
-  private readonly level = element('level');
+  private readonly level = element('level-text');
   private readonly gold = element('gold-text');
   private readonly clockTime = element('clock-time');
   private readonly zone = element('zone');
@@ -142,13 +142,17 @@ export class Hud {
   }
 
   setProgress(level: number, fraction: number): void {
-    this.text(this.level, `Stufe ${level}`);
+    this.text(this.level, String(level));
     this.style(this.xpFill, 'width', percent(fraction));
   }
 
   /** Gold, das in dieser Nacht eingesammelt wurde. */
   setGold(gold: number): void {
-    this.text(this.gold, String(gold));
+    const text = String(gold);
+    this.text(this.gold, text);
+    // Lange Zahlen werden kleiner gesetzt, damit sie im Beutel bleiben (siehe style.css).
+    const long = text.length > 5 ? '2' : text.length > 4 ? '1' : '0';
+    if (this.gold.dataset.long !== long) this.gold.dataset.long = long;
   }
 
   setClock(secondsLeft: number): void {
