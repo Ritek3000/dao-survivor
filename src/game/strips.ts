@@ -25,8 +25,14 @@ export type StripLook =
   | 'gust'
   /** Weißer Lichtstoß. */
   | 'flare'
-  /** Risse im Boden. */
+  /** Heller Ring aus gestreutem Licht, der über den Boden nach außen läuft. */
+  | 'lichtwelle'
+  /** Glutbrocken am Boden: ein gebrochener, rot bis gelb glühender Ring. */
+  | 'glut'
+  /** Spalten im Boden, die vom Mittelpunkt nach außen laufen. */
   | 'crack'
+  /** Wenige kurze Risse rund um einen Punkt, etwa den Fuß eines Festgehaltenen. */
+  | 'footcrack'
   /** Aufrechter, kaum sichtbarer Schleier. */
   | 'veil'
   /** Gerader Lichtstrahl. */
@@ -178,11 +184,34 @@ const FRAGMENT_HEAD = /* glsl */ `
 `;
 
 interface LookDef {
+  /** Hilfsfunktionen, die vor `main` stehen. */
+  head?: string;
   body: string;
   defines?: Record<string, string>;
   /** 'add' = Licht, 'cover' = deckend, 'warp' = verzieht das Bild dahinter. */
   mode: 'add' | 'cover' | 'warp';
 }
+
+/**
+ * Eine Schar zackiger Spalten, die vom Mittelpunkt nach außen laufen und sich zum Ende hin verjüngen.
+ * `lines` = Anzahl (ganzzahlig, damit die Naht des Rings stimmt), `thickness` = Breite am Ursprung in Metern,
+ * `reachScale` = wie weit sie höchstens reichen, `startR` = ab welchem Radius sie beginnen.
+ */
+const FISSURES = /* glsl */ `
+  float fissure(float lines, float salt, float thickness, float reachScale, float startR) {
+    float r = vUv.y * uExtent.y;
+    float a = vUv.x * lines + uLife.z * 31.0 + salt;
+    float cell = mod(floor(a), lines);
+    float f = fract(a) - 0.5;
+    float key = hash(vec2(cell, salt + 3.7));
+    float jag = (noise(vec2(r * 2.2, cell * 7.3 + salt)) - 0.5) * 0.7 + (noise(vec2(r * 7.0, cell * 3.1 + salt)) - 0.5) * 0.25;
+    float cellWidth = 6.2832 * max(r, 0.3) / lines;
+    float d = abs(f - (key - 0.5) * 0.5 - jag) * cellWidth;
+    float width = thickness * pow(max(1.0 - vUv.y, 0.0), 0.7) + 0.025;
+    float reach = (0.5 + 0.5 * hash(vec2(cell, salt + 9.1))) * reachScale;
+    return (1.0 - smoothstep(width * 0.55, width, d)) * (1.0 - smoothstep(reach - 0.12, reach, vUv.y)) * smoothstep(startR, startR + 0.4, r);
+  }
+`;
 
 const LOOKS: Record<StripLook, LookDef> = {
   slash: {
@@ -238,12 +267,36 @@ const LOOKS: Record<StripLook, LookDef> = {
     defines: { UPRIGHT: '' },
     body: /* glsl */ `
       // Entlang des Rings in Metern rechnen, damit Flammen in jedem Radius gleich breit sind.
-      vec2 q = vec2(vUv.x * uShape.w * uExtent.y * 1.7 + uLife.z, vUv.y * 1.5 - uLife.w * 1.9);
-      float flame = 0.7 * fbm(q) + 0.3 * noise(q * 2.3 + vec2(0.0, -uLife.w * 1.3));
-      float shape = flame - 0.12 - vUv.y * 0.85;
-      float glow = smoothstep(0.0, 0.22, shape) * smoothstep(0.0, 0.06, vUv.y);
-      vec3 hot = mix(vec3(0.75, 0.1, 0.01), vec3(1.0, 0.7, 0.22), smoothstep(0.05, 0.42, shape));
-      emit(hot * uColor * glow * 0.8);
+      float m = vUv.x * uShape.w * uExtent.y;
+      // Zungen: Jede Zelle (knapp einen Meter) trägt eine Flamme eigener Höhe, die sich im Wind wiegt.
+      float u = m / 0.85 + uLife.z * 50.0;
+      float id = floor(u);
+      float across = fract(u) - 0.5;
+      float sway = (noise(vec2(vUv.y * 2.5 - uLife.w * 2.2, id * 1.7)) - 0.5) * 0.8 * vUv.y;
+      float height = 0.25 + 0.75 * noise(vec2(id * 3.1, uLife.w * 1.1));
+      float y = vUv.y / height;
+      // Dreieck, das zur Spitze schmaler wird; am Fuß berühren sich die Nachbarn und bilden ein Glutbett.
+      float inside = 1.0 - y - abs(across + sway) * 1.7 * (0.35 + y);
+      float flame = fbm(vec2(m * 2.3 + uLife.z * 30.0, vUv.y * 1.8 - uLife.w * 2.4));
+      float shape = inside + (flame - 0.5) * 0.55;
+      float glow = smoothstep(0.0, 0.2, shape) * smoothstep(0.0, 0.05, vUv.y);
+      vec3 hot = mix(vec3(0.75, 0.1, 0.01), vec3(1.0, 0.7, 0.22), smoothstep(0.05, 0.5, shape));
+      // Am Fuß, wo die Glut liegt, brennt es weißgelb.
+      hot = mix(hot, vec3(1.0, 0.86, 0.5), smoothstep(0.2, 0.0, vUv.y) * 0.6);
+      emit(hot * uColor * glow * 0.9);
+    `,
+  },
+  glut: {
+    mode: 'add',
+    body: /* glsl */ `
+      float m = vUv.x * uShape.w * uExtent.y;
+      float band = sin(vUv.y * 3.14159);
+      // Brocken: Das Glühen reißt auf, wo das Rauschen schwach ist, und flackert unregelmäßig.
+      float chunk = 0.65 * noise(vec2(m * 3.2 + uLife.z * 30.0, uLife.w * 0.8)) + 0.35 * noise(vec2(m * 9.0 + uLife.z * 7.0, uLife.w * 1.7));
+      float heat = smoothstep(0.28, 0.85, chunk);
+      float core = pow(band, 6.0);
+      vec3 color = mix(vec3(0.85, 0.16, 0.02), vec3(1.0, 0.72, 0.28), core * heat);
+      emit(color * (pow(band, 1.5) * (0.3 + 0.7 * heat) * 0.9 + core * heat * 1.5));
     `,
   },
   glow: {
@@ -257,14 +310,15 @@ const LOOKS: Record<StripLook, LookDef> = {
     mode: 'add',
     body: /* glsl */ `
       float t = uLife.x;
-      // Nur manche Bahnen tragen eine Fahne, und jede ist in kurze Striche zerrissen.
-      float lane = vUv.x * uShape.w * 46.0 + uLife.z * 5.0;
-      float pick = smoothstep(0.66, 0.82, noise(vec2(lane, 0.0)));
-      float dash = smoothstep(0.45, 0.75, noise(vec2(lane * 0.5, vUv.y * 9.0 - t * 14.0)));
+      // Nur manche Bahnen tragen eine Fahne; sie krümmen sich nach außen und sind in weiche Striche zerrissen.
+      float lane = vUv.x * uShape.w * 24.0 + vUv.y * 6.0 + uLife.z * 5.0;
+      float pick = smoothstep(0.58, 0.8, noise(vec2(lane, 0.0)));
+      float dash = smoothstep(0.35, 0.72, noise(vec2(lane * 0.5, vUv.y * 7.0 - t * 12.0)));
+      float soft = 0.55 + 0.45 * noise(vec2(lane * 3.0, vUv.y * 15.0));
       // Die Böe läuft als Welle nach außen und zieht ihre Fahnen hinter sich her.
       float front = t * 1.35;
-      float wave = smoothstep(front - 0.7, front - 0.1, vUv.y) * (1.0 - smoothstep(front, front + 0.05, vUv.y));
-      float glow = pick * dash * wave * (1.0 - smoothstep(0.55, 1.0, t)) * smoothstep(0.02, 0.15, vUv.y);
+      float wave = smoothstep(front - 0.75, front - 0.1, vUv.y) * (1.0 - smoothstep(front, front + 0.05, vUv.y));
+      float glow = pick * dash * soft * wave * (1.0 - smoothstep(0.55, 1.0, t)) * smoothstep(0.02, 0.15, vUv.y);
       emit(uColor * glow * lit());
     `,
   },
@@ -272,38 +326,53 @@ const LOOKS: Record<StripLook, LookDef> = {
     mode: 'add',
     body: /* glsl */ `
       float t = uLife.x;
-      float rays = 0.72 + 0.28 * noise(vec2(vUv.x * 70.0, uLife.z * 9.0));
+      // Strahlen: Jeder hat seine eigene Länge, ein paar reichen weit hinaus.
+      float angular = vUv.x * 64.0 + uLife.z * 13.0;
+      float spoke = pow(noise(vec2(angular, 1.7)), 2.2);
+      float fine = 0.55 + 0.45 * noise(vec2(vUv.x * 180.0, uLife.z * 9.0));
+      float reach = 0.3 + 0.7 * noise(vec2(angular * 0.5, 9.1));
+      float run = min(1.0, t * 3.2);
+      float rays = spoke * fine * smoothstep(run * reach, run * reach * 0.35, vUv.y) * smoothstep(0.0, 0.05, vUv.y);
       // Ein Stoß, kein Leuchten: sofort grell, nach einem Wimpernschlag vorbei.
-      float core = exp(-vUv.y * vUv.y * 12.0) * (1.0 - smoothstep(0.0, 0.22, t));
-      float front = min(1.0, t * 2.6) * 0.95;
-      float shell = smoothstep(0.025, 0.0, abs(vUv.y - front)) * (1.0 - t) * (1.0 - t);
-      emit(uColor * (core * rays * 1.3 + shell * 0.18));
+      float core = exp(-vUv.y * vUv.y * 26.0) * (1.0 - smoothstep(0.0, 0.3, t));
+      float halo = exp(-vUv.y * vUv.y * 5.0) * (1.0 - smoothstep(0.0, 0.4, t));
+      float fade = (1.0 - smoothstep(0.25, 1.0, t));
+      emit(uColor * (core * 1.2 + halo * 0.18 + rays * 1.9 * fade));
+    `,
+  },
+  lichtwelle: {
+    mode: 'add',
+    body: /* glsl */ `
+      float band = sin(vUv.y * 3.14159);
+      float core = pow(band, 7.0);
+      // Der Staub am Boden fängt das Licht unregelmäßig: Die Welle ist körnig, nicht glatt.
+      float grain = 0.6 + 0.4 * noise(vec2(vUv.x * uShape.w * 7.0 + uLife.z * 20.0, uLife.w * 2.0));
+      float fade = (1.0 - uLife.x) * (1.0 - uLife.x);
+      emit(uColor * (core * 2.2 + band * band * 0.55) * grain * fade);
     `,
   },
   crack: {
     mode: 'cover',
+    head: FISSURES,
     body: /* glsl */ `
-      // Kanten zwischen zufälligen Zellen; im Weltmaß, damit das Muster am Boden haftet.
-      vec2 p = vWorld * 1.5 + uLife.z * 31.0;
-      vec2 cell = floor(p);
-      vec2 f = fract(p);
-      float nearest = 8.0;
-      float second = 8.0;
-      for (int j = -1; j <= 1; j++) {
-        for (int i = -1; i <= 1; i++) {
-          vec2 o = vec2(float(i), float(j));
-          vec2 site = o + vec2(hash(cell + o), hash(cell + o + 17.3)) - f;
-          float d = dot(site, site);
-          if (d < nearest) { second = nearest; nearest = d; }
-          else if (d < second) { second = d; }
-        }
-      }
-      float line = 1.0 - smoothstep(0.0, 0.09, sqrt(second) - sqrt(nearest));
-      // Die Risse laufen vom Mittelpunkt nach außen und werden dort dünner.
-      float grown = smoothstep(vUv.y - 0.1, vUv.y + 0.1, uLife.x * 30.0);
-      float reach = 1.0 - smoothstep(0.45, 1.0, vUv.y);
+      float line = max(fissure(14.0, 0.0, 0.2, 1.0, 0.9), fissure(30.0, 0.37, 0.07, 0.6, 1.8));
+      // Die Spalten reißen vom Mittelpunkt nach außen auf, bleiben eine Weile offen und verwischen dann.
+      float grown = smoothstep(vUv.y - 0.15, vUv.y + 0.05, uLife.x * 6.0);
       float fade = 1.0 - smoothstep(0.6, 1.0, uLife.x);
-      gl_FragColor = vec4(vec3(0.012, 0.01, 0.008), line * grown * reach * fade * uLife.y);
+      gl_FragColor = vec4(vec3(0.012, 0.01, 0.008), line * grown * fade * uLife.y);
+    `,
+  },
+  footcrack: {
+    mode: 'cover',
+    head: FISSURES,
+    body: /* glsl */ `
+      // Dunkler Kern mit hellem, aufgeworfenem Rand: Auf dem dunklen Boden wäre der Riss sonst nicht zu sehen.
+      float core = fissure(7.0, 0.0, 0.16, 1.0, 0.3);
+      float rim = fissure(7.0, 0.0, 0.42, 1.0, 0.3);
+      float grown = smoothstep(vUv.y - 0.15, vUv.y + 0.05, uLife.x * 8.0);
+      float fade = 1.0 - smoothstep(0.7, 1.0, uLife.x);
+      vec3 colour = mix(vec3(0.2, 0.15, 0.09), vec3(0.012, 0.01, 0.008), core);
+      gl_FragColor = vec4(colour, rim * grown * fade * uLife.y);
     `,
   },
   veil: {
@@ -323,13 +392,16 @@ const LOOKS: Record<StripLook, LookDef> = {
     body: /* glsl */ `
       float fromAxis = abs(vUv.x - 0.5) * 2.0;
       float t = uLife.x;
+      float along = mix(uExtent.x, uExtent.y, vUv.y);
       float flicker = 0.82 + 0.18 * noise(vec2(vUv.y * 34.0 - uLife.w * 40.0, uLife.z));
-      // Der Strahl selbst ist fingerdick; alles andere ist sein Schein im Staub.
+      // Der Strahl selbst ist fingerdick; alles andere ist sein Schein im Staub, der körnig an ihm vorbeizieht.
+      float grain = 0.55 + 0.45 * noise(vec2(along * 3.2 - uLife.w * 16.0, fromAxis * 7.0 + uLife.z * 9.0));
+      float hot = smoothstep(0.05, 0.0, fromAxis);
       float core = smoothstep(0.12, 0.0, fromAxis);
       float halo = exp(-fromAxis * fromAxis * 14.0);
       float ends = smoothstep(0.0, 0.02, vUv.y) * (1.0 - smoothstep(0.93, 1.0, vUv.y));
       float envelope = smoothstep(0.0, 0.08, t) * (1.0 - smoothstep(0.3, 1.0, t));
-      emit((uColor * halo * 0.4 * flicker + vec3(1.0, 0.98, 0.92) * core * 1.7) * ends * envelope);
+      emit((uColor * halo * 0.5 * flicker * grain + vec3(1.0, 0.95, 0.8) * core * 1.1 + vec3(1.0) * hot * 1.2) * ends * envelope);
     `,
   },
   lancelight: {
@@ -338,9 +410,11 @@ const LOOKS: Record<StripLook, LookDef> = {
     body: /* glsl */ `
       float fromAxis = abs(vUv.x - 0.5) * 2.0;
       float spread = exp(-fromAxis * fromAxis * 4.0) * (1.0 - fromAxis);
+      // Der Staub am Boden fängt das Licht ungleichmäßig.
+      float dust = 0.6 + 0.4 * noise(vWorld * 2.6 + uLife.z * 17.0);
       float ends = smoothstep(0.0, 0.1, vUv.y) * (1.0 - smoothstep(0.85, 1.0, vUv.y));
       float envelope = smoothstep(0.0, 0.08, uLife.x) * (1.0 - smoothstep(0.3, 1.0, uLife.x));
-      emit(uColor * spread * ends * envelope);
+      emit(uColor * spread * dust * ends * envelope);
     `,
   },
   heat: {
@@ -354,14 +428,22 @@ const LOOKS: Record<StripLook, LookDef> = {
         smoothstep(0.0, 0.1, vUv.y) * (1.0 - smoothstep(0.75, 1.0, vUv.y)) *
         (1.0 - smoothstep(front, front + 0.08, vUv.y)) *
         (1.0 - smoothstep(0.3, 1.0, t)) * uLife.y;
+      // Wellenfronten: Bögen quer zur Richtung, die von der Hand nach außen laufen und sich dabei krümmen.
+      float along = mix(uExtent.x, uExtent.y, vUv.y);
+      float lateral = (vUv.x - 0.5) * uShape.w * along;
+      float bands = 0.5 + 0.5 * sin((along + 0.06 * lateral * lateral) * 4.6 - uLife.w * 7.5);
+      float ripple = bands * bands * bands;
       // Feine Schlieren im Weltmaß, die rasch durch die Luft ziehen: grob für das Wogen, fein für das Flirren.
       vec2 flow = vec2(uLife.w * 4.0, -uLife.w * 5.5) + uLife.z * 13.0;
       vec2 coarse = vec2(noise(vWorld * 3.0 + flow), noise(vWorld * 3.0 + flow + vec2(4.1, 9.2))) - 0.5;
       vec2 fine = vec2(noise(vWorld * 11.0 - flow * 2.0), noise(vWorld * 11.0 - flow * 2.0 + vec2(7.7, 2.3))) - 0.5;
+      float amp = (0.55 + 0.9 * ripple) * mask;
       vec2 wobble = coarse * 0.012 + fine * 0.007;
-      // Kein Licht, nur Flimmern: Heiße Luft bündelt und streut, was hinter ihr liegt.
-      float lens = 1.0 + (fine.x + fine.y) * 0.3 * mask;
-      gl_FragColor = vec4(behind(wobble * mask) * lens * (1.0 + vec3(0.05, 0.02, 0.0) * mask), 1.0);
+      // Kein Licht, nur Flimmern: Heiße Luft bündelt und streut, was hinter ihr liegt, und färbt es einen Hauch warm.
+      float lens = 1.0 + ((fine.x + fine.y) * 0.3 + (ripple - 0.3) * 0.25) * mask;
+      vec3 seen = behind(wobble * amp) * lens;
+      seen += vec3(0.16, 0.05, -0.02) * 0.14 * mask * (0.4 + ripple);
+      gl_FragColor = vec4(max(seen, 0.0), 1.0);
     `,
   },
   shock: {
@@ -536,7 +618,7 @@ export class Strips {
       uniforms: { ...uniforms, ...this.shared },
       defines: def.defines ?? {},
       vertexShader,
-      fragmentShader: `${FRAGMENT_HEAD}\nvoid main() {\n${def.body}\n${def.mode === 'warp' ? '' : '#include <colorspace_fragment>'}\n}`,
+      fragmentShader: `${FRAGMENT_HEAD}\n${def.head ?? ''}\nvoid main() {\n${def.body}\n${def.mode === 'warp' ? '' : '#include <colorspace_fragment>'}\n}`,
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,

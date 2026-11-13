@@ -1,9 +1,10 @@
 /**
  * Kleine Gegenstände der Angriffe, aus einfachen Körpern zusammengesetzt und je zu einem Netz
- * verschmolzen: Pfeil, Wurfmesser, Wurfaxt, Fangeisen, Wurzelwerk und Steinbrocken.
+ * verschmolzen: Pfeil, Wurfmesser, Wurfaxt, Fangeisen, Wurzelwerk, Steinbrocken und Felszacken.
  * Farben stecken in den Eckpunkten, damit alle mit einem Material und einem Zeichenaufruf auskommen.
  */
 import * as THREE from 'three';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Random } from '../core/random';
 import { swallowedByFinsternis } from './darkness';
@@ -119,32 +120,24 @@ export function trapGeometry(shut: boolean): THREE.BufferGeometry {
 }
 
 /**
- * Dornige Wurzeln, die aus dem Boden um ein Opfer wachsen und sich nach innen krallen.
+ * Dornige Wurzeln, die aus dem Boden um ein Opfer wachsen und sich nach innen krallen,
+ * dazu niedrige Wurzeln, die sich am Boden nach außen ziehen.
  * Bemessen für einen Gegner mit 0,45 m Radius; für größere wird das Ganze skaliert.
  */
 export function rootsGeometry(random: Random): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
   const up = new THREE.Vector3(0, 1, 0);
-  const tendrils = 9;
-  for (let k = 0; k < tendrils; k++) {
-    const start = (k / tendrils) * Math.PI * 2 + (random() - 0.5) * 0.5;
-    const twist = (random() < 0.5 ? -1 : 1) * (0.5 + random() * 0.5);
-    const height = (k % 3 === 2 ? 0.45 : 0.85) + random() * 0.5;
-    // Vom Boden außen in einem Bogen nach oben und innen.
-    const path = [0, 0.3, 0.6, 0.85, 1].map((t) => {
-      const angle = start + twist * t * 1.9;
-      const radius = 0.66 - 0.44 * t * t;
-      return new THREE.Vector3(Math.cos(angle) * radius, -0.08 + height * Math.sin(t * 1.45), Math.sin(angle) * radius);
-    });
+  const center = new THREE.Vector3();
+  const vertex = new THREE.Vector3();
+
+  /** Eine Röhre entlang `path`, zur Spitze hin verjüngt, mit Dornen an `thornsAt`. */
+  const root = (path: THREE.Vector3[], thickness: number, color: number, thornsAt: number[], thornSize: number): void => {
     const curve = new THREE.CatmullRomCurve3(path);
-    const thickness = 0.065 + random() * 0.035;
-    const segments = 10;
+    const segments = 9;
     const sides = 5;
     const tube = new THREE.TubeGeometry(curve, segments, thickness, sides, false);
     // Zur Spitze hin verjüngen: Jeder Ring rückt an die Mittellinie heran.
     const position = tube.getAttribute('position');
-    const center = new THREE.Vector3();
-    const vertex = new THREE.Vector3();
     for (let i = 0; i < position.count; i++) {
       const t = Math.floor(i / (sides + 1)) / segments;
       curve.getPointAt(t, center);
@@ -152,20 +145,70 @@ export function rootsGeometry(random: Random): THREE.BufferGeometry {
       position.setXYZ(i, vertex.x, vertex.y, vertex.z);
     }
     tube.computeVertexNormals();
-    parts.push(painted(tube, k % 2 === 0 ? 0x3d2f1f : 0x4a3d24));
+    parts.push(painted(tube, color));
 
-    for (const t of [0.3, 0.5, 0.68, 0.84]) {
+    for (const t of thornsAt) {
       curve.getPointAt(t, center);
       const outward = new THREE.Vector3(center.x, 0.25 + random() * 0.5, center.z).normalize();
       if (random() < 0.5) outward.set(-outward.z, outward.y, outward.x);
-      const thorn = new THREE.ConeGeometry(0.028, 0.15, 4)
-        .translate(0, 0.075, 0)
+      // Die Dornen sind hell wie abgebrochenes Holz, damit sie sich von der dunklen Rinde abheben.
+      const thorn = new THREE.ConeGeometry(0.03 * thornSize, 0.17 * thornSize, 4)
+        .translate(0, 0.085 * thornSize, 0)
         .applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, outward))
         .translate(center.x, center.y, center.z);
-      parts.push(painted(thorn, 0x1f170f));
+      parts.push(painted(thorn, 0x8f7c52));
     }
+  };
+
+  const tendrils = 10;
+  for (let k = 0; k < tendrils; k++) {
+    const start = (k / tendrils) * Math.PI * 2 + (random() - 0.5) * 0.5;
+    const twist = (random() < 0.5 ? -1 : 1) * (0.3 + random() * 0.45);
+    const height = (k % 3 === 2 ? 0.45 : 0.85) + random() * 0.55;
+    // Vom Boden außen in einem Bogen nach oben und innen, jede mit eigener Windung.
+    const path = [0, 0.3, 0.6, 0.85, 1].map((t) => {
+      const angle = start + twist * t * 1.9;
+      const radius = 0.66 - 0.44 * t * t + 0.05 * Math.sin(t * 9 + k);
+      return new THREE.Vector3(Math.cos(angle) * radius, -0.08 + height * Math.sin(t * 1.45), Math.sin(angle) * radius);
+    });
+    root(path, 0.075 + random() * 0.05, k % 2 === 0 ? 0x4a3822 : 0x58452a, [0.3, 0.5, 0.68, 0.84].filter(() => random() < 0.7), 1);
+  }
+  // Niedrige Wurzeln, die sich am Boden vom Opfer fortziehen.
+  for (let k = 0; k < 5; k++) {
+    const angle = (k / 5) * Math.PI * 2 + (random() - 0.5) * 0.8;
+    const path = [0, 0.33, 0.66, 1].map((t) => {
+      const a = angle + 0.5 * Math.sin(t * 4 + k);
+      const radius = 0.35 + 0.85 * t;
+      return new THREE.Vector3(Math.cos(a) * radius, -0.06 + (0.12 + 0.12 * random()) * Math.sin(t * Math.PI), Math.sin(a) * radius);
+    });
+    root(path, 0.045 + random() * 0.025, 0x4a3822, [0.45, 0.75], 0.8);
   }
   return joined(parts);
+}
+
+/**
+ * Felszacke, die ein Erdstoß aus dem Boden treibt: eine kantige, zur Spitze schmaler werdende Säule
+ * von Einheitshöhe und -breite, Fuß leicht unter dem Boden. Jede Instanz wird verdreht und gestreckt,
+ * damit der Ring nicht gleichförmig wirkt.
+ */
+export function shardGeometry(random: Random): THREE.BufferGeometry {
+  const points: THREE.Vector3[] = [];
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2 + (random() - 0.5) * 0.5;
+    const r = 0.6 + random() * 0.6;
+    points.push(new THREE.Vector3(Math.cos(a) * r, -0.15, Math.sin(a) * r));
+  }
+  for (let k = 0; k < 4; k++) {
+    const a = (k / 4) * Math.PI * 2 + (random() - 0.5) * 1;
+    const r = 0.45 + random() * 0.5;
+    points.push(new THREE.Vector3(Math.cos(a) * r, 0.3 + random() * 0.3, Math.sin(a) * r));
+  }
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2 + (random() - 0.5) * 0.8;
+    const r = 0.08 + random() * 0.2;
+    points.push(new THREE.Vector3(Math.cos(a) * r, 0.9 + random() * 0.1, Math.sin(a) * r));
+  }
+  return painted(new ConvexGeometry(points), 0x7d7466);
 }
 
 /** Kantiger Brocken, den ein Erdstoß aus dem Boden wirft. */
