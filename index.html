@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Survivor-like – Prototyp</title>
   </head>
-  <body>
+  <body data-vitals="top-left">
     <canvas id="game"></canvas>
 
     <div id="finsternis-veil"></div>
@@ -73,16 +73,71 @@
     <div id="sound-off" hidden>Ton aus · M</div>
     <div id="debug" hidden></div>
 
+    <!--
+      Menüs: Jeder Eintrag mit data-item ist anwählbar (Maus oder Tasten, siehe src/ui/menus.ts); data-command nennt,
+      was der Knopf auslöst.
+    -->
     <div id="pause" class="overlay" hidden>
       <h1>Pause</h1>
-      <div id="sound-panel">
-        <h2>Ton</h2>
-        <label><span>Gesamt</span><input id="vol-master" type="range" min="0" max="100" step="1" /></label>
-        <label><span>Effekte</span><input id="vol-effects" type="range" min="0" max="100" step="1" /></label>
-        <label><span>Musik</span><input id="vol-music" type="range" min="0" max="100" step="1" /></label>
-        <label class="mute"><input id="vol-mute" type="checkbox" /><span>Ton aus</span></label>
+      <div class="menu">
+        <button type="button" class="menu-item" data-item data-command="resume">Weiter</button>
+        <button type="button" class="menu-item" data-item data-command="options">Optionen</button>
+        <button type="button" class="menu-item" data-item data-command="abort">Lauf abbrechen</button>
       </div>
-      <p class="keys">Esc oder P: weiter · M: Ton an/aus</p>
+      <p class="keys">Auf und Ab: wählen · Enter: bestätigen · Esc oder P: weiter · M: Ton an/aus</p>
+    </div>
+
+    <div id="options" class="overlay" hidden>
+      <h1>Optionen</h1>
+      <section class="option-group">
+        <h2>Ton</h2>
+        <label class="option" data-item data-row="master">
+          <span class="option-label">Gesamt</span>
+          <input id="vol-master" type="range" min="0" max="100" step="1" />
+          <output id="vol-master-value"></output>
+        </label>
+        <label class="option" data-item data-row="effects">
+          <span class="option-label">Effekte</span>
+          <input id="vol-effects" type="range" min="0" max="100" step="1" />
+          <output id="vol-effects-value"></output>
+        </label>
+        <label class="option" data-item data-row="music">
+          <span class="option-label">Musik</span>
+          <input id="vol-music" type="range" min="0" max="100" step="1" />
+          <output id="vol-music-value"></output>
+        </label>
+        <label class="option mute" data-item data-row="mute">
+          <input id="vol-mute" type="checkbox" />
+          <span class="option-label">Ton aus</span>
+        </label>
+      </section>
+      <section class="option-group">
+        <h2>Oberfläche</h2>
+        <div class="option position" data-item data-row="position">
+          <span class="option-label">Lebensbalken platzieren</span>
+          <div id="position-picker" class="screen-model" role="radiogroup" aria-label="Lebensbalken platzieren">
+            <span class="model-clock">Uhr</span>
+            <button type="button" class="spot" data-position="top-left" role="radio" aria-label="Oben links"><i></i><i></i><i></i></button>
+            <button type="button" class="spot" data-position="top-right" role="radio" aria-label="Oben rechts"><i></i><i></i><i></i></button>
+            <button type="button" class="spot" data-position="bottom-left" role="radio" aria-label="Unten links"><i></i><i></i><i></i></button>
+            <button type="button" class="spot" data-position="bottom-center" role="radio" aria-label="Unten Mitte"><i></i><i></i><i></i></button>
+            <button type="button" class="spot" data-position="bottom-right" role="radio" aria-label="Unten rechts"><i></i><i></i><i></i></button>
+          </div>
+          <span id="position-name" class="option-value"></span>
+        </div>
+      </section>
+      <button type="button" class="button" data-item data-command="back">Zurück (Esc)</button>
+      <p class="keys">Auf und Ab: Zeile wählen · Links und Rechts: ändern · Enter: umschalten · Esc: zurück</p>
+    </div>
+
+    <div id="confirm" class="overlay" hidden>
+      <h1 id="confirm-title"></h1>
+      <p id="confirm-text"></p>
+      <div class="menu choices">
+        <button type="button" class="menu-item" data-item data-command="no" id="confirm-no"></button>
+        <button type="button" class="menu-item danger" data-item data-command="yes" id="confirm-yes"></button>
+      </div>
+      <p class="keys">Links und Rechts: wählen · Enter: bestätigen · Esc: zurück</p>
     </div>
 
     <div id="loading" class="overlay" hidden>
