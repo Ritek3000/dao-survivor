@@ -3,8 +3,9 @@ import { audio, type Duck, type MusicId } from '../audio';
 import { CONFIG } from '../config';
 import { Input, type MoveVector } from '../core/input';
 import { createRandom } from '../core/random';
-import { loadSettings, saveSettings, type Settings } from '../core/settings';
+import { loadSettings, saveSettings, type Settings, type VitalsPosition } from '../core/settings';
 import { formatTime, type Hud } from '../ui/hud';
+import { Menus, type MenuCommand } from '../ui/menus';
 import { Arsenal, type CombatTraits } from './arsenal';
 import { Boss } from './boss';
 import { CameraRig } from './cameraRig';
@@ -55,6 +56,7 @@ export class Game {
   private readonly background = NIGHT_BACKGROUND.clone();
   private readonly fog = new THREE.Fog(NIGHT_BACKGROUND, 28, 60);
   private readonly input = new Input();
+  private readonly menus = new Menus();
   private readonly random = createRandom(CONFIG.world.seed + 900);
   private readonly progression = new Progression();
   private readonly world = new World();
@@ -102,6 +104,8 @@ export class Game {
   private traitLabel = '';
   /** Hat die Spielfigur die letzte Nacht überstanden? Bestimmt das Stück zum Ende. */
   private won = false;
+  /** Wurde die Nacht über das Pausenmenü abgebrochen? Dann spielt zum Ende die Musik des Menüs. */
+  private aborted = false;
   private settings: Settings;
   /** Sekunden bis zum nächsten Ruf aus der Horde. */
   private callIn = 2;
@@ -150,15 +154,24 @@ export class Game {
     };
     this.hud.onSteigerungClass = (index) => this.selectSteigerungClass(index);
     this.hud.onSteigerungBack = () => this.closeSteigerung();
-    this.settings = loadSettings({ sound: { ...CONFIG.audio.defaults, muted: false } });
+    this.settings = loadSettings({
+      sound: { ...CONFIG.audio.defaults, muted: false },
+      ui: { vitalsPosition: 'top-left' },
+    });
     audio.setVolumes(this.settings.sound);
     audio.muffleAt = (x, z) => this.zones.finsternisAt(x, z);
     audio.onVolumes = (volumes) => {
       this.settings.sound = { ...volumes };
       saveSettings(this.settings);
-      this.hud.showSound(volumes);
+      this.menus.showSound(volumes);
+      this.hud.setMuted(volumes.muted);
     };
-    this.hud.bindSound(this.settings.sound, (volumes) => audio.setVolumes(volumes));
+    this.menus.onCommand = (command) => this.onMenuCommand(command);
+    this.menus.onSound = (volumes) => audio.setVolumes(volumes);
+    this.menus.onVitalsPosition = (position) => this.setVitalsPosition(position);
+    this.menus.showSound(this.settings.sound);
+    this.hud.setMuted(this.settings.sound.muted);
+    this.setVitalsPosition(this.settings.ui.vitalsPosition, false);
     this.rig.snapTo(this.player.position);
     window.addEventListener('resize', this.resize);
     this.resize();
@@ -204,7 +217,7 @@ export class Game {
         else this.update(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         break;
       case 'paused':
-        if (this.input.wasPressed('pause')) this.setPaused(false);
+        this.updateMenu();
         break;
       case 'select':
       case 'levelup':
@@ -281,8 +294,8 @@ export class Game {
     if (this.player.consumeHit()) this.hud.flashHurt();
     this.refreshHud();
 
-    if (!this.player.alive) this.end(false);
-    else if (this.time >= CONFIG.run.nightSeconds) this.end(true);
+    if (!this.player.alive) this.end('fallen');
+    else if (this.time >= CONFIG.run.nightSeconds) this.end('won');
     else if (this.pendingSegen > 0) this.openBossSegen();
     else if (this.pendingLevels > 0) this.openLevelUp();
   }
@@ -387,8 +400,77 @@ export class Game {
 
   private setPaused(paused: boolean): void {
     this.phase = paused ? 'paused' : 'playing';
-    this.hud.setPaused(paused);
+    if (paused) this.menus.showPause();
+    else this.menus.hide();
     audio.play('pause');
+  }
+
+  /** Stellt die Lebensgruppe an die gewählte Stelle; `save` ist beim Start aus, denn dann kommt der Wert aus dem Speicher. */
+  private setVitalsPosition(position: VitalsPosition, save = true): void {
+    this.settings.ui.vitalsPosition = position;
+    this.hud.setVitalsPosition(position);
+    this.menus.showVitalsPosition(position);
+    if (save) saveSettings(this.settings);
+  }
+
+  /** Bedienung der Menüs in der Pause: Auf und Ab wählen, Links und Rechts ändern, Enter bestätigt, Esc geht zurück. */
+  private updateMenu(): void {
+    const { input, menus } = this;
+    if (input.wasPressed('pause')) {
+      this.menuBack();
+      return;
+    }
+    let moved = false;
+    if (input.wasPressed('up')) moved = menus.step(-1);
+    else if (input.wasPressed('down')) moved = menus.step(1);
+    else if (input.wasPressed('left')) moved = menus.adjust(-1);
+    else if (input.wasPressed('right')) moved = menus.adjust(1);
+    if (moved) audio.play('auswahl');
+    if (input.wasPressed('confirm')) menus.activate();
+  }
+
+  /** Esc im Menü: eine Ebene zurück; aus dem Pausenmenü selbst zurück ins Spiel. */
+  private menuBack(): void {
+    if (this.menus.screen === 'pause') {
+      this.setPaused(false);
+      return;
+    }
+    this.menus.showPause();
+    audio.play('auswahl');
+  }
+
+  private onMenuCommand(command: MenuCommand): void {
+    switch (command) {
+      case 'resume':
+        this.setPaused(false);
+        break;
+      case 'options':
+        this.menus.showOptions();
+        audio.play('auswahl');
+        break;
+      case 'abort': {
+        const keep = Math.round(CONFIG.gold.deathKeep * 100);
+        this.menus.showConfirm({
+          title: 'Lauf abbrechen?',
+          text:
+            keep >= 100
+              ? 'Du verlässt die Nacht. Was du bis jetzt erbeutet hast, behältst du, wie bei einem Sturz.'
+              : `Du verlässt die Nacht. Vom Ertrag behältst du ${keep} %, wie bei einem Sturz.`,
+          no: 'Weiterspielen',
+          yes: 'Lauf abbrechen',
+        });
+        audio.play('auswahl');
+        break;
+      }
+      case 'yes':
+        this.menus.hide();
+        this.end('aborted');
+        break;
+      case 'no':
+      case 'back':
+        this.menuBack();
+        break;
+    }
   }
 
   /** Die Klassenwahl vor der Nacht; `selected` markiert eine Klasse, sonst die zuletzt gespielte. */
@@ -571,15 +653,19 @@ export class Game {
     else if (this.pendingLevels > 0) this.openLevelUp();
   }
 
-  private end(won: boolean): void {
+  private end(outcome: 'won' | 'fallen' | 'aborted'): void {
+    const won = outcome === 'won';
     this.phase = 'ended';
     this.won = won;
+    this.aborted = outcome === 'aborted';
     // Der letzte Frame läuft knapp über das Ende der Nacht hinaus.
     const survived = Math.min(this.time, CONFIG.run.nightSeconds);
     const stats = `${this.playerClass.name} · Überlebt: ${formatTime(survived)} · Stufe ${this.progression.level} · Erschlagen: ${this.enemies.kills}`;
     const gold = this.settle(won, survived);
     this.hud.setBoss(null);
-    if (won) {
+    if (outcome === 'aborted') {
+      this.hud.showEnd('Lauf abgebrochen', 'Du hast dich aus der Nacht zurückgezogen.', stats, gold);
+    } else if (won) {
       this.world.setDawn(1);
       const { name } = CONFIG.boss;
       const fate = this.boss.slain
@@ -721,7 +807,7 @@ export class Game {
       case 'steigerung':
         return 'menue';
       case 'ended':
-        return this.won ? 'sieg' : 'niederlage';
+        return this.aborted ? 'menue' : this.won ? 'sieg' : 'niederlage';
       default:
         if (this.boss.enemy) return 'boss';
         return this.time >= CONFIG.audio.music.lateFrom ? 'nacht-spaet' : 'nacht';

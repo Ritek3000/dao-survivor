@@ -22,7 +22,7 @@ import { audioUrl, parseManifest, type LoopEntry, type MusicEntry, type SoundEnt
 /** Wie weit die Musik zurückgenommen wird: voll, leiser bei der Wahl einer Stärkung, leise und dumpf in der Pause. */
 export type Duck = 'none' | 'choice' | 'paused';
 
-/** Regler wie im Pausenbild: 0 bis 1 und Stumm. Dieselben Werte merkt sich `core/settings.ts`. */
+/** Regler wie in den Optionen: 0 bis 1 und Stumm. Dieselben Werte merkt sich `core/settings.ts`. */
 export type Volumes = SoundSettings;
 
 interface LoadedSound {

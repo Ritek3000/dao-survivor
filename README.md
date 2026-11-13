@@ -49,7 +49,7 @@ Nach jedem Merge auf `main` baut GitHub das Spiel und veröffentlicht den Stand 
 | Taste                      | Aktion                                  |
 | -------------------------- | --------------------------------------- |
 | WASD oder Pfeiltasten      | Bewegen                                 |
-| Esc oder P                 | Pause (dort stehen auch die Tonregler)  |
+| Esc oder P                 | Pause (Weiter, Optionen, Lauf abbrechen); in Menüs: zurück |
 | M                          | Ton an oder aus                         |
 | 1, 2, 3 oder Pfeile, Enter | Klasse und Stärkungen wählen, Bestätigen |
 | U                          | Steigerungen öffnen (bei der Klassenwahl und am Ende der Nacht) |
@@ -81,10 +81,10 @@ public/audio/         Klänge und Musik (sfx/, schleifen/, musik/) und audio.jso
 src/
   main.ts             Einstieg: baut das Spiel und hängt Entwicklungswerkzeuge nur im Dev-Modus an
   config.ts           Zentrale Stellschrauben: Nachtdauer, Welt, Gegnerarten, Kulisse
-  core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Tonregler), Spielstand (Gold, Steigerungen)
+  core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Steigerungen)
   audio/              Ton und Musik: Engine, Ereignisnamen, Lesen von audio.json
   game/               Spiellogik und Darstellung (siehe unten)
-  ui/hud.ts           Anzeigen, Auswahlkarten, Pause, Ende
+  ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Pause, Optionen, Rückfragen
   tools/              Entwicklungswerkzeuge: Messlauf und Modell-Prüfer
 tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren; Python: Klänge erzeugen)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
@@ -104,6 +104,20 @@ Wichtige Teile von `src/game/`:
 | `zones.ts`, `darkness.ts`, `dust.ts` | Lichtinseln, Finsternis und Verstaubung                           |
 | `world.ts`, `ground.ts`, `scenery.ts` | Welt, Boden und Kulisse                                          |
 | `models.ts`                    | Lädt GLB-Dateien und bringt sie auf die Maße, die das Spiel braucht     |
+
+## Menüs und Oberfläche
+
+**Pause** (Esc oder P): *Weiter*, *Optionen* und *Lauf abbrechen*. Wer den Lauf abbricht, bestätigt zuerst eine Rückfrage; die Nacht endet dann
+wie bei einem Sturz (Ertrag nach `CONFIG.gold.deathKeep`) mit der Endanzeige „Lauf abgebrochen“.
+
+**Optionen** haben zwei Gruppen: *Ton* (Regler und „Ton aus“) und *Oberfläche* mit **Lebensbalken platzieren**. Gewählt wird die Stelle der
+Lebensgruppe (Stufe im Kreis, Lebensbalken, Gold im Geldbeutel): oben links, oben rechts, unten links, unten Mitte oder unten rechts. Die Gruppe
+wandert als Ganzes; was dort sonst stünde (Hinweis, Tonmeldung, Feuer entzünden), weicht aus. Bedienung mit der Maus oder mit den Tasten
+(Auf und Ab wählen die Zeile, Links und Rechts ändern, Enter schaltet um, Esc geht zurück).
+
+Alle Einstellungen bleiben erhalten (`localStorage`, Schlüssel `dao-survivor.einstellungen`, siehe `src/core/settings.ts`); Stände ohne die Stelle der
+Lebensgruppe gelten als „oben links“. Die Menüs stehen in `index.html`, bedient werden sie von `src/ui/menus.ts`; was ein Knopf bewirkt,
+entscheidet `Game.onMenuCommand`.
 
 ## Gold und Steigerungen
 
@@ -195,7 +209,7 @@ Bei Musik, die in der Schleife läuft, sollte das Stück nahtlos enden und begin
 
 ### Lautstärke und Stummschalten
 
-Im Pausenbild (Esc oder P) stehen drei Regler: Gesamt, Effekte, Musik. Die Taste **M** schaltet den Ton überall an oder aus, auch im Menü; ein
+In den Optionen (Pause: Esc oder P, dann **Optionen**) stehen drei Regler: Gesamt, Effekte, Musik, dazu das Häkchen „Ton aus“. Die Taste **M** schaltet den Ton überall an oder aus, auch im Menü; ein
 Hinweis unten rechts erinnert daran, solange er aus ist. Die Einstellung bleibt erhalten (`localStorage`, mit Rückfall auf den Speicher der Sitzung).
 Browser spielen erst nach der ersten Eingabe Ton ab: Bis zur ersten Taste oder dem ersten Klick bleibt die Klassenwahl still.
 
