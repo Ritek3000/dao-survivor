@@ -146,7 +146,16 @@ export const CLASSES: readonly ClassDef[] = [
       along: [0.601, -0.516, 0.61],
       toward: [-0.036, -0.78, -0.625],
       // Im Lauf schwenkt die Hand weit; der Schild bleibt dabei an der linken Seite der Figur und fährt nicht in den Körper.
-      steady: { weight: 0.9, along: [-0.342, 0.94, 0], toward: [0.94, 0.342, 0], minSide: 0.4 },
+      // Die Leine hält ihn beim Ausholen (Wirbelschlag, Wuchthieb) nah am Körper: Ruhelage `rest` ist der Griffpunkt im Leerlauf,
+      // gemessen von der Hüfte in den Achsen der Figur. Ohne Leine entfernte sich die Schildmitte im Wirbelschlag bis auf
+      // 52 cm vom Körper (im Leerlauf 20 cm), mit ihr bis auf etwa 40 cm; im Wuchthieb von 63 auf 33 cm.
+      steady: {
+        weight: 0.9,
+        along: [-0.342, 0.94, 0],
+        toward: [0.94, 0.342, 0],
+        minSide: 0.4,
+        leash: { bone: 'spine', rest: [0.4, -0.152, -0.027], near: 0.15, soft: 0.35, inward: 0.03 },
+      },
     },
     weapons: ['axthieb', 'wirbelschlag', 'wuchthieb', 'kriegsschrei', 'wurfaxt'],
     swings: {

@@ -270,7 +270,8 @@ Dateien mit gleichem Namen. Neu erzeugte OGG-Dateien nur einchecken, wenn sich d
   Eisen in eine Textur (`blender --background --factory-startup --python tools/schild-erzeugen.py`, optional mit `-- ziel.glb`).
   Das Sor-Symbol auf der Fläche ist ein Vorschlag und lässt sich im Skript mit `EMBLEM = False` abschalten. Sitz und Haltung stehen im
   Eintrag `offhand` des Kämpfers in `classes.ts`: Der Schild hängt am Handknochen, hält seine Ausrichtung aber im Raum der Figur
-  (`steady`), damit er im Lauf nicht mitwackelt und nicht im Körper steckt.
+  (`steady`), damit er im Lauf nicht mitwackelt und nicht im Körper steckt; eine Leine (`leash`) hält ihn beim Ausholen
+  (Wirbelschlag, Wuchthieb) nah am Körper.
 
 ## Lore
 
