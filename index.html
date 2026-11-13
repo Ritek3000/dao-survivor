@@ -11,15 +11,41 @@
     <div id="finsternis-veil"></div>
     <div id="hurt-veil"></div>
 
+    <!--
+      Lebensgruppe: Stufe im Kreis, Lebensbalken, Gold im Geldbeutel. Der Kreis und der Beutel überdecken je ein
+      Ende des Balkens, damit die drei wie ein Stück aussehen. Die Stelle auf dem Bildschirm wählt data-vitals am body.
+    -->
     <div id="vitals">
-      <div id="level">Stufe 1</div>
-      <div id="hp" class="bar">
-        <div id="hp-fill"></div>
-        <div id="hp-dust"></div>
-        <span id="hp-text"></span>
+      <div id="level">
+        <span class="label">Stufe</span>
+        <span id="level-text">1</span>
       </div>
-      <div id="xp" class="bar"><div id="xp-fill"></div></div>
-      <div id="gold"><span class="coin"></span><span id="gold-text">0</span></div>
+      <div id="vitals-bars">
+        <div id="hp" class="bar">
+          <div id="hp-track">
+            <div id="hp-fill"></div>
+            <div id="hp-dust"></div>
+            <span id="hp-text"></span>
+          </div>
+        </div>
+        <div id="xp" class="bar"><div id="xp-fill"></div></div>
+      </div>
+      <div id="gold">
+        <svg class="purse" viewBox="0 0 72 66" aria-hidden="true">
+          <defs>
+            <linearGradient id="purse-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#52402a" />
+              <stop offset="1" stop-color="#1b150d" />
+            </linearGradient>
+          </defs>
+          <path class="purse-body" d="M26 15 C12 19 4 31 4 44 C4 57 17 64 36 64 C55 64 68 57 68 44 C68 31 60 19 46 15 Z" />
+          <path class="purse-shine" d="M11 42 C11 33 16 26 24 22" />
+          <path class="purse-neck" d="M23 4 Q36 -1 49 4 L46 15 Q36 19 26 15 Z" />
+          <path class="purse-tie" d="M25 13.5 Q36 18.5 47 13.5 M35 19 Q32 25 27 25 M37 19 Q40 25 45 25" />
+          <circle class="purse-knot" cx="36" cy="17.5" r="2.6" />
+        </svg>
+        <span id="gold-text">0</span>
+      </div>
     </div>
 
     <div id="clock">
