@@ -12,7 +12,7 @@
  */
 
 import { CONFIG } from '../config';
-import { loadSavegame, writeSavegame, type Savegame } from '../core/savegame';
+import { emptySavegame, loadSavegame, writeSavegame, type Savegame } from '../core/savegame';
 import type { ClassId } from './classes';
 import type { Stats } from './progression';
 
@@ -145,6 +145,18 @@ export class Steigerungen {
   /** Liest den Spielstand neu, etwa nachdem ein Werkzeug Ränge nur zum Ausprobieren gesetzt hat. */
   reload(): void {
     this.save = loadSavegame();
+  }
+
+  /** Gibt es einen Fortschritt, der bei einem neuen Spiel verloren ginge: Gold in der Börse oder gekaufte Ränge? */
+  hasProgress(): boolean {
+    this.refresh();
+    return this.save.gold > 0 || Object.values(this.save.ranks).some((ranks) => Object.values(ranks).some((rank) => rank > 0));
+  }
+
+  /** Setzt den Fortschritt zurück: leere Börse, keine Ränge. Der Messlauf (`persist = false`) schreibt dabei nichts. */
+  reset(): void {
+    this.save = emptySavegame();
+    this.persistNow();
   }
 
   rank(classId: ClassId, steigerung: Steigerung): number {

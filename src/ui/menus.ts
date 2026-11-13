@@ -1,5 +1,5 @@
 /**
- * Die Menüs, die ein Knopfdruck bedient: Pause, Optionen und Rückfragen (später auch der Startbildschirm).
+ * Die Menüs, die ein Knopfdruck bedient: Startbildschirm, Pause, Optionen, Anleitung und Rückfragen.
  *
  * Jedes Menü ist ein Overlay in index.html. Jeder Eintrag darin trägt `data-item` und ist mit Maus oder Tasten
  * anwählbar; trägt er `data-command`, löst er beim Anklicken oder mit Enter einen `MenuCommand` aus. Was daraus folgt,
@@ -12,9 +12,9 @@ import { VITALS_POSITIONS, type VitalsPosition } from '../core/settings';
 import { element } from './dom';
 
 /** Was ein Knopf in einem Menü auslöst. */
-export type MenuCommand = 'resume' | 'options' | 'abort' | 'back' | 'yes' | 'no';
+export type MenuCommand = 'new' | 'continue' | 'options' | 'help' | 'resume' | 'abort' | 'back' | 'yes' | 'no';
 
-export type MenuScreen = 'pause' | 'options' | 'confirm';
+export type MenuScreen = 'title' | 'pause' | 'options' | 'help' | 'confirm';
 
 /** Eine Rückfrage mit zwei Antworten; `no` ist die sichere und steht vorn und vorgewählt. */
 export interface ConfirmView {
@@ -46,8 +46,10 @@ export class Menus {
   onVitalsPosition: (position: VitalsPosition) => void = () => {};
 
   private readonly roots: Readonly<Record<MenuScreen, HTMLElement>> = {
+    title: element('title'),
     pause: element('pause'),
     options: element('options'),
+    help: element('help'),
     confirm: element('confirm'),
   };
   private readonly sliders: Readonly<Record<SliderRow, HTMLInputElement>> = {
@@ -63,12 +65,15 @@ export class Menus {
   private readonly muteBox = element<HTMLInputElement>('vol-mute');
   private readonly spots = [...element('position-picker').querySelectorAll<HTMLButtonElement>('.spot')];
   private readonly positionName = element('position-name');
+  private readonly continueButton = element('title-continue');
   private readonly confirmTitle = element('confirm-title');
   private readonly confirmText = element('confirm-text');
   private readonly confirmNo = element('confirm-no');
   private readonly confirmYes = element('confirm-yes');
   private current: MenuScreen | null = null;
   private selected = 0;
+  /** Die zuletzt markierte Zeile je Menü, damit man nach Optionen oder Anleitung dort weitermacht, wo man war. */
+  private readonly lastSelected: Partial<Record<MenuScreen, number>> = {};
   private position: VitalsPosition = 'top-left';
 
   constructor() {
@@ -104,22 +109,34 @@ export class Menus {
     return this.current;
   }
 
-  showPause(): void {
-    this.show('pause', 0);
+  /**
+   * Der Startbildschirm; "Spiel fortsetzen" gibt es nur, wenn es einen Spielstand gibt, und dann ist er vorgewählt.
+   * `back`: man kommt von einer Unterseite zurück; die Markierung bleibt, wo sie war.
+   */
+  showTitle(canContinue: boolean, back = false): void {
+    this.continueButton.hidden = !canContinue;
+    this.show('title', canContinue ? 1 : 0, back);
   }
 
-  /** `solid`: undurchsichtiger Grund, wenn dahinter kein Spiel zu sehen sein soll (später: vom Startbildschirm aus). */
+  showPause(back = false): void {
+    this.show('pause', 0, back);
+  }
+
+  showHelp(): void {
+    this.show('help', 0);
+  }
+
+  /** `solid`: undurchsichtiger Grund, wenn dahinter kein Spiel zu sehen sein soll (vom Startbildschirm aus). */
   showOptions(solid = false): void {
-    this.roots.options.classList.toggle('solid', solid);
-    this.show('options', 0);
+    this.show('options', 0, false, solid);
   }
 
-  showConfirm(view: ConfirmView): void {
+  showConfirm(view: ConfirmView, solid = false): void {
     this.confirmTitle.textContent = view.title;
     this.confirmText.textContent = view.text;
     this.confirmNo.textContent = view.no;
     this.confirmYes.textContent = view.yes;
-    this.show('confirm', 0);
+    this.show('confirm', 0, false, solid);
   }
 
   hide(): void {
@@ -197,10 +214,12 @@ export class Menus {
     else if (item.dataset.row === 'mute' || item.dataset.row === 'position') this.adjust(1);
   }
 
-  private show(screen: MenuScreen, selected: number): void {
+  private show(screen: MenuScreen, selected: number, restore = false, solid = false): void {
     for (const [id, root] of Object.entries(this.roots)) root.hidden = id !== screen;
+    this.roots[screen].classList.toggle('solid', solid);
     this.current = screen;
-    this.setSelected(selected);
+    const last = restore ? this.lastSelected[screen] : undefined;
+    this.setSelected(Math.min(last ?? selected, this.items().length - 1));
   }
 
   private items(): HTMLElement[] {
@@ -210,6 +229,7 @@ export class Menus {
 
   private setSelected(index: number): void {
     this.selected = index;
+    if (this.current) this.lastSelected[this.current] = index;
     for (const [at, item] of this.items().entries()) item.classList.toggle('selected', at === index);
   }
 
