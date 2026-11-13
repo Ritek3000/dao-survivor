@@ -14,8 +14,11 @@ import { arrowGeometry, propMaterial, rockGeometry, rootsGeometry, trapGeometry 
 import { Strips, type Strip } from './strips';
 import type { Site } from './zones';
 
-/** Woran ein Treffer zu erkennen ist: Stahl schlägt Funken, die Sorlanze brennt, alles andere wirbelt Staub auf. */
-export type StrikeKind = 'stahl' | 'brand' | 'staub';
+/**
+ * Woran ein Treffer zu erkennen ist: Stahl schlägt Funken, die Sorlanze brennt,
+ * Hitze und Glut versengen (Funken und aufsteigender Rauch), alles andere wirbelt Staub auf.
+ */
+export type StrikeKind = 'stahl' | 'brand' | 'glut' | 'staub';
 
 const STEEL = 0xffeed2;
 const DUST = 0xa3927a;
@@ -24,6 +27,8 @@ const SOR = 0xffe6a8;
 const EMBER = 0xff7a2a;
 const SHIELD = 0xbfd4ff;
 
+/** Wie viele Körner die Hitze zum Glühen bringt. */
+const HEAT_GRAINS = 70;
 const HAIL_ARROWS = 14;
 /** Sekunden, die ein Pfeil des Hagels sichtbar herabfliegt, und sein Tempo dabei. */
 const HAIL_FLIGHT = 0.3;
@@ -105,6 +110,7 @@ export class Effects {
   private readonly lightTint = new THREE.Color();
 
   private fireRing: Strip | null = null;
+  private fireCoals: Strip | null = null;
   private fireGlow: Strip | null = null;
   private shieldHaze: Strip | null = null;
   private shieldVeil: Strip | null = null;
@@ -168,7 +174,7 @@ export class Effects {
     this.roots.length = 0;
     this.snapped.length = 0;
     this.later.length = 0;
-    this.fireRing = this.fireGlow = this.shieldHaze = this.shieldVeil = null;
+    this.fireRing = this.fireCoals = this.fireGlow = this.shieldHaze = this.shieldVeil = null;
     for (const mesh of [this.hailMesh, this.rockMesh, this.rootMesh, this.openTraps, this.shutTraps]) mesh.count = 0;
   }
 
@@ -386,13 +392,43 @@ export class Effects {
 
   // ----------------------------------------------------------------- Magier
 
-  /** Hitze werfen: kein Licht, kein Knall. Die Luft flimmert, und am Boden rührt sich der Staub. */
+  /**
+   * Hitze werfen: kein Licht, kein Knall. Die Luft flimmert in Wellen, die von der Hand ausgehen,
+   * und der Staub in ihr wird für einen Atemzug glühend heiß.
+   */
   heat(x: number, z: number, angle: number, range: number, width: number): void {
     this.strips.spawn({ look: 'heat', x, z, angle, width: width + 0.22, inner: 0.5, outer: range, y: 1.05, life: 0.55 });
     for (let i = 0; i < 5; i++) {
       const a = angle + (this.random() - 0.5) * width;
       const r = 1 + this.random() * (range - 1.5);
       this.puff(x + Math.sin(a) * r, z + Math.cos(a) * r, a, 3.5, DUST, 0.22);
+    }
+    // Glühende Körner im ganzen Kegel: je weiter hinaus, desto breiter streut er.
+    const sin = Math.sin(angle);
+    const cos = Math.cos(angle);
+    const p = this.particle;
+    for (let i = 0; i < HEAT_GRAINS; i++) {
+      const along = 1.2 + (range - 1.4) * Math.pow(this.random(), 0.85);
+      const spread = 0.3 + along * Math.tan(Math.min(width, 2.2) / 2);
+      const side = (this.random() + this.random() - 1) * spread;
+      const drift = 0.6 + this.random();
+      const heat = this.random();
+      // Über 1: Das Zentrum des Korns sättigt, der Rand bleibt orange.
+      const glow = 1.6 + 3.5 * Math.pow(this.random(), 3);
+      p.x = x + sin * along + cos * side;
+      p.y = 0.1 + Math.pow(this.random(), 1.4) * 1.9;
+      p.z = z + cos * along - sin * side;
+      p.vx = sin * drift;
+      p.vy = 0.35;
+      p.vz = cos * drift;
+      p.life = 0.45 + this.random() * 0.6;
+      p.size = 0.06 + this.random() * 0.07;
+      p.grow = 0;
+      p.gravity = 0;
+      p.drag = 1.2;
+      p.color.setRGB(glow, glow * (0.22 + 0.5 * heat), glow * 0.04 * (0.5 + heat));
+      p.alpha = 1;
+      this.glow.spawn(p);
     }
   }
 
@@ -410,72 +446,92 @@ export class Effects {
       outer: length + 1,
       y: 0.07,
       color: SOR,
-      opacity: 0.22,
+      opacity: 0.26,
       life: 0.3,
     });
     const sin = Math.sin(angle);
     const cos = Math.cos(angle);
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 44; i++) {
       const along = 0.8 + this.random() * (length - 1);
       const p = this.particle;
       p.x = x + sin * along + (this.random() - 0.5) * 0.25;
       p.y = 1.2 + (this.random() - 0.5) * 0.3;
       p.z = z + cos * along + (this.random() - 0.5) * 0.25;
-      p.vx = (this.random() - 0.5) * 0.5;
-      p.vy = 0.15 + this.random() * 0.4;
-      p.vz = (this.random() - 0.5) * 0.5;
+      // Der Staub im Strahl wird heiß und stiebt zur Seite und nach oben davon.
+      const side = (this.random() - 0.5) * 1.4;
+      p.vx = cos * side + (this.random() - 0.5) * 0.3;
+      p.vy = 0.15 + this.random() * 0.5;
+      p.vz = -sin * side + (this.random() - 0.5) * 0.3;
       p.life = 0.45 + this.random() * 0.6;
-      p.size = 0.07 + this.random() * 0.08;
+      p.size = 0.05 + this.random() * 0.09;
       p.grow = 0;
       p.gravity = 0;
       p.drag = 1;
-      p.color.set(SOR);
-      p.alpha = 0.9;
+      // Weißgold, nur manche Körner glühen orange nach.
+      p.color.set(this.random() < 0.25 ? 0xffb050 : SOR).multiplyScalar(1.3);
+      p.alpha = 0.95;
       this.glow.spawn(p);
     }
+    // Am Ursprung ist der Strahl am heißesten.
+    const q = this.particle;
+    q.x = x + sin * 0.9;
+    q.y = 1.2;
+    q.z = z + cos * 0.9;
+    q.vx = q.vy = q.vz = 0;
+    q.life = 0.3;
+    q.size = 0.9;
+    q.grow = -1.5;
+    q.gravity = 0;
+    q.drag = 0;
+    q.color.set(0xfff0c8);
+    q.alpha = 0.9;
+    this.glow.spawn(q);
     this.flash(x + sin * length * 0.35, 1.7, z + cos * length * 0.35, 0xfff0c8, 70, length * 0.9, 0.3);
   }
 
   /**
-   * Glut formen: ein Flammenring, der dem Magier folgt. Jedes Bild aufzurufen;
+   * Glut formen: ein Ring aus Glutbrocken mit Flammenzungen, der dem Magier folgt. Jedes Bild aufzurufen;
    * mit `active` = false erlischt er.
    */
   embers(active: boolean, x: number, z: number, radius: number, time: number, dt: number): void {
     if (!active) {
-      if (this.fireRing) this.strips.release(this.fireRing, 0.4);
-      if (this.fireGlow) this.strips.release(this.fireGlow, 0.4);
-      this.fireRing = this.fireGlow = null;
+      for (const strip of [this.fireRing, this.fireCoals, this.fireGlow]) if (strip) this.strips.release(strip, 0.4);
+      this.fireRing = this.fireCoals = this.fireGlow = null;
       this.emberLight.intensity = 0;
       return;
     }
-    this.fireRing ??= this.strips.spawn({ look: 'fire', x, z, inner: 0, outer: radius, y: 0.02, span: 1.15, life: Infinity });
+    this.fireRing ??= this.strips.spawn({ look: 'fire', x, z, inner: 0, outer: radius, y: 0.02, span: 1.7, life: Infinity });
+    this.fireCoals ??= this.strips.spawn({ look: 'glut', x, z, inner: radius - 0.5, outer: radius + 0.5, y: 0.03, life: Infinity });
+    // Ein warmer Hof färbt den Boden im Ring.
     this.fireGlow ??= this.strips.spawn({
-      look: 'ring',
+      look: 'glow',
       x,
       z,
-      inner: radius * 0.7,
-      outer: radius * 1.3,
+      inner: 0,
+      outer: radius * 1.35,
       y: 0.05,
-      color: 0xff5a14,
-      opacity: 0.15,
+      color: 0xff6a18,
+      opacity: 0.11,
       life: Infinity,
     });
     const flicker = 1 + 0.12 * Math.sin(time * 13) + 0.08 * Math.sin(time * 29.3 + 1.1);
-    for (const strip of [this.fireRing, this.fireGlow]) {
+    for (const strip of [this.fireRing, this.fireCoals, this.fireGlow]) {
       strip.x = x;
       strip.z = z;
     }
     this.fireRing.spec.outer = radius;
     this.fireRing.opacity = 0.95 * flicker;
-    this.fireGlow.spec.inner = radius * 0.7;
-    this.fireGlow.spec.outer = radius * 1.3;
+    this.fireCoals.spec.inner = radius - 0.5;
+    this.fireCoals.spec.outer = radius + 0.5;
+    this.fireCoals.opacity = 0.9 * flicker;
+    this.fireGlow.spec.outer = radius * 1.35;
     // Das Licht sitzt über dem Magier: So fällt der Schein flach auf den Boden um ihn, ohne ihn auszubrennen.
     this.emberLight.position.set(x, 2.2, z);
     this.emberLight.distance = radius * 3;
     this.emberLight.intensity = 9 * flicker;
 
     // Funken steigen aus den Flammen auf.
-    const wanted = 45 * dt;
+    const wanted = 80 * dt;
     const count = Math.floor(wanted) + (this.random() < wanted % 1 ? 1 : 0);
     for (let i = 0; i < count; i++) this.ember(x, z, radius, 1);
   }
@@ -489,11 +545,11 @@ export class Effects {
       inner: 0,
       outer: radius,
       y: 0.02,
-      span: 1.8,
+      span: 2.4,
       opacity: 0.9,
       life: 0.3,
     });
-    for (let i = 0; i < 14; i++) this.ember(x, z, radius, 2);
+    for (let i = 0; i < 22; i++) this.ember(x, z, radius, 2);
   }
 
   /** Erdstoß: Der Boden reißt, Brocken springen heraus, Staub rollt nach außen. */
@@ -573,28 +629,44 @@ export class Effects {
     }
   }
 
-  /** Sorhennas Brand: ein lautloser weißer Lichtstoß, der für einen Augenblick alles ausleuchtet. */
+  /**
+   * Sorhennas Brand: ein lautloser weißer Lichtstoß, der für einen Augenblick alles ausleuchtet.
+   * Strahlen schießen in der Luft nach allen Seiten, eine Lichtwelle läuft über den Boden.
+   */
   flare(x: number, z: number, radius: number): void {
-    this.strips.spawn({ look: 'flare', x, z, inner: 0, outer: radius, y: 1.3, color: 0xffffff, opacity: 1.2, life: 0.45 });
+    this.strips.spawn({ look: 'flare', x, z, inner: 0, outer: radius, y: 1.5, color: 0xfff6e4, opacity: 1.2, life: 0.5 });
+    this.strips.spawn({
+      look: 'lichtwelle',
+      x,
+      z,
+      inner: radius * 0.1,
+      outer: radius * 0.22,
+      innerTo: radius * 0.8,
+      outerTo: radius * 0.98,
+      y: 0.06,
+      color: 0xffeccc,
+      opacity: 0.9,
+      life: 0.55,
+    });
     this.strips.spawn({ look: 'glow', x, z, inner: 0, outer: radius * 1.3, y: 0.06, color: 0xfff6e0, opacity: 0.3, life: 0.3 });
     this.flash(x, 2.4, z, 0xffffff, 110, radius * 2.4, 0.24);
     // Der Staub in der Luft hängt noch einen Atemzug lang hell.
-    for (let i = 0; i < 46; i++) {
+    for (let i = 0; i < 90; i++) {
       const a = this.random() * TAU;
       const r = Math.sqrt(this.random()) * radius;
       const p = this.particle;
       p.x = x + Math.sin(a) * r;
       p.y = 0.3 + this.random() * 1.8;
       p.z = z + Math.cos(a) * r;
-      p.vx = Math.sin(a) * 0.6;
+      p.vx = Math.sin(a) * 0.9;
       p.vy = 0.1 + this.random() * 0.3;
-      p.vz = Math.cos(a) * 0.6;
-      p.life = 0.6 + this.random() * 0.8;
-      p.size = 0.06 + this.random() * 0.08;
+      p.vz = Math.cos(a) * 0.9;
+      p.life = 0.6 + this.random() * 0.9;
+      p.size = 0.05 + this.random() * 0.08;
       p.grow = 0;
       p.gravity = 0;
       p.drag = 1.5;
-      p.color.set(0xffffff);
+      p.color.set(0xfff4dc).multiplyScalar(1 + 2.5 * Math.pow(this.random(), 3));
       p.alpha = 0.9;
       this.glow.spawn(p);
     }
@@ -715,6 +787,9 @@ export class Effects {
       this.sparks(x, y, z, 4, 0xffe2b0, 3.5);
     } else if (kind === 'brand') {
       this.sparks(x, y, z, 7, 0xffb060, 2.5);
+    } else if (kind === 'glut') {
+      this.sparks(x, y, z, 6, 0xff8a30, 2.5);
+      this.smoke(x, y, z);
     }
     // Die Geschöpfe der Nacht sind halb Staub: Jeder Treffer schlägt etwas davon heraus.
     const p = this.particle;
@@ -781,6 +856,27 @@ export class Effects {
     });
   }
 
+  /** Rauch, der von einem Versengten aufsteigt: dunkel, langsam, fast ohne Eigenlicht. */
+  private smoke(x: number, y: number, z: number): void {
+    const p = this.particle;
+    for (let i = 0; i < 2; i++) {
+      p.x = x + (this.random() - 0.5) * 0.3;
+      p.y = y + this.random() * 0.3;
+      p.z = z + (this.random() - 0.5) * 0.3;
+      p.vx = (this.random() - 0.5) * 0.5;
+      p.vy = 0.9 + this.random() * 0.8;
+      p.vz = (this.random() - 0.5) * 0.5;
+      p.life = 0.8 + this.random() * 0.6;
+      p.size = 0.28 + this.random() * 0.2;
+      p.grow = 0.7;
+      p.gravity = -0.4;
+      p.drag = 1.5;
+      p.color.set(0x3a3430);
+      p.alpha = 0.6;
+      this.dust.spawn(p);
+    }
+  }
+
   /** Funken: springen auseinander, fallen und verglühen. */
   private sparks(x: number, y: number, z: number, count: number, color: number, speed: number): void {
     const p = this.particle;
@@ -828,18 +924,22 @@ export class Effects {
   private ember(x: number, z: number, radius: number, vigor: number): void {
     const a = this.random() * TAU;
     const p = this.particle;
-    p.x = x + Math.sin(a) * radius;
+    const r = radius + (this.random() - 0.5) * 0.9;
+    p.x = x + Math.sin(a) * r;
     p.y = 0.1 + this.random() * 0.4;
-    p.z = z + Math.cos(a) * radius;
+    p.z = z + Math.cos(a) * r;
     p.vx = (this.random() - 0.5) * 0.8;
-    p.vy = (0.7 + this.random() * 1.2) * vigor;
+    p.vy = (0.7 + this.random() * 1.4) * vigor;
     p.vz = (this.random() - 0.5) * 0.8;
-    p.life = 0.5 + this.random() * 0.7;
-    p.size = 0.05 + this.random() * 0.06;
+    p.life = 0.5 + this.random() * 0.9;
+    p.size = 0.05 + this.random() * 0.07;
     p.grow = -0.03;
     p.gravity = -0.6;
     p.drag = 0.8;
-    p.color.set(this.random() < 0.3 ? 0xffd27a : EMBER);
+    // Von rotorange bis gelb; die wenigen hellen Funken glühen über 1 und sättigen.
+    const heat = this.random();
+    const glow = 1 + 2.2 * Math.pow(this.random(), 3);
+    p.color.setRGB(glow, glow * (0.25 + 0.5 * heat), glow * 0.05 * heat);
     p.alpha = 1;
     this.glow.spawn(p);
   }

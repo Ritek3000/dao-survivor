@@ -41,12 +41,18 @@ const lightAt = new THREE.Vector3();
 /** Woran ein Treffer des Angriffs zu erkennen ist. */
 function strikeKind(def: WeaponDef): StrikeKind {
   if (def.kind === 'beam') return 'brand';
+  if (def.kind === 'aura' || def.look === 'hitze') return 'glut';
   if (def.kind === 'projectile' || def.kind === 'volley' || def.kind === 'trap') return 'stahl';
   return def.look === 'hieb' || def.look === 'wucht' || def.look === 'wirbel' ? 'stahl' : 'staub';
 }
 
 /** Der Ton zu jeder Trefferart; fest hinterlegt, weil Treffer das häufigste Ereignis im Kampf sind. */
-const HIT_SOUNDS: Record<StrikeKind, SoundId> = { stahl: 'treffer.stahl', staub: 'treffer.staub', brand: 'treffer.brand' };
+const HIT_SOUNDS: Record<StrikeKind, SoundId> = {
+  stahl: 'treffer.stahl',
+  staub: 'treffer.staub',
+  brand: 'treffer.brand',
+  glut: 'treffer.brand',
+};
 
 /** Höhe eines Punktes am Körper des Gegners als Anteil seiner Größe; wer schwebt, steht entsprechend höher. */
 function bodyHeight(model: EnemyModel, fraction: number): number {
