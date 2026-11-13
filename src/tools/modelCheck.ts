@@ -110,6 +110,8 @@ let current: THREE.Object3D | null = null;
 let clips: readonly THREE.AnimationClip[] = [];
 /** Die Waffe der Klasse, wenn die Datei das Modell einer Spielfigur ist. */
 let gear: Gear | null = null;
+/** Was die andere Hand hält (der Schild des Kämpfers). */
+let offhand: Gear | null = null;
 /** Zum Ausprobieren aus der Konsole: Buch aufgeschlagen (weight), Pfeil auf der Sehne (charged). */
 const gearState = { weight: 0, charged: false };
 
@@ -138,12 +140,13 @@ buttons(
   'Prüflicht',
 );
 
-function show(gltf: GLTF, megabytes: number, fileName: string): void {
+function show(gltf: GLTF, megabytes: number, fileName: string, gearModels: ReadonlyMap<string, THREE.Object3D>): void {
   if (current) scene.remove(current);
   current = gltf.scene;
   scene.add(current);
   const playerClass = CLASSES.find((candidate) => fileName.endsWith(candidate.model.file));
-  gear = playerClass ? equip(playerClass.gear, current) : null;
+  gear = playerClass ? equip(playerClass.gear, current, gearModels) : null;
+  offhand = playerClass?.offhand ? equip(playerClass.offhand, current, gearModels) : null;
 
   let triangles = 0;
   let vertices = 0;
@@ -283,12 +286,28 @@ function show(gltf: GLTF, megabytes: number, fileName: string): void {
 }
 
 const loader = new GLTFLoader();
+
+/** Lädt die Modelle der Ausrüstung (Schild), die eine Spielfigur in die Hand nimmt; fehlt eines, bleibt der Platzhalter. */
+async function loadGearModels(fileName: string): Promise<Map<string, THREE.Object3D>> {
+  const models = new Map<string, THREE.Object3D>();
+  const playerClass = CLASSES.find((candidate) => fileName.endsWith(candidate.model.file));
+  for (const def of [playerClass?.gear, playerClass?.offhand]) {
+    if (!def?.model || models.has(def.model)) continue;
+    try {
+      models.set(def.model, (await loader.loadAsync(`${import.meta.env.BASE_URL}models/${def.model}`)).scene);
+    } catch (error) {
+      console.warn(`Ausrüstung ${def.model} nicht geladen.`, error);
+    }
+  }
+  return models;
+}
+
 function load(buffer: ArrayBuffer, fileName: string): void {
   hint.textContent = `Lade ${fileName} …`;
   loader.parse(
     buffer,
     '',
-    (gltf) => show(gltf, buffer.byteLength / 1048576, fileName),
+    (gltf) => void loadGearModels(fileName).then((gearModels) => show(gltf, buffer.byteLength / 1048576, fileName, gearModels)),
     (error) => {
       hint.textContent = `Die Datei ließ sich nicht lesen: ${error.message}`;
     },
@@ -336,6 +355,7 @@ function frame(now: number): void {
   last = now;
   controls.update();
   gear?.update(gearState.weight, gearState.charged);
+  offhand?.settle();
   renderer.render(scene, camera);
 }
 requestAnimationFrame(frame);
@@ -350,5 +370,6 @@ requestAnimationFrame(frame);
   getModel: () => current,
   getClips: () => clips,
   getGear: () => gear,
+  getOffhand: () => offhand,
   gearState,
 };

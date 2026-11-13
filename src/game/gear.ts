@@ -1,28 +1,38 @@
 /**
- * Was eine Klasse in den Händen hält: die Axt des Kämpfers, der Bogen des Wildnisläufers,
- * das Zauberbuch des Magiers. Aus einfachen Körpern gebaut und an den Handknochen gehängt,
- * damit die Angriffs-Animationen etwas zu führen haben.
+ * Was eine Klasse in den Händen hält: die Axt und der Schild des Kämpfers, der Bogen des Wildnisläufers,
+ * das Zauberbuch des Magiers. Axt, Bogen und Buch sind aus einfachen Körpern gebaut, der Schild ist ein GLB-Modell
+ * (`tools/schild-erzeugen.py`). Alles hängt am Handknochen, damit es den Animationen folgt.
  */
 import * as THREE from 'three';
 import { swallowedByFinsternis } from './darkness';
 
-export type GearKind = 'axt' | 'bogen' | 'buch';
+export type GearKind = 'axt' | 'bogen' | 'buch' | 'schild';
 type Triple = readonly [number, number, number];
 
 export interface GearDef {
   kind: GearKind;
   hand: 'links' | 'rechts';
-  /** In Metern: Stiel der Axt, Bogen von Spitze zu Spitze, Höhe des Buchs. */
+  /** In Metern: Stiel der Axt, Bogen von Spitze zu Spitze, Höhe des Buchs, Durchmesser des Schilds. */
   size: number;
+  /** Modell aus `public/models` für Gegenstände, die keine Körper aus dem Code sind (der Schild). */
+  model?: string;
   /** Griffpunkt, gemessen im Raum des Handknochens. */
   offset: Triple;
   /**
    * Richtung im Raum des Handknochens, in die der Gegenstand ragt:
-   * zum Axtkopf, zum oberen Bogenende, aus den aufgeschlagenen Seiten heraus.
+   * zum Axtkopf, zum oberen Bogenende, aus den aufgeschlagenen Seiten heraus, zum oberen Schildrand.
    */
   along: Triple;
-  /** Richtung, in die er wirkt: Schneide der Axt, Flug des Pfeils, Kopfende des Buchs. */
+  /** Richtung, in die er wirkt: Schneide der Axt, Flug des Pfeils, Kopfende des Buchs, Aussenseite des Schilds. */
   toward: Triple;
+  /**
+   * Der Schild folgt mit seinem Griffpunkt der Hand, behält aber seine Ausrichtung im Raum der Figur, sonst schwenkt er
+   * mit jedem Handgelenk durch den Lauf: `weight` 0 heißt starr an der Hand, 1 ganz fest; `along` und `toward` gelten im
+   * Raum der Figur (+Z nach vorn, +X nach links), nicht im Raum des Handknochens. `minSide`: So weit links von der
+   * Mitte der Figur bleibt der Griffpunkt mindestens, damit der Schild nicht in den Körper fährt, wenn die Hand
+   * im Lauf nach innen schwingt (Meter, vor der Skalierung der Figur).
+   */
+  steady?: { weight: number; along: Triple; toward: Triple; minSide: number };
 }
 
 interface Built {
@@ -32,6 +42,12 @@ interface Built {
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
+const handRotation = new THREE.Quaternion();
+const figureRotation = new THREE.Quaternion();
+const wanted = new THREE.Quaternion();
+const origin = new THREE.Vector3();
+const handScale = new THREE.Vector3();
+const sideways = new THREE.Vector3();
 const FORWARD = new THREE.Vector3(0, 0, 1);
 const direction = new THREE.Vector3();
 
@@ -191,35 +207,117 @@ function buildBook(height: number): Built {
   };
 }
 
-const BUILDERS: Record<GearKind, (size: number) => Built> = {
+/**
+ * Rundschild: Im Modell steht +Y oben, +Z zeigt aus der Schildfläche heraus (zur Aussenseite mit dem Buckel), und der
+ * Ursprung liegt in der Griffstange. Das Modell wird auf den Durchmesser `diameter` gebracht, wie es auch geliefert wird.
+ * Fehlt die Datei, steht ein schlichter Holzteller an seiner Stelle.
+ */
+function buildShield(diameter: number, model?: THREE.Object3D): Built {
+  const object = new THREE.Group();
+  if (model) {
+    const copy = model.clone(true);
+    const box = new THREE.Box3().setFromObject(copy);
+    const size = box.getSize(new THREE.Vector3());
+    copy.scale.multiplyScalar(diameter / (Math.max(size.x, size.y) || diameter));
+    object.add(copy);
+  } else {
+    const radius = diameter / 2;
+    const board = part(new THREE.CylinderGeometry(radius, radius, 0.03, 24), lit(0x6b2a22));
+    board.rotation.x = Math.PI / 2;
+    board.position.z = -0.045;
+    const boss = part(new THREE.SphereGeometry(radius * 0.28, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), lit(0x8a9099, 0.45));
+    boss.rotation.x = Math.PI / 2;
+    boss.position.z = -0.03;
+    object.add(board, boss);
+  }
+  return { object, update: () => {} };
+}
+
+const BUILDERS: Record<GearKind, (size: number, model?: THREE.Object3D) => Built> = {
   axt: buildAxe,
   bogen: buildBow,
   buch: buildBook,
+  schild: buildShield,
 };
+
+/** Die Drehung eines Gegenstands, dessen +Y nach `along` und dessen +Z nach `toward` zeigt. */
+function orientation(along: Triple, toward: Triple): THREE.Quaternion {
+  const y = new THREE.Vector3(...along).normalize();
+  const z = new THREE.Vector3(...toward);
+  z.addScaledVector(y, -z.dot(y)).normalize();
+  const x = new THREE.Vector3().crossVectors(y, z);
+  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+}
 
 /** Ein Gegenstand in der Hand einer Spielfigur. */
 export class Gear {
   private readonly built: Built;
+  /** Die Drehung, in der er starr an der Hand sitzt, im Raum des Handknochens. */
+  private readonly rigid = new THREE.Quaternion();
+  /** Die Drehung, die er im Raum der Figur hält (nur mit `def.steady`). */
+  private readonly held = new THREE.Quaternion();
+  private steadiness: number;
+  /** Der Griffpunkt im Raum des Handknochens, wie ihn `setGrip` festlegt. */
+  private readonly grip = new THREE.Vector3();
 
   constructor(
-    def: GearDef,
-    hand: THREE.Object3D,
+    private readonly def: GearDef,
+    private readonly hand: THREE.Object3D,
     private readonly otherHand: THREE.Object3D,
+    private readonly figure: THREE.Object3D,
+    model?: THREE.Object3D,
   ) {
-    this.built = BUILDERS[def.kind](def.size);
+    this.built = BUILDERS[def.kind](def.size, model);
     this.setGrip(def.along, def.toward, def.offset);
+    if (def.steady) this.held.copy(orientation(def.steady.along, def.steady.toward));
+    this.steadiness = def.steady?.weight ?? 0;
     hand.add(this.built.object);
     this.update(0, false);
   }
 
   /** Legt fest, wie der Gegenstand in der Hand sitzt; die Angaben gelten im Raum des Handknochens. */
   setGrip(along: Triple, toward: Triple, offset: Triple): void {
-    const y = new THREE.Vector3(...along).normalize();
-    const z = new THREE.Vector3(...toward);
-    z.addScaledVector(y, -z.dot(y)).normalize();
-    const x = new THREE.Vector3().crossVectors(y, z);
-    this.built.object.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
-    this.built.object.position.set(...offset);
+    this.rigid.copy(orientation(along, toward));
+    this.built.object.quaternion.copy(this.rigid);
+    this.grip.set(...offset);
+    this.built.object.position.copy(this.grip);
+  }
+
+  /**
+   * Richtet einen Gegenstand mit `def.steady` im Raum der Figur aus. Gehört hinter jeden Schritt der Animation,
+   * denn die Hand steht erst dann an ihrem neuen Platz.
+   */
+  settle(): void {
+    if (this.steadiness <= 0) return;
+    this.hand.getWorldQuaternion(handRotation);
+    this.figure.getWorldQuaternion(figureRotation);
+    // Gesucht ist die Drehung im Raum der Hand, die in der Welt der gehaltenen Ausrichtung der Figur entspricht.
+    wanted.copy(handRotation).invert().multiply(figureRotation).multiply(this.held);
+    const object = this.built.object;
+    object.quaternion.slerpQuaternions(this.rigid, wanted, this.steadiness);
+
+    // Schwingt die Hand nach innen, rückt der Schild nach außen, statt durch den Körper zu fahren.
+    object.position.copy(this.grip);
+    object.getWorldPosition(origin);
+    this.figure.worldToLocal(origin);
+    const missing = (this.def.steady?.minSide ?? 0) - origin.x;
+    if (missing <= 0) return;
+    object.getWorldPosition(origin);
+    sideways.setFromMatrixColumn(this.figure.matrixWorld, 0).normalize();
+    // Die Figur ist skaliert: Der Abstand gilt in ihrem eigenen Maß.
+    origin.addScaledVector(sideways, missing * this.figure.getWorldScale(handScale).x);
+    object.position.copy(this.hand.worldToLocal(origin));
+  }
+
+  /** Lässt den Schild starr an der Hand sitzen, etwa wenn die Figur zu Boden geht. */
+  release(): void {
+    this.steadiness = 0;
+    this.built.object.quaternion.copy(this.rigid);
+  }
+
+  /** Nimmt die gehaltene Ausrichtung wieder auf. */
+  restore(): void {
+    this.steadiness = this.def.steady?.weight ?? 0;
   }
 
   /** `weight`: wie weit die Angriffshaltung eingeblendet ist; `charged`: der Pfeil liegt auf der Sehne. */
@@ -228,8 +326,11 @@ export class Gear {
   }
 }
 
-/** Hängt die Ausrüstung an die Hand einer Figur. Ohne Handknochen bleibt die Figur unbewaffnet. */
-export function equip(def: GearDef, figure: THREE.Object3D): Gear | null {
+/**
+ * Hängt die Ausrüstung an die Hand einer Figur. Ohne Handknochen bleibt die Figur unbewaffnet.
+ * `models` hält die geladenen Modelle für Ausrüstung mit `def.model`, nach Dateiname.
+ */
+export function equip(def: GearDef, figure: THREE.Object3D, models?: ReadonlyMap<string, THREE.Object3D>): Gear | null {
   const hands: Partial<Record<GearDef['hand'], THREE.Object3D>> = {};
   figure.traverse((object) => {
     if (!(object instanceof THREE.Bone)) return;
@@ -239,5 +340,6 @@ export function equip(def: GearDef, figure: THREE.Object3D): Gear | null {
   });
   const { links, rechts } = hands;
   if (!links || !rechts) return null;
-  return def.hand === 'links' ? new Gear(def, links, rechts) : new Gear(def, rechts, links);
+  const model = def.model ? models?.get(def.model) : undefined;
+  return def.hand === 'links' ? new Gear(def, links, rechts, figure, model) : new Gear(def, rechts, links, figure, model);
 }

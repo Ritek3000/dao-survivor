@@ -57,6 +57,8 @@ export interface ClassDef {
    * ausgemessen; nach einem neuen Export mit anderem Skelett müssen sie neu bestimmt werden.
    */
   gear: GearDef;
+  /** Was die andere Hand hält, etwa der Schild des Kämpfers; er greift nicht ein, sondern schmückt die Figur. */
+  offhand?: GearDef;
   /** Der erste Eintrag ist der Startangriff, die übrigen kommen beim Stufenaufstieg dazu. */
   weapons: readonly string[];
   /** Welche Animation zu welchem Angriff gehört. Angriffe ohne Eintrag wirken ohne Bewegung der Figur. */
@@ -130,6 +132,21 @@ export const CLASSES: readonly ClassDef[] = [
       offset: [0.055, 0.085, -0.05],
       along: [0.16, 0.42, 0.89],
       toward: [0.72, 0.57, -0.4],
+    },
+    // Rundschild in der linken Hand, die Außenseite nach links. Er ist um 20 Grad nach oben geneigt: So fängt die Fläche das
+    // Licht der Fackel über dem Kopf, und der Unterarm ragt nicht durch das Brett. Griffpunkt und Richtungen sind im Leerlauf
+    // der Figur ausgemessen und gelten im Raum des linken Handknochens (`handL`); nach einem neuen Export des Modells
+    // müssen sie neu bestimmt werden.
+    offhand: {
+      kind: 'schild',
+      hand: 'links',
+      size: 0.56,
+      model: 'ausruestung/schild.glb',
+      offset: [-0.088, 0.129, -0.157],
+      along: [0.601, -0.516, 0.61],
+      toward: [-0.036, -0.78, -0.625],
+      // Im Lauf schwenkt die Hand weit; der Schild bleibt dabei an der linken Seite der Figur und fährt nicht in den Körper.
+      steady: { weight: 0.9, along: [-0.342, 0.94, 0], toward: [0.94, 0.342, 0], minSide: 0.4 },
     },
     weapons: ['axthieb', 'wirbelschlag', 'wuchthieb', 'kriegsschrei', 'wurfaxt'],
     swings: {
