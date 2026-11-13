@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { createRandom } from '../core/random';
 import { Particles, type Particle } from './particles';
-import { arrowGeometry, propMaterial, rockGeometry, rootsGeometry, trapGeometry } from './props';
+import { arrowGeometry, propMaterial, rockGeometry, rootsGeometry, shardGeometry, trapGeometry } from './props';
 import { Strips, type Strip } from './strips';
 import type { Site } from './zones';
 
@@ -29,6 +29,9 @@ const SHIELD = 0xbfd4ff;
 
 /** Wie viele Körner die Hitze zum Glühen bringt. */
 const HEAT_GRAINS = 70;
+/** Wie viele Felszacken gleichzeitig stehen können, und wie viele ein Erdstoß treibt. */
+const SHARDS = 64;
+const QUAKE_SHARDS = 34;
 const HAIL_ARROWS = 14;
 /** Sekunden, die ein Pfeil des Hagels sichtbar herabfliegt, und sein Tempo dabei. */
 const HAIL_FLIGHT = 0.3;
@@ -60,6 +63,20 @@ interface Rock {
   rest: number;
 }
 
+/** Eine Felszacke, die ein Erdstoß aus dem Boden treibt. */
+interface Shard extends Site {
+  yaw: number;
+  /** Neigung nach außen in Radiant. */
+  lean: number;
+  spin: number;
+  width: number;
+  height: number;
+  /** Helligkeit des Steins, 1 = Grundfarbe. */
+  tint: number;
+  age: number;
+  life: number;
+}
+
 interface Roots extends Site {
   scale: number;
   yaw: number;
@@ -78,6 +95,12 @@ interface Later {
 
 const pose = new THREE.Object3D();
 const WHITE = new THREE.Color(1, 1, 1);
+const UP = new THREE.Vector3(0, 1, 0);
+const RIGHT = new THREE.Vector3(1, 0, 0);
+const yawTurn = new THREE.Quaternion();
+const leanTurn = new THREE.Quaternion();
+const selfTurn = new THREE.Quaternion();
+const stoneTint = new THREE.Color();
 const FORWARD = new THREE.Vector3(0, 0, 1);
 const heading = new THREE.Vector3();
 const TAU = Math.PI * 2;
@@ -101,6 +124,8 @@ export class Effects {
   private readonly hail: HailArrow[] = [];
   private readonly rockMesh: THREE.InstancedMesh;
   private readonly rocks: Rock[] = [];
+  private readonly shardMesh: THREE.InstancedMesh;
+  private readonly shards: Shard[] = [];
   private readonly rootMesh: THREE.InstancedMesh;
   private readonly roots: Roots[] = [];
   private readonly openTraps: THREE.InstancedMesh;
@@ -143,7 +168,10 @@ export class Effects {
     };
     const iron = propMaterial(0.5);
     this.hailMesh = instanced(arrowGeometry(), propMaterial(0.6), 96, false);
-    this.rockMesh = instanced(rockGeometry(), propMaterial(0.95, true), 80, true);
+    this.rockMesh = instanced(rockGeometry(), propMaterial(0.95, true), 140, true);
+    this.shardMesh = instanced(shardGeometry(this.random), propMaterial(0.95, true), SHARDS, true);
+    // Das Farbattribut muss vor dem ersten Zeichnen da sein, sonst baut das Material seinen Shader ohne.
+    for (let i = 0; i < SHARDS; i++) this.shardMesh.setColorAt(i, WHITE);
     this.rootMesh = instanced(rootsGeometry(this.random), propMaterial(0.9), 40, true);
     this.openTraps = instanced(trapGeometry(false), iron, 12, false);
     this.shutTraps = instanced(trapGeometry(true), iron, 16, true);
@@ -156,6 +184,7 @@ export class Effects {
       this.emberLight,
       this.hailMesh,
       this.rockMesh,
+      this.shardMesh,
       this.rootMesh,
       this.openTraps,
       this.shutTraps,
@@ -171,11 +200,12 @@ export class Effects {
     this.flashPeak = 0;
     this.hail.length = 0;
     this.rocks.length = 0;
+    this.shards.length = 0;
     this.roots.length = 0;
     this.snapped.length = 0;
     this.later.length = 0;
     this.fireRing = this.fireCoals = this.fireGlow = this.shieldHaze = this.shieldVeil = null;
-    for (const mesh of [this.hailMesh, this.rockMesh, this.rootMesh, this.openTraps, this.shutTraps]) mesh.count = 0;
+    for (const mesh of [this.hailMesh, this.rockMesh, this.shardMesh, this.rootMesh, this.openTraps, this.shutTraps]) mesh.count = 0;
   }
 
   /** Hält die Teilchen unabhängig von Auflösung und Blickwinkel gleich groß. */
@@ -208,6 +238,7 @@ export class Effects {
     }
     this.updateHail(dt);
     this.updateRocks(dt);
+    this.updateShards(dt);
     this.updateRoots(dt);
     this.updateSnapped(dt);
   }
@@ -552,11 +583,33 @@ export class Effects {
     for (let i = 0; i < 22; i++) this.ember(x, z, radius, 2);
   }
 
-  /** Erdstoß: Der Boden reißt, Brocken springen heraus, Staub rollt nach außen. */
+  /**
+   * Erdstoß: Spalten laufen vom Magier nach außen, im Ring bricht der Fels in Zacken aus dem Boden,
+   * Staub rollt hinaus, Brocken und Splitter fliegen.
+   */
   quake(x: number, z: number, radius: number): void {
-    this.strips.spawn({ look: 'crack', x, z, inner: 0, outer: radius * 1.1, y: 0.04, life: 2.8, opacity: 0.95 });
+    this.strips.spawn({ look: 'crack', x, z, inner: 0, outer: radius * 1.15, y: 0.04, life: 2.8, opacity: 0.95 });
     this.groundWave(x, z, radius, EARTH, 0.95);
-    for (let i = 0; i < 18 && this.rocks.length < this.rockMesh.instanceMatrix.count; i++) {
+    for (let i = 0; i < QUAKE_SHARDS && this.shards.length < SHARDS; i++) {
+      const a = (i / QUAKE_SHARDS) * TAU + (this.random() - 0.5) * 0.18;
+      // Ein gebrochener Ring um vier Fünftel des Radius, dazwischen wenige Zacken weiter innen.
+      const r = radius * (i % 5 === 4 ? 0.35 + 0.35 * this.random() : 0.8) + (this.random() - 0.5) * 0.8;
+      const big = this.random() < 0.3;
+      this.shards.push({
+        x: x + Math.sin(a) * r,
+        z: z + Math.cos(a) * r,
+        yaw: a,
+        lean: 0.2 + this.random() * 0.25,
+        spin: this.random() * TAU,
+        width: big ? 0.3 + this.random() * 0.15 : 0.14 + this.random() * 0.13,
+        height: big ? 0.9 + this.random() * 0.5 : 0.3 + this.random() * 0.5,
+        tint: 0.75 + this.random() * 0.6,
+        // Der Fels bricht nicht überall im selben Augenblick auf.
+        age: -this.random() * 0.08,
+        life: 1.3 + this.random() * 0.4,
+      });
+    }
+    for (let i = 0; i < 22 && this.rocks.length < this.rockMesh.instanceMatrix.count; i++) {
       const a = this.random() * TAU;
       const r = radius * (0.25 + 0.75 * this.random());
       const out = 0.5 + this.random() * 2;
@@ -572,31 +625,71 @@ export class Effects {
         rest: -1,
       });
     }
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 44; i++) {
       const a = this.random() * TAU;
-      const r = radius * this.random();
-      this.puff(x + Math.sin(a) * r, z + Math.cos(a) * r, a, 2.2, EARTH);
+      const r = radius * (0.8 + (this.random() - 0.4) * 0.35);
+      this.puff(x + Math.sin(a) * r, z + Math.cos(a) * r, a, 2, EARTH);
+    }
+    // Splitter, die das Licht erfasst: Sie springen aus den Rissen und fallen zurück.
+    const p = this.particle;
+    for (let i = 0; i < 60; i++) {
+      const a = this.random() * TAU;
+      const r = radius * (0.2 + 0.7 * this.random());
+      const out = 1.5 + this.random() * 3;
+      p.x = x + Math.sin(a) * r;
+      p.y = 0.1 + this.random() * 0.4;
+      p.z = z + Math.cos(a) * r;
+      p.vx = Math.sin(a) * out;
+      p.vy = 2 + this.random() * 4;
+      p.vz = Math.cos(a) * out;
+      p.life = 0.5 + this.random() * 0.6;
+      p.size = 0.05 + this.random() * 0.05;
+      p.grow = 0;
+      p.gravity = 9;
+      p.drag = 0.6;
+      p.color.setRGB(0.95, 0.78, 0.55).multiplyScalar(0.9 + this.random() * 1.2);
+      p.alpha = 0.9;
+      this.glow.spawn(p);
     }
   }
 
-  /** Wurzelgriff: Um jedes Opfer wachsen dornige Wurzeln aus dem Boden und halten es `seconds` lang. */
+  /**
+   * Wurzelgriff: Um jedes Opfer wachsen dornige Wurzeln aus dem Boden und halten es `seconds` lang.
+   * Der Boden reißt um den Fuß auf, Erde stäubt.
+   */
   entangle(x: number, z: number, radius: number, seconds: number): void {
     if (this.roots.length >= this.rootMesh.instanceMatrix.count) return;
     this.roots.push({ x, z, scale: radius / 0.45, yaw: this.random() * TAU, age: 0, life: seconds });
-    for (let i = 0; i < 4; i++) {
+    this.strips.spawn({ look: 'footcrack', x, z, inner: 0, outer: radius * 4, y: 0.04, life: Math.max(0.6, seconds), opacity: 0.95 });
+    for (let i = 0; i < 9; i++) {
       const a = this.random() * TAU;
-      this.puff(x + Math.sin(a) * radius, z + Math.cos(a) * radius, a, 1.2, EARTH);
+      this.puff(x + Math.sin(a) * radius * 1.3, z + Math.cos(a) * radius * 1.3, a, 1.2, EARTH);
     }
   }
 
-  /** Sturmböe: Windfahnen jagen nach außen und reißen den Staub mit. */
+  /**
+   * Sturmböe: Der Wind zeigt sich nur im Staub. Eine Staubfront läuft nach außen, weiche Fahnen krümmen sich
+   * hinterher, Körner und Kiesel werden nach außen getrieben.
+   */
   gust(x: number, z: number, radius: number): void {
     for (const [y, opacity] of [
-      [0.45, 0.1],
-      [1.3, 0.05],
+      [0.45, 0.22],
+      [1.3, 0.1],
     ] as const) {
-      this.strips.spawn({ look: 'gust', x, z, inner: 0.6, outer: radius * 1.15, y, color: 0xd8d2c4, opacity, life: 0.55 });
+      this.strips.spawn({ look: 'gust', x, z, inner: 0.6, outer: radius * 1.15, y, color: 0xd8d2c4, opacity, life: 0.6 });
     }
+    this.strips.spawn({
+      look: 'dustring',
+      x,
+      z,
+      inner: radius * 0.25,
+      outer: radius * 0.5,
+      innerTo: radius * 0.85,
+      outerTo: radius * 1.2,
+      color: DUST,
+      opacity: 0.75,
+      life: 0.6,
+    });
     this.strips.spawn({
       look: 'shock',
       x,
@@ -608,9 +701,9 @@ export class Effects {
       y: 0.9,
       life: 0.45,
     });
-    for (let i = 0; i < 34; i++) {
+    const p = this.particle;
+    for (let i = 0; i < 64; i++) {
       const a = this.random() * TAU;
-      const p = this.particle;
       const speed = 8 + this.random() * 7;
       p.x = x + Math.sin(a) * 0.8;
       p.y = 0.15 + this.random() * 0.9;
@@ -626,6 +719,41 @@ export class Effects {
       p.color.set(DUST);
       p.alpha = 0.4;
       this.dust.spawn(p);
+    }
+    // Körner, die der Wind vor sich hertreibt.
+    for (let i = 0; i < 120; i++) {
+      const a = this.random() * TAU;
+      const speed = 9 + this.random() * 9;
+      p.x = x + Math.sin(a) * (0.6 + this.random() * 2);
+      p.y = 0.1 + this.random() * 1.4;
+      p.z = z + Math.cos(a) * (0.6 + this.random() * 2);
+      p.vx = Math.sin(a + 0.25) * speed;
+      p.vy = this.random() * 0.5;
+      p.vz = Math.cos(a + 0.25) * speed;
+      p.life = 0.35 + this.random() * 0.45;
+      p.size = 0.04 + this.random() * 0.05;
+      p.grow = 0;
+      p.gravity = 0;
+      p.drag = 1.1;
+      p.color.setRGB(0.95, 0.93, 0.86).multiplyScalar(0.7 + this.random() * 1.6);
+      p.alpha = 0.9;
+      this.glow.spawn(p);
+    }
+    // Kiesel, die weit hinausfliegen.
+    for (let i = 0; i < 18 && this.rocks.length < this.rockMesh.instanceMatrix.count; i++) {
+      const a = this.random() * TAU;
+      const speed = 7 + this.random() * 7;
+      this.rocks.push({
+        x: x + Math.sin(a) * 0.9,
+        y: 0.1 + this.random() * 0.4,
+        z: z + Math.cos(a) * 0.9,
+        vx: Math.sin(a) * speed,
+        vy: 0.8 + this.random() * 1.6,
+        vz: Math.cos(a) * speed,
+        size: 0.03 + this.random() * 0.04,
+        spin: (this.random() - 0.5) * 24,
+        rest: -1,
+      });
     }
   }
 
@@ -1009,6 +1137,40 @@ export class Effects {
     }
     this.rockMesh.count = this.rocks.length;
     this.rockMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  private updateShards(dt: number): void {
+    for (let i = this.shards.length - 1; i >= 0; i--) {
+      const shard = this.shards[i];
+      if (!shard) continue;
+      shard.age += dt;
+      if (shard.age < shard.life) continue;
+      const last = this.shards.pop();
+      if (last && last !== shard) this.shards[i] = last;
+    }
+    let shown = 0;
+    for (const shard of this.shards) {
+      // Wer noch verzögert ist, steht noch nicht da.
+      if (shard.age < 0) continue;
+      // Sie schießen hoch, schwingen etwas über und sinken am Ende zurück.
+      const t = Math.min(1, shard.age / 0.14);
+      const grown = 1 + 0.12 * Math.sin(t * Math.PI) - (1 - t) * (1 - t);
+      const sink = Math.min(1, (shard.life - shard.age) / 0.5);
+      const height = Math.max(0.001, grown * sink) * shard.height;
+      pose.position.set(shard.x, 0, shard.z);
+      pose.quaternion
+        .copy(yawTurn.setFromAxisAngle(UP, shard.yaw))
+        .multiply(leanTurn.setFromAxisAngle(RIGHT, shard.lean))
+        .multiply(selfTurn.setFromAxisAngle(UP, shard.spin));
+      pose.scale.set(shard.width, height, shard.width);
+      pose.updateMatrix();
+      this.shardMesh.setMatrixAt(shown, pose.matrix);
+      this.shardMesh.setColorAt(shown, stoneTint.setScalar(shard.tint));
+      shown++;
+    }
+    this.shardMesh.count = shown;
+    this.shardMesh.instanceMatrix.needsUpdate = true;
+    if (this.shardMesh.instanceColor) this.shardMesh.instanceColor.needsUpdate = true;
   }
 
   private updateRoots(dt: number): void {

@@ -29,8 +29,10 @@ export type StripLook =
   | 'lichtwelle'
   /** Glutbrocken am Boden: ein gebrochener, rot bis gelb glühender Ring. */
   | 'glut'
-  /** Risse im Boden. */
+  /** Spalten im Boden, die vom Mittelpunkt nach außen laufen. */
   | 'crack'
+  /** Wenige kurze Risse rund um einen Punkt, etwa den Fuß eines Festgehaltenen. */
+  | 'footcrack'
   /** Aufrechter, kaum sichtbarer Schleier. */
   | 'veil'
   /** Gerader Lichtstrahl. */
@@ -182,11 +184,34 @@ const FRAGMENT_HEAD = /* glsl */ `
 `;
 
 interface LookDef {
+  /** Hilfsfunktionen, die vor `main` stehen. */
+  head?: string;
   body: string;
   defines?: Record<string, string>;
   /** 'add' = Licht, 'cover' = deckend, 'warp' = verzieht das Bild dahinter. */
   mode: 'add' | 'cover' | 'warp';
 }
+
+/**
+ * Eine Schar zackiger Spalten, die vom Mittelpunkt nach außen laufen und sich zum Ende hin verjüngen.
+ * `lines` = Anzahl (ganzzahlig, damit die Naht des Rings stimmt), `thickness` = Breite am Ursprung in Metern,
+ * `reachScale` = wie weit sie höchstens reichen, `startR` = ab welchem Radius sie beginnen.
+ */
+const FISSURES = /* glsl */ `
+  float fissure(float lines, float salt, float thickness, float reachScale, float startR) {
+    float r = vUv.y * uExtent.y;
+    float a = vUv.x * lines + uLife.z * 31.0 + salt;
+    float cell = mod(floor(a), lines);
+    float f = fract(a) - 0.5;
+    float key = hash(vec2(cell, salt + 3.7));
+    float jag = (noise(vec2(r * 2.2, cell * 7.3 + salt)) - 0.5) * 0.7 + (noise(vec2(r * 7.0, cell * 3.1 + salt)) - 0.5) * 0.25;
+    float cellWidth = 6.2832 * max(r, 0.3) / lines;
+    float d = abs(f - (key - 0.5) * 0.5 - jag) * cellWidth;
+    float width = thickness * pow(max(1.0 - vUv.y, 0.0), 0.7) + 0.025;
+    float reach = (0.5 + 0.5 * hash(vec2(cell, salt + 9.1))) * reachScale;
+    return (1.0 - smoothstep(width * 0.55, width, d)) * (1.0 - smoothstep(reach - 0.12, reach, vUv.y)) * smoothstep(startR, startR + 0.4, r);
+  }
+`;
 
 const LOOKS: Record<StripLook, LookDef> = {
   slash: {
@@ -285,14 +310,15 @@ const LOOKS: Record<StripLook, LookDef> = {
     mode: 'add',
     body: /* glsl */ `
       float t = uLife.x;
-      // Nur manche Bahnen tragen eine Fahne, und jede ist in kurze Striche zerrissen.
-      float lane = vUv.x * uShape.w * 46.0 + uLife.z * 5.0;
-      float pick = smoothstep(0.66, 0.82, noise(vec2(lane, 0.0)));
-      float dash = smoothstep(0.45, 0.75, noise(vec2(lane * 0.5, vUv.y * 9.0 - t * 14.0)));
+      // Nur manche Bahnen tragen eine Fahne; sie krümmen sich nach außen und sind in weiche Striche zerrissen.
+      float lane = vUv.x * uShape.w * 24.0 + vUv.y * 6.0 + uLife.z * 5.0;
+      float pick = smoothstep(0.58, 0.8, noise(vec2(lane, 0.0)));
+      float dash = smoothstep(0.35, 0.72, noise(vec2(lane * 0.5, vUv.y * 7.0 - t * 12.0)));
+      float soft = 0.55 + 0.45 * noise(vec2(lane * 3.0, vUv.y * 15.0));
       // Die Böe läuft als Welle nach außen und zieht ihre Fahnen hinter sich her.
       float front = t * 1.35;
-      float wave = smoothstep(front - 0.7, front - 0.1, vUv.y) * (1.0 - smoothstep(front, front + 0.05, vUv.y));
-      float glow = pick * dash * wave * (1.0 - smoothstep(0.55, 1.0, t)) * smoothstep(0.02, 0.15, vUv.y);
+      float wave = smoothstep(front - 0.75, front - 0.1, vUv.y) * (1.0 - smoothstep(front, front + 0.05, vUv.y));
+      float glow = pick * dash * soft * wave * (1.0 - smoothstep(0.55, 1.0, t)) * smoothstep(0.02, 0.15, vUv.y);
       emit(uColor * glow * lit());
     `,
   },
@@ -327,28 +353,26 @@ const LOOKS: Record<StripLook, LookDef> = {
   },
   crack: {
     mode: 'cover',
+    head: FISSURES,
     body: /* glsl */ `
-      // Kanten zwischen zufälligen Zellen; im Weltmaß, damit das Muster am Boden haftet.
-      vec2 p = vWorld * 1.5 + uLife.z * 31.0;
-      vec2 cell = floor(p);
-      vec2 f = fract(p);
-      float nearest = 8.0;
-      float second = 8.0;
-      for (int j = -1; j <= 1; j++) {
-        for (int i = -1; i <= 1; i++) {
-          vec2 o = vec2(float(i), float(j));
-          vec2 site = o + vec2(hash(cell + o), hash(cell + o + 17.3)) - f;
-          float d = dot(site, site);
-          if (d < nearest) { second = nearest; nearest = d; }
-          else if (d < second) { second = d; }
-        }
-      }
-      float line = 1.0 - smoothstep(0.0, 0.09, sqrt(second) - sqrt(nearest));
-      // Die Risse laufen vom Mittelpunkt nach außen und werden dort dünner.
-      float grown = smoothstep(vUv.y - 0.1, vUv.y + 0.1, uLife.x * 30.0);
-      float reach = 1.0 - smoothstep(0.45, 1.0, vUv.y);
+      float line = max(fissure(14.0, 0.0, 0.2, 1.0, 0.9), fissure(30.0, 0.37, 0.07, 0.6, 1.8));
+      // Die Spalten reißen vom Mittelpunkt nach außen auf, bleiben eine Weile offen und verwischen dann.
+      float grown = smoothstep(vUv.y - 0.15, vUv.y + 0.05, uLife.x * 6.0);
       float fade = 1.0 - smoothstep(0.6, 1.0, uLife.x);
-      gl_FragColor = vec4(vec3(0.012, 0.01, 0.008), line * grown * reach * fade * uLife.y);
+      gl_FragColor = vec4(vec3(0.012, 0.01, 0.008), line * grown * fade * uLife.y);
+    `,
+  },
+  footcrack: {
+    mode: 'cover',
+    head: FISSURES,
+    body: /* glsl */ `
+      // Dunkler Kern mit hellem, aufgeworfenem Rand: Auf dem dunklen Boden wäre der Riss sonst nicht zu sehen.
+      float core = fissure(7.0, 0.0, 0.16, 1.0, 0.3);
+      float rim = fissure(7.0, 0.0, 0.42, 1.0, 0.3);
+      float grown = smoothstep(vUv.y - 0.15, vUv.y + 0.05, uLife.x * 8.0);
+      float fade = 1.0 - smoothstep(0.7, 1.0, uLife.x);
+      vec3 colour = mix(vec3(0.2, 0.15, 0.09), vec3(0.012, 0.01, 0.008), core);
+      gl_FragColor = vec4(colour, rim * grown * fade * uLife.y);
     `,
   },
   veil: {
@@ -594,7 +618,7 @@ export class Strips {
       uniforms: { ...uniforms, ...this.shared },
       defines: def.defines ?? {},
       vertexShader,
-      fragmentShader: `${FRAGMENT_HEAD}\nvoid main() {\n${def.body}\n${def.mode === 'warp' ? '' : '#include <colorspace_fragment>'}\n}`,
+      fragmentShader: `${FRAGMENT_HEAD}\n${def.head ?? ''}\nvoid main() {\n${def.body}\n${def.mode === 'warp' ? '' : '#include <colorspace_fragment>'}\n}`,
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
