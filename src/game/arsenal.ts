@@ -72,6 +72,8 @@ export class Arsenal {
   private swings: ClassDef['swings'] = {};
   private traits: CombatTraits = { dealt: 1, haste: 1, finsternisDamage: 1 };
   private shieldCharging = 0;
+  /** Stand der Kuppel im letzten Bild: Daran erkennt man, dass sie gerade einen Treffer abgefangen hat. */
+  private shieldWasUp = false;
 
   constructor(
     private readonly stats: Stats,
@@ -91,6 +93,7 @@ export class Arsenal {
     this.traps.length = 0;
     this.volleys.length = 0;
     this.shieldCharging = 0;
+    this.shieldWasUp = false;
     this.player.shield = false;
     this.projectiles.reset();
     this.effects.reset();
@@ -142,7 +145,11 @@ export class Arsenal {
     this.updateTraps();
     this.projectiles.update(dt, this.enemies, this.onProjectileHit);
     this.effects.embers(aura !== null, origin.x, origin.z, aura ? this.auraRadius(aura) : 0, time, dt);
-    this.effects.shield(this.player.shield, origin.x, origin.z);
+    // Wer den Schild gebrochen hat, ist meist der nächste Gegner; von dort aus zerfällt die Kuppel.
+    const broken = this.shieldWasUp && !this.player.shield;
+    const attacker = broken ? this.enemies.nearest(origin.x, origin.z, 4) : null;
+    this.effects.shield(this.player.shield, origin.x, origin.z, attacker ? Math.atan2(attacker.x - origin.x, attacker.z - origin.z) : undefined);
+    this.shieldWasUp = this.player.shield;
     this.effects.showTraps(this.traps);
     this.effects.lightSource(this.player.lightSource(lightAt), lightAt, dt);
     this.effects.update(dt, this.player.light, this.player.lightColor);

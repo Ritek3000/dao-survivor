@@ -3,12 +3,15 @@
  * Flächen aus dem Shader (strips.ts), Teilchen (particles.ts), kleine Gegenstände (props.ts)
  * und zwei Lichter, die für Augenblicke aufleuchten.
  *
- * Die Zauber folgen den Vorlagen: Hitze ist nur ein Flimmern, die Sorlanze ein fingerdicker Strahl,
- * der Schild eine unsichtbare Fläche. Nichts entsteht aus dem Nichts: Steine kommen aus dem Boden,
- * Wurzeln wachsen aus ihm, und was leuchtet, ist angestrahlter Staub.
+ * Die Zauber folgen den Vorlagen und ihren Grundsätzen: Nichts entsteht aus dem Nichts. Steine kommen aus dem Boden,
+ * Wurzeln wachsen aus ihm, Feuer braucht etwas, das brennt, und was leuchtet, ist angestrahlter Staub.
+ * Die Vorlagen sind dabei ein Maß für die Stimmung, nicht für die Sichtbarkeit: Hitze und Schild sind dort
+ * unsichtbar, im Spiel muss man sie sehen, sonst weiß niemand, was ihn trifft oder schützt. Sie zeigen sich
+ * deshalb als flimmernde Luft mit glühenden Körnern bzw. als dünnes Wabenglas (`dome.ts`).
  */
 import * as THREE from 'three';
 import { createRandom } from '../core/random';
+import { ShieldDome } from './dome';
 import { Particles, type Particle } from './particles';
 import { arrowGeometry, propMaterial, rockGeometry, rootsGeometry, shardGeometry, trapGeometry } from './props';
 import { Strips, type Strip } from './strips';
@@ -137,8 +140,9 @@ export class Effects {
   private fireRing: Strip | null = null;
   private fireCoals: Strip | null = null;
   private fireGlow: Strip | null = null;
-  private shieldHaze: Strip | null = null;
-  private shieldVeil: Strip | null = null;
+  private readonly dome = new ShieldDome(SHIELD);
+  private shieldRing: Strip | null = null;
+  private shieldGlow: Strip | null = null;
 
   /** Ein Teilchen als Vorlage, damit im Kampf keine neuen Objekte entstehen. */
   private readonly particle: Particle = {
@@ -178,6 +182,7 @@ export class Effects {
 
     this.group.add(
       this.strips.group,
+      this.dome.mesh,
       this.dust.points,
       this.glow.points,
       this.flashLight,
@@ -204,7 +209,8 @@ export class Effects {
     this.roots.length = 0;
     this.snapped.length = 0;
     this.later.length = 0;
-    this.fireRing = this.fireCoals = this.fireGlow = this.shieldHaze = this.shieldVeil = null;
+    this.fireRing = this.fireCoals = this.fireGlow = this.shieldRing = this.shieldGlow = null;
+    this.dome.reset();
     for (const mesh of [this.hailMesh, this.rockMesh, this.shardMesh, this.rootMesh, this.openTraps, this.shutTraps]) mesh.count = 0;
   }
 
@@ -241,6 +247,8 @@ export class Effects {
     this.updateShards(dt);
     this.updateRoots(dt);
     this.updateSnapped(dt);
+    this.dome.update(dt);
+    this.shieldMotes(dt);
   }
 
   // ---------------------------------------------------------------- Kämpfer
@@ -801,48 +809,88 @@ export class Effects {
   }
 
   /**
-   * Schild: eine unsichtbare Fläche. Zu ahnen ist sie nur daran, dass die Luft um den Magier
-   * leicht flimmert. Jedes Bild aufzurufen; bricht der Schild, schlägt die Fläche Wellen.
+   * Schild: eine Kuppel aus kaltem Wabenglas, am Boden durch einen hellen Ring verankert (`dome.ts`).
+   * Jedes Bild aufzurufen. `hitFrom` ist die Richtung des Angreifers (0 zeigt nach +Z), wenn der Schild
+   * gerade einen Treffer abgefangen hat (ohne Angabe wird eine Richtung gewürfelt); die Kuppel zerfällt von dort aus.
    */
-  shield(active: boolean, x: number, z: number): void {
-    if (!active) {
-      if (!this.shieldHaze || !this.shieldVeil) return;
-      this.strips.release(this.shieldHaze, 0.15);
-      this.strips.release(this.shieldVeil, 0.15);
-      this.shieldHaze = this.shieldVeil = null;
-      this.strips.spawn({ look: 'shock', x, z, inner: 0.6, outer: 1.2, innerTo: 2, outerTo: 2.8, y: 1, life: 0.35 });
-      this.strips.spawn({
-        look: 'ring',
-        x,
-        z,
-        inner: 0.8,
-        outer: 1.1,
-        innerTo: 2.1,
-        outerTo: 2.5,
-        y: 0.9,
-        color: SHIELD,
-        opacity: 0.7,
-        life: 0.3,
-      });
-      this.sparks(x, 1, z, 16, SHIELD, 4);
+  shield(active: boolean, x: number, z: number, hitFrom?: number): void {
+    this.dome.place(x, z);
+    if (active) {
+      if (!this.dome.standing) this.raiseShield(x, z);
+      for (const strip of [this.shieldRing, this.shieldGlow]) {
+        if (!strip) continue;
+        strip.x = x;
+        strip.z = z;
+      }
       return;
     }
-    this.shieldHaze ??= this.strips.spawn({ look: 'shimmer', x, z, inner: 0, outer: 1.05, y: 0.05, span: 1.7, life: Infinity });
-    this.shieldVeil ??= this.strips.spawn({
-      look: 'veil',
-      x,
-      z,
-      inner: 0,
-      outer: 1.05,
-      y: 0.05,
-      span: 1.7,
-      color: SHIELD,
-      opacity: 0.01,
-      life: Infinity,
-    });
-    for (const strip of [this.shieldHaze, this.shieldVeil]) {
-      strip.x = x;
-      strip.z = z;
+    if (!this.dome.standing) return;
+    for (const strip of [this.shieldRing, this.shieldGlow]) if (strip) this.strips.release(strip, 0.2);
+    this.shieldRing = this.shieldGlow = null;
+    const from = hitFrom ?? this.random() * TAU;
+    this.dome.shatter(from);
+    this.shieldBurst(x, z, from);
+  }
+
+  /** Die Kuppel wächst empor: Ein Ring läuft über den Boden nach außen und bleibt als Fuß der Kuppel stehen. */
+  private raiseShield(x: number, z: number): void {
+    this.dome.raise();
+    this.strips.spawn({ look: 'ring', x, z, inner: 0.1, outer: 0.5, innerTo: 1.0, outerTo: 1.45, y: 0.04, color: SHIELD, opacity: 0.8, life: 0.4 });
+    this.shieldRing = this.strips.spawn({ look: 'ring', x, z, inner: 0.96, outer: 1.24, y: 0.04, color: SHIELD, opacity: 0.1, life: Infinity });
+    this.shieldGlow = this.strips.spawn({ look: 'glow', x, z, inner: 0, outer: 1.5, y: 0.03, color: SHIELD, opacity: 0.015, life: Infinity });
+    this.sparks(x, 0.15, z, 10, SHIELD, 2);
+  }
+
+  /** Der Schild hat einen Treffer abgefangen: Die Druckwelle weicht aus, Splitter fliegen von der Einschlagstelle fort. */
+  private shieldBurst(x: number, z: number, from: number): void {
+    this.strips.spawn({ look: 'shock', x, z, inner: 0.6, outer: 1.2, innerTo: 2, outerTo: 2.8, y: 1, life: 0.35 });
+    this.strips.spawn({ look: 'ring', x, z, inner: 1.15, outer: 1.4, innerTo: 2.1, outerTo: 2.6, y: 0.06, color: SHIELD, opacity: 0.35, life: 0.35 });
+    const p = this.particle;
+    // Splitter: Die meisten stieben von der Einschlagstelle fort, die übrigen fallen von der ganzen Kuppel ab.
+    for (let i = 0; i < 36; i++) {
+      const aimed = i < 24;
+      const a = aimed ? from + (this.random() - 0.5) * 1.8 : this.random() * TAU;
+      const speed = aimed ? 2.5 + this.random() * 4 : 0.8 + this.random() * 1.6;
+      p.x = x + Math.sin(a) * 1.0;
+      p.y = 0.3 + this.random() * 1.2;
+      p.z = z + Math.cos(a) * 1.0;
+      p.vx = Math.sin(a) * speed;
+      p.vy = this.random() * 2.5;
+      p.vz = Math.cos(a) * speed;
+      p.life = 0.35 + this.random() * 0.45;
+      p.size = 0.06 + this.random() * 0.08;
+      p.grow = -0.08;
+      p.gravity = GRAVITY * 0.6;
+      p.drag = 1.1;
+      p.color.set(SHIELD).multiplyScalar(1.4 + 1.8 * this.random());
+      p.alpha = 1;
+      this.glow.spawn(p);
+    }
+  }
+
+  /** Feine Körner, die in der stehenden Kuppel langsam aufsteigen: angestrahlter Staub, nichts schwebt ohne Grund. */
+  private shieldMotes(dt: number): void {
+    if (!this.dome.standing) return;
+    const wanted = 7 * dt;
+    const count = Math.floor(wanted) + (this.random() < wanted % 1 ? 1 : 0);
+    const p = this.particle;
+    for (let i = 0; i < count; i++) {
+      const a = this.random() * TAU;
+      const r = 0.25 + this.random() * 0.75;
+      p.x = this.dome.mesh.position.x + Math.sin(a) * r;
+      p.y = 0.05;
+      p.z = this.dome.mesh.position.z + Math.cos(a) * r;
+      p.vx = 0;
+      p.vy = 0.35 + this.random() * 0.4;
+      p.vz = 0;
+      p.life = 1.2 + this.random() * 0.8;
+      p.size = 0.04 + this.random() * 0.03;
+      p.grow = -0.015;
+      p.gravity = 0;
+      p.drag = 0.4;
+      p.color.set(SHIELD).multiplyScalar(1.6);
+      p.alpha = 0.75;
+      this.glow.spawn(p);
     }
   }
 
