@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Survivor-like – Prototyp</title>
+    <!-- Das Sor-Symbol; public/favicon.ico entsteht aus public/sor-symbol.png (tools/symbol-erzeugen.py). -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
   </head>
   <body data-vitals="top-left">
     <canvas id="game"></canvas>
@@ -78,6 +80,7 @@
       was der Knopf auslöst.
     -->
     <div id="title" class="overlay" hidden>
+      <img class="sor-symbol" src="/sor-symbol.png" alt="Sor-Symbol" draggable="false" />
       <h1>DAO Survivor</h1>
       <p class="tagline">Überstehe die Nacht vor der Mauer</p>
       <div class="rule"></div>
