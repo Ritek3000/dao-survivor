@@ -29,6 +29,8 @@ export type StripLook =
   | 'lichtwelle'
   /** Glutbrocken am Boden: ein gebrochener, rot bis gelb glühender Ring. */
   | 'glut'
+  /** Brennender Boden: Flammen zucken über eine ganze Fläche und steigen auf. */
+  | 'brandbett'
   /** Spalten im Boden, die vom Mittelpunkt nach außen laufen. */
   | 'crack'
   /** Wenige kurze Risse rund um einen Punkt, etwa den Fuß eines Festgehaltenen. */
@@ -272,12 +274,14 @@ const LOOKS: Record<StripLook, LookDef> = {
       float u = m / 0.85 + uLife.z * 50.0;
       float id = floor(u);
       float across = fract(u) - 0.5;
-      float sway = (noise(vec2(vUv.y * 2.5 - uLife.w * 2.2, id * 1.7)) - 0.5) * 0.8 * vUv.y;
-      float height = 0.25 + 0.75 * noise(vec2(id * 3.1, uLife.w * 1.1));
+      float sway = (noise(vec2(vUv.y * 2.5 - uLife.w * 3.0, id * 1.7)) - 0.5) * 0.9 * vUv.y;
+      // Das Feuer lodert: Jede Zunge hebt und senkt sich schnell, und ganze Abschnitte schlagen immer wieder hoch.
+      float surge = noise(vec2(m * 0.3 + uLife.z * 9.0, uLife.w * 0.9));
+      float height = (0.25 + 0.75 * noise(vec2(id * 3.1, uLife.w * 2.1))) * (0.6 + 0.8 * surge);
       float y = vUv.y / height;
       // Dreieck, das zur Spitze schmaler wird; am Fuß berühren sich die Nachbarn und bilden ein Glutbett.
       float inside = 1.0 - y - abs(across + sway) * 1.7 * (0.35 + y);
-      float flame = fbm(vec2(m * 2.3 + uLife.z * 30.0, vUv.y * 1.8 - uLife.w * 2.4));
+      float flame = fbm(vec2(m * 2.3 + uLife.z * 30.0, vUv.y * 1.8 - uLife.w * 3.4));
       float shape = inside + (flame - 0.5) * 0.55;
       float glow = smoothstep(0.0, 0.2, shape) * smoothstep(0.0, 0.05, vUv.y);
       vec3 hot = mix(vec3(0.75, 0.1, 0.01), vec3(1.0, 0.7, 0.22), smoothstep(0.05, 0.5, shape));
@@ -297,6 +301,26 @@ const LOOKS: Record<StripLook, LookDef> = {
       float core = pow(band, 6.0);
       vec3 color = mix(vec3(0.85, 0.16, 0.02), vec3(1.0, 0.72, 0.28), core * heat);
       emit(color * (pow(band, 1.5) * (0.3 + 0.7 * heat) * 0.9 + core * heat * 1.5));
+    `,
+  },
+  brandbett: {
+    mode: 'add',
+    body: /* glsl */ `
+      // Das Muster hängt an der Mitte der Fläche und zieht mit ihr: Das Feuer folgt der Spielfigur.
+      vec2 rel = vWorld - uShape.xy;
+      float r = length(rel) / max(uExtent.y, 0.1);
+      float t = uLife.w;
+      vec2 q = rel * 1.25 + uLife.z * 40.0;
+      // Die Flammen steigen (auf dem Bildschirm nach oben) und zerreißen dabei.
+      float lick = 0.7 * fbm(q * vec2(1.0, 0.7) + vec2(t * 0.35, t * 1.9)) + 0.3 * noise(q * 3.1 + vec2(-t * 0.8, t * 3.1));
+      float bed = smoothstep(0.46, 0.8, lick);
+      float hotspot = smoothstep(0.74, 0.97, lick);
+      // Zum Rand hin brennt es dichter: Dort steht die Wand der Flammen.
+      float dense = 0.45 + 0.55 * smoothstep(0.3, 1.0, r);
+      float edge = 1.0 - smoothstep(0.92, 1.04, r);
+      vec3 color = mix(vec3(0.7, 0.09, 0.01), vec3(1.0, 0.48, 0.1), bed);
+      color = mix(color, vec3(1.0, 0.82, 0.38), hotspot);
+      emit(color * uColor * (0.24 * bed) * dense * edge);
     `,
   },
   glow: {

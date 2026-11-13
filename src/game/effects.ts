@@ -140,6 +140,9 @@ export class Effects {
   private fireRing: Strip | null = null;
   private fireCoals: Strip | null = null;
   private fireGlow: Strip | null = null;
+  private fireBed: Strip | null = null;
+  /** Klingt nach jedem Schadensstoß der Glut von 1 auf 0 ab: Dann flammt das ganze Feld auf. */
+  private fireSurge = 0;
   private readonly dome = new ShieldDome(SHIELD);
   private shieldRing: Strip | null = null;
   private shieldGlow: Strip | null = null;
@@ -209,7 +212,8 @@ export class Effects {
     this.roots.length = 0;
     this.snapped.length = 0;
     this.later.length = 0;
-    this.fireRing = this.fireCoals = this.fireGlow = this.shieldRing = this.shieldGlow = null;
+    this.fireRing = this.fireCoals = this.fireGlow = this.fireBed = this.shieldRing = this.shieldGlow = null;
+    this.fireSurge = 0;
     this.dome.reset();
     for (const mesh of [this.hailMesh, this.rockMesh, this.shardMesh, this.rootMesh, this.openTraps, this.shutTraps]) mesh.count = 0;
   }
@@ -529,17 +533,23 @@ export class Effects {
   }
 
   /**
-   * Glut formen: ein Ring aus Glutbrocken mit Flammenzungen, der dem Magier folgt. Jedes Bild aufzurufen;
-   * mit `active` = false erlischt er.
+   * Glut formen: ein brennender Kreis, der dem Magier folgt. Der Boden darin steht in Flammen, am Rand
+   * lodert eine Wand aus Zungen über einem Ring aus Glutbrocken. Wer im Kreis steht, brennt; die Schadensstöße
+   * zeigt `emberPulse`. Jedes Bild aufzurufen; mit `active` = false erlischt das Feuer.
+   *
+   * Lore (Abweichung): In der Vorlage ist der Feuerkreis eine Wand, die nur verletzt, wer hindurchgeht. Im Spiel
+   * brennt die ganze Fläche, denn nur dann sieht man, dass Gegner im Inneren Schaden nehmen.
    */
   embers(active: boolean, x: number, z: number, radius: number, time: number, dt: number): void {
     if (!active) {
-      for (const strip of [this.fireRing, this.fireCoals, this.fireGlow]) if (strip) this.strips.release(strip, 0.4);
-      this.fireRing = this.fireCoals = this.fireGlow = null;
+      for (const strip of [this.fireRing, this.fireCoals, this.fireGlow, this.fireBed]) if (strip) this.strips.release(strip, 0.4);
+      this.fireRing = this.fireCoals = this.fireGlow = this.fireBed = null;
       this.emberLight.intensity = 0;
+      this.fireSurge = 0;
       return;
     }
-    this.fireRing ??= this.strips.spawn({ look: 'fire', x, z, inner: 0, outer: radius, y: 0.02, span: 1.7, life: Infinity });
+    this.fireBed ??= this.strips.spawn({ look: 'brandbett', x, z, inner: 0, outer: radius, y: 0.025, life: Infinity });
+    this.fireRing ??= this.strips.spawn({ look: 'fire', x, z, inner: 0, outer: radius, y: 0.02, span: 1.9, life: Infinity });
     this.fireCoals ??= this.strips.spawn({ look: 'glut', x, z, inner: radius - 0.5, outer: radius + 0.5, y: 0.03, life: Infinity });
     // Ein warmer Hof färbt den Boden im Ring.
     this.fireGlow ??= this.strips.spawn({
@@ -550,16 +560,22 @@ export class Effects {
       outer: radius * 1.35,
       y: 0.05,
       color: 0xff6a18,
-      opacity: 0.11,
+      opacity: 0.05,
       life: Infinity,
     });
-    const flicker = 1 + 0.12 * Math.sin(time * 13) + 0.08 * Math.sin(time * 29.3 + 1.1);
-    for (const strip of [this.fireRing, this.fireCoals, this.fireGlow]) {
+    this.fireSurge = Math.max(0, this.fireSurge - dt * 4);
+    const surge = this.fireSurge;
+    // Unregelmäßig und schnell: Das Feuer lodert, es pulsiert nicht gleichmäßig.
+    const flicker =
+      1 + 0.12 * Math.sin(time * 13) + 0.08 * Math.sin(time * 29.3 + 1.1) + 0.14 * Math.sin(time * 2.3) * Math.sin(time * 5.1 + 0.6);
+    for (const strip of [this.fireRing, this.fireCoals, this.fireGlow, this.fireBed]) {
       strip.x = x;
       strip.z = z;
     }
+    this.fireBed.spec.outer = radius;
+    this.fireBed.opacity = (0.85 + 0.9 * surge) * flicker;
     this.fireRing.spec.outer = radius;
-    this.fireRing.opacity = 0.95 * flicker;
+    this.fireRing.opacity = Math.min(1.25, (0.95 + 0.3 * surge) * flicker);
     this.fireCoals.spec.inner = radius - 0.5;
     this.fireCoals.spec.outer = radius + 0.5;
     this.fireCoals.opacity = 0.9 * flicker;
@@ -567,16 +583,21 @@ export class Effects {
     // Das Licht sitzt über dem Magier: So fällt der Schein flach auf den Boden um ihn, ohne ihn auszubrennen.
     this.emberLight.position.set(x, 2.2, z);
     this.emberLight.distance = radius * 3;
-    this.emberLight.intensity = 9 * flicker;
+    this.emberLight.intensity = 6 * flicker * (1 + 0.5 * surge);
 
-    // Funken steigen aus den Flammen auf.
-    const wanted = 80 * dt;
-    const count = Math.floor(wanted) + (this.random() < wanted % 1 ? 1 : 0);
-    for (let i = 0; i < count; i++) this.ember(x, z, radius, 1);
+    // Funken steigen aus den Flammen auf, die meisten vom Rand, einige vom brennenden Boden.
+    const sparks = this.perFrame(110 * dt);
+    for (let i = 0; i < sparks; i++) this.ember(x, z, radius, 1, i % 3 === 0);
+    // Zungen und Rauch: Die Flammen im Kreis schlagen auf, über dem Feuer steigt dunkler Rauch.
+    const tongues = this.perFrame((26 + 40 * surge) * dt);
+    for (let i = 0; i < tongues; i++) this.tongue(x, z, radius);
+    const smoke = this.perFrame(5 * dt);
+    for (let i = 0; i < smoke; i++) this.fireSmoke(x, z, radius);
   }
 
-  /** Die Glut greift an: Der Ring lodert kurz auf. */
+  /** Die Glut greift an: Alle im Kreis erleiden Schaden, und das ganze Feuer flammt auf. */
   emberPulse(x: number, z: number, radius: number): void {
+    this.fireSurge = 1;
     this.strips.spawn({
       look: 'fire',
       x,
@@ -584,11 +605,11 @@ export class Effects {
       inner: 0,
       outer: radius,
       y: 0.02,
-      span: 2.4,
+      span: 2.6,
       opacity: 0.9,
       life: 0.3,
     });
-    for (let i = 0; i < 22; i++) this.ember(x, z, radius, 2);
+    for (let i = 0; i < 22; i++) this.ember(x, z, radius, 2, i % 2 === 0);
   }
 
   /**
@@ -1096,11 +1117,16 @@ export class Effects {
     this.dust.spawn(p);
   }
 
-  /** Ein Funke, der aus dem Flammenring aufsteigt. */
-  private ember(x: number, z: number, radius: number, vigor: number): void {
+  /** Wie oft in diesem Bild etwas entsteht, wenn im Mittel `wanted` Stück gebraucht werden. */
+  private perFrame(wanted: number): number {
+    return Math.floor(wanted) + (this.random() < wanted % 1 ? 1 : 0);
+  }
+
+  /** Ein Funke, der aus dem Feuer aufsteigt: vom Flammenring oder, mit `inside`, vom brennenden Boden darin. */
+  private ember(x: number, z: number, radius: number, vigor: number, inside = false): void {
     const a = this.random() * TAU;
     const p = this.particle;
-    const r = radius + (this.random() - 0.5) * 0.9;
+    const r = inside ? Math.sqrt(this.random()) * radius : radius + (this.random() - 0.5) * 0.9;
     p.x = x + Math.sin(a) * r;
     p.y = 0.1 + this.random() * 0.4;
     p.z = z + Math.cos(a) * r;
@@ -1118,6 +1144,48 @@ export class Effects {
     p.color.setRGB(glow, glow * (0.25 + 0.5 * heat), glow * 0.05 * heat);
     p.alpha = 1;
     this.glow.spawn(p);
+  }
+
+  /** Eine kurze Flammenzunge aus dem brennenden Boden: weich, orange, steigt schnell und zieht sich zusammen. */
+  private tongue(x: number, z: number, radius: number): void {
+    const a = this.random() * TAU;
+    const r = Math.sqrt(this.random()) * radius;
+    const p = this.particle;
+    p.x = x + Math.sin(a) * r;
+    p.y = 0.05;
+    p.z = z + Math.cos(a) * r;
+    p.vx = (this.random() - 0.5) * 0.5;
+    p.vy = 1.1 + this.random() * 1.2;
+    p.vz = (this.random() - 0.5) * 0.5;
+    p.life = 0.35 + this.random() * 0.35;
+    p.size = 0.22 + this.random() * 0.2;
+    p.grow = -0.35;
+    p.gravity = -0.6;
+    p.drag = 1.2;
+    p.color.setRGB(1.5, 0.42 + 0.3 * this.random(), 0.05);
+    p.alpha = 0.4;
+    this.glow.spawn(p);
+  }
+
+  /** Ein Rauchfaden, der über dem Feuer aufsteigt: dunkel, langsam, fast ohne Eigenlicht. */
+  private fireSmoke(x: number, z: number, radius: number): void {
+    const a = this.random() * TAU;
+    const r = radius * (0.5 + 0.5 * Math.sqrt(this.random()));
+    const p = this.particle;
+    p.x = x + Math.sin(a) * r;
+    p.y = 0.8 + this.random() * 0.6;
+    p.z = z + Math.cos(a) * r;
+    p.vx = (this.random() - 0.5) * 0.4;
+    p.vy = 0.8 + this.random() * 0.6;
+    p.vz = (this.random() - 0.5) * 0.4;
+    p.life = 1 + this.random() * 0.8;
+    p.size = 0.35 + this.random() * 0.25;
+    p.grow = 0.5;
+    p.gravity = -0.3;
+    p.drag = 1.2;
+    p.color.set(0x2c2824);
+    p.alpha = 0.3;
+    this.dust.spawn(p);
   }
 
   private updateHail(dt: number): void {

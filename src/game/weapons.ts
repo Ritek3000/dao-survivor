@@ -224,9 +224,10 @@ const DEFS: readonly WeaponDef[] = [
     width: 0.4,
   },
   {
+    // Trifft alle Gegner im ganzen Kreis, nicht nur am Rand: Rang 1 bringt 5 Schaden alle 0,5 s, also 10 je Sekunde.
     id: 'glut-formen',
     name: 'Glut formen',
-    text: 'Feuerkreis um dich, der Gegner verbrennt',
+    text: 'Brennender Kreis um dich: Wer darin steht, erleidet jede Sekunde Schaden',
     kind: 'aura',
     cooldown: 0.5,
     damage: 5,
