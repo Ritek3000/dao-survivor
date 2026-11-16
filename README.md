@@ -96,7 +96,7 @@ Wichtige Teile von `src/game/`:
 | ------------------------------ | ----------------------------------------------------------------------- |
 | `game.ts`                      | Hauptschleife und Phasen (Laden, Startbildschirm, Klassenwahl, Spiel, Pause, Ende) |
 | `classes.ts`, `gear.ts`        | Die drei Klassen mit Werten, Modell und Ausrüstung; die Ausrüstung in den Händen (Axt, Bogen, Buch, Schild des Kämpfers) |
-| `weapons.ts`, `arsenal.ts`     | Alle Angriffe als Daten (mit Rangregeln) und ihre Ausführung; die sieben Fertigkeiten des Kämpfers (siehe [Kämpfer](#fertigkeiten-des-kämpfers)) |
+| `weapons.ts`, `arsenal.ts`     | Alle Angriffe als Daten (mit Rangregeln) und ihre Ausführung; die Fertigkeiten des Kämpfers und des Wildnisläufers (siehe [Kämpfer](#fertigkeiten-des-kämpfers), [Wildnisläufer](#fertigkeiten-des-wildnisläufers)) |
 | `status.ts`, `events.ts`, `fields.ts`, `buffs.ts` | Unterbau der Fertigkeiten: Zustände der Gegner, Ereignisse mit Urheber, Bodenfelder, zeitweilige Werte (siehe [Fertigkeiten](#fertigkeiten-der-unterbau)) |
 | `effects.ts`, `strips.ts`, `particles.ts`, `props.ts` | Wie die Angriffe aussehen                        |
 | `enemies.ts`, `boss.ts`, `threats.ts` | Horde, Verschlinger und die Zauber der Gegner                    |
@@ -334,6 +334,49 @@ Wie das gebaut ist:
 - Kriegsschrei: Der Schaden aus Rang 2 trifft nur kleine Gegner (nicht den Troll und den Verschlinger, also kein Großwild; Schalter `schwache`), damit der Schrei kein zweiter Flächenangriff wird. Wurfaxt, Rang 1: Die Axt trifft **einen** Gegner und bleibt stecken (vorher
   durchschlug sie alle); das Durchschlagen kommt mit Rang 2.
 - Banner, Rang 5: Das Banner holt **Edelsteine** heran (nicht die Beute der Gegner); sie fliegen von allein zur Figur.
+
+## Fertigkeiten des Wildnisläufers
+
+Auch der Wildnisläufer hat sieben Fertigkeiten mit je fünf Rängen (Vorlage: „Klassen, Fertigkeiten & Evolutionen“, Abschnitt Wildnisläufer), und auch sie sind **Daten** in `weapons.ts`. Die Zahlen für Balancing
+stehen in `CONFIG.skills.laeufer`. Die Auswahlkarte nennt wie beim Kämpfer, was der **nächste** Rang tut (`WeaponDef.rankText`). Die **Evolutionen** (Rang 6) kommen in einem eigenen Paket.
+
+| Fertigkeit       | Art                       | Was die Ränge bringen                                                                                                                         |
+| ---------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bogenschuss      | Geschoss                  | 1: schwerer Pfeil, stößt kleine Gegner zurück · 2: durchbohrt das erste Ziel, zweites mit 40 % weniger Schaden · 3: Nachladezeit −0,3 s, Treffer verlangsamen 1,5 s um 15 % · 4: zwei Pfeile, Vorteil · 5: mehr Reichweite und Tempo, das erste Ziel erleidet 3 s lang 15 % mehr Schaden |
+| Pfeilhagel       | Salve mit Verzögerung     | 1: 6 Pfeile · 2: 9 Pfeile (1,5 × Schaden), Radius +20 % · 3: Verlangsamung im Zielgebiet · 4: kürzere Abklingzeit, Blutung · 5: folgt der Gruppe, 25 % mehr Schaden im Zentrum |
+| Fangeisen        | Falle (`kind: 'trap'`)    | 1: Schaden, 1,5 s festgehalten · 2: zwei Eisen zugleich · 3: kürzere Abklingzeit, Blutung · 4: Nachteil und Markierung der Gefangenen · 5: Stirbt ein Gefangener im Eisen, fliegen Splitter auf Gegner ringsum |
+| Wurfmesser-Fächer | Geschoss, Fächer         | 1: drei Messer, jedes trifft sein erstes Ziel · 2: vier Messer, breiter · 3: kürzere Abklingzeit, Blutung · 4: fünf Messer, Vorteil · 5: Messer durchschlagen ein Ziel |
+| Sporenfalle      | Kapsel (`kind: 'pod'`) → Bodenfeld | 1: Kapsel platzt bei Annäherung, Wolke 3,5 s (Schaden, 20 % langsamer) · 2: Radius +30 %, 1 s länger · 3: kürzere Abklingzeit, Fernkämpfer ohne Zauber, Gegner greifen langsamer an · 4: zwei Kapseln, mehr Schaden über Zeit · 5: Wer in der Wolke stirbt, lässt eine frische Wolke zurück |
+| Köderpuppe       | Bodenfeld, 8,5 s Pause    | 1: Gegner in der Nähe 20 % langsamer und träger · 2: Bereich +30 %, steht 5 s · 3: kürzere Abklingzeit, kleine Gegner im Schatten fürchten sich · 4: nahe der Puppe 40 % weniger Schaden aus Fernangriffen · 5: beim Auflösen eine Schadenswelle mit Rückstoß |
+| Netz             | Fläche (`kind: 'root'`)   | 1: Schaden, 2,5 s um 40 % langsamer · 2: Radius +30 %, 50 % · 3: kürzere Abklingzeit, zieht Getroffene zusammen · 4: Blutung und Nachteil · 5: Staub macht kleine Gegner 1,5 s bewegungsunfähig und stört Fernkämpfer |
+
+Wie das gebaut ist:
+
+- **Neue Schalter und Zahlen je Rang** (`RankRule`, `ResolvedRank`): `speed` und `spread` (Faktoren auf Pfeiltempo und Streuung), `duration` (Sekunden, etwa die Haltezeit einer Wolke) und die Schalter `abfall`, `vorteil`, `ruestung`, `folgen`,
+  `mitte`, `splitter`, `platzen`, `furcht`, `schleier`, `knall`, `zug`, `staub`; `arsenal.ts` fragt sie mit `hasFlag` ab. `abfall` lässt Durchschlag-Ziele nach dem ersten nur `pierceFalloff` (60 %) des Schadens erleiden;
+  `vorteil` gibt gegen Gegner im Nachteil, verlangsamt oder blutend `advantageCrit` (+30 %) Kritchance, ohne dass ein Zustand dafür verbraucht wird.
+- **Die Sporenfalle ist Kapsel und Feld**: Eine Kapsel (`kind: 'pod'`, höchstens vier liegen) bleibt, bis ein Gegner in ihre Nähe kommt, und öffnet sich dann in ein Bodenfeld mit Schaden je Takt und den Zuständen des Rangs
+  (`fields.ts`). Das Feld von Rang 5 meldet sich in `onKill`: Wer darin stirbt, lässt eine kleine zweite Wolke zurück (nie mehr als 14 Felder, nicht auf einer bestehenden Wolke).
+- **Die Köderpuppe ist ein Bodenfeld** an der Figur, das 1,5 s nach dem Aufstellen kleine Gegner in Furcht schickt (`furcht`), die Figur hinter einem Schleier schützt (`schleier`: ein zeitweiliger Wert `rangedTaken`, siehe unten)
+  und sich mit `onEnd` in eine Schadenswelle löst (`knall`). Das Netz fängt über `kind: 'root'` die Gruppe um den nächsten Gegner, zieht sie zusammen (`zug`) und betäubt kleine Gegner (`staub`, Zustand `hold`).
+- **Pfeilhagel**: Die Salve schlägt verzögert ein; mit `folgen` rutscht ihre Mitte bis zu 1,4 m zur Gruppe, mit `mitte` trifft das Zentrum 25 % härter. **Fangeisen**: Der Haken `listener.kill` sieht, wenn ein Gefangener im Eisen stirbt (`splitter`).
+- **`Stats.rangedTaken`** ist neu: ein Faktor auf Schaden aus Fernangriffen (heute nur der Schwarze Sog), den die Köderpuppe über einen zeitweiligen Wert senkt. `Player.hurt` hat dafür den Parameter `ranged`.
+- Klänge: `angriff.sporenfalle`, `einschlag.sporenfalle`, `angriff.koederpuppe`, `einschlag.koederpuppe` und `angriff.netz` sind neu in `audio.json` (erzeugt von `tools/audio-erzeugen.py`).
+- Zwei neue Bilder: das Gestell der Köderpuppe und die Pilzkapsel (`props.ts`, `effects.ts`), beide aus Rechnung und mit festem Pool; das Netz ist ein Gitter aus Strichen, kein neues Modell.
+
+**Abweichungen von der Vorlage** (die Vorlage ist ein Leitfaden, siehe [Lore](#lore)):
+
+- „Rüstungsverlust“ und „Nachteil“ sind im Spiel ein **Nachteil** (`weak`) für *jeden* Urheber, nicht nur für Pfeile und Messer: Der Gegner erleidet mehr Schaden. Das Spiel hat keine Rüstung der Gegner.
+- Bogenschuss: Die Grundwerte sind **1 s Abklingzeit und 36 Schaden** (vorher 0,65 s und 16), damit „−0,3 s“ aus Rang 3 etwas bedeutet. Bogenschuss und Wurfmesser durchschlagen auf Rang 1 nichts mehr (vorher durchschlugen beide ein weiteres Ziel);
+  das kommt mit Rang 2 bzw. 5. Die Wurfmesser haben 3 / 4 / 5 Messer (vorher 3 / 5 / 7), Rang 5 bringt den Durchschlag statt zweier Messer mehr. Weil Rang 1 jetzt nur ein Ziel trifft, ist der Schaden höher (Bogenschuss 36 statt 16, Wurfmesser 12 statt 9). Im Messlauf (zwölf Nächte, zwei Saatwerte) überlebt die Automatik-Figur damit im Mittel etwa so lange wie vorher (431 s gegen 470 s; die Streuung liegt bei rund 40 s).
+- Fangeisen: Die Haltezeit ist **1,5 s** (vorher 2,5 s); Rang 5 schleudert die Splitter **ohne Zustände**, sonst würde jede Kette neue Gefangene machen.
+- Pfeilhagel: Der Schaden steigt mit der Zahl der Pfeile (1,5 × bei neun), weil die Vorlage mehr Pfeile, nicht mehr Fläche meint.
+- Sporenfalle, Köderpuppe und Netz: „Fernkämpfer können nicht zielen“ ist im Spiel **ohne Zauber** (`silence`), denn nur der Priester wirkt aus der Ferne. Das gilt gleich für die Betäubung in Rang 5 des Netzes.
+- Köderpuppe: „Ausweichchance“ aus Rang 4 ist **40 % weniger Schaden aus Fernangriffen** (`rangedTaken`, 0,6 für 0,8 s, solange man nahe der Puppe steht); das Spiel kennt kein Ausweichen, und der Schwarze Sog ist der einzige Fernangriff.
+  „Köderpuppe zerschlagen“ gibt es nicht: Gegner greifen die Puppe nicht an, sie wirkt als Feld und löst sich nach ihrer Dauer auf.
+  Das Gestell steht an der Figur (nicht beim Gegner), sobald ein Gegner innerhalb von 9 m ist; das Netz fällt auf die nächste Gruppe.
+- Sporenfalle, Rang 5: Die kleinen Wolken sind begrenzt (höchstens 14 Felder, keine Überlagerung), damit die Kette bei einer dichten Horde die Felder nicht aufbraucht.
+- Kein Savegame- und kein Plattform-Eingriff: `SAVEGAME_VERSION` bleibt, Pfade und Eingabe sind unverändert.
 
 ## Ton und Musik
 

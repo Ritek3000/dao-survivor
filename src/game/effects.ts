@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { createRandom } from '../core/random';
 import { ShieldDome } from './dome';
 import { Particles, type Particle } from './particles';
-import { arrowGeometry, bannerGeometry, propMaterial, rockGeometry, rootsGeometry, shardGeometry, trapGeometry } from './props';
+import { arrowGeometry, bannerGeometry, decoyGeometry, podGeometry, propMaterial, rockGeometry, rootsGeometry, shardGeometry, trapGeometry } from './props';
 import { Strips, type Strip } from './strips';
 import type { Site } from './zones';
 
@@ -38,6 +38,9 @@ const QUAKE_SHARDS = 34;
 const HAIL_ARROWS = 14;
 /** So viele Banner werden höchstens zugleich gezeichnet. */
 export const BANNER_CAPACITY = 6;
+/** So viele Köderpuppen und Pilzkapseln zeichnet der Kampf höchstens zugleich. */
+export const DECOY_CAPACITY = 4;
+export const POD_CAPACITY = 8;
 /** Sekunden, die ein Pfeil des Hagels sichtbar herabfliegt, und sein Tempo dabei. */
 const HAIL_FLIGHT = 0.3;
 const HAIL_SPEED = 34;
@@ -138,6 +141,8 @@ export class Effects {
   private readonly snapped: Snapped[] = [];
   private readonly later: Later[] = [];
   private readonly bannerMesh: THREE.InstancedMesh;
+  private readonly decoyMesh: THREE.InstancedMesh;
+  private readonly podMesh: THREE.InstancedMesh;
   /** Läuft mit; das Tuch der Banner wiegt sich danach. */
   private swayTime = 0;
   private readonly lightTint = new THREE.Color();
@@ -188,6 +193,8 @@ export class Effects {
     this.openTraps = instanced(trapGeometry(false), iron, 12, false);
     this.shutTraps = instanced(trapGeometry(true), iron, 16, true);
     this.bannerMesh = instanced(bannerGeometry(), propMaterial(0.85), BANNER_CAPACITY, true);
+    this.decoyMesh = instanced(decoyGeometry(), propMaterial(0.9), DECOY_CAPACITY, true);
+    this.podMesh = instanced(podGeometry(), propMaterial(0.8), POD_CAPACITY, false);
 
     this.group.add(
       this.strips.group,
@@ -203,6 +210,8 @@ export class Effects {
       this.openTraps,
       this.shutTraps,
       this.bannerMesh,
+      this.decoyMesh,
+      this.podMesh,
     );
   }
 
@@ -222,7 +231,7 @@ export class Effects {
     this.fireRing = this.fireCoals = this.fireGlow = this.fireBed = this.shieldRing = this.shieldGlow = null;
     this.fireSurge = 0;
     this.dome.reset();
-    for (const mesh of [this.hailMesh, this.rockMesh, this.shardMesh, this.rootMesh, this.openTraps, this.shutTraps, this.bannerMesh]) mesh.count = 0;
+    for (const mesh of [this.hailMesh, this.rockMesh, this.shardMesh, this.rootMesh, this.openTraps, this.shutTraps, this.bannerMesh, this.decoyMesh, this.podMesh]) mesh.count = 0;
   }
 
   /** Hält die Teilchen unabhängig von Auflösung und Blickwinkel gleich groß. */
@@ -397,7 +406,7 @@ export class Effects {
   // ---------------------------------------------------------- Wildnisläufer
 
   /** Pfeilhagel: Ein fahler Kreis kündigt ihn an, dann schlagen die Pfeile nacheinander ein. */
-  hailMark(x: number, z: number, radius: number, delay: number, fromX: number, fromZ: number): void {
+  hailMark(x: number, z: number, radius: number, delay: number, fromX: number, fromZ: number, arrows = HAIL_ARROWS): void {
     this.strips.spawn({
       look: 'ring',
       x,
@@ -410,7 +419,8 @@ export class Effects {
     });
     // Die Pfeile kommen aus der Richtung des Schützen, steil von oben.
     const away = Math.atan2(x - fromX, z - fromZ);
-    for (let i = 0; i < HAIL_ARROWS; i++) {
+    const shown = Math.min(arrows, HAIL_ARROWS);
+    for (let i = 0; i < shown; i++) {
       const a = this.random() * TAU;
       const r = Math.sqrt(this.random()) * radius * 0.92;
       const yaw = away + (this.random() - 0.5) * 0.25;
@@ -421,7 +431,7 @@ export class Effects {
         dx: Math.sin(yaw) * Math.cos(steep),
         dy: -Math.sin(steep),
         dz: Math.cos(yaw) * Math.cos(steep),
-        lands: delay * (0.72 + 0.28 * (i / (HAIL_ARROWS - 1))),
+        lands: delay * (0.72 + 0.28 * (i / Math.max(1, shown - 1))),
       });
     }
   }
@@ -441,16 +451,16 @@ export class Effects {
     });
   }
 
-  /** Die gespannten Fangeisen, wie sie gerade liegen. */
-  showTraps(traps: readonly Site[]): void {
+  /** Die gespannten Fangeisen, wie sie gerade liegen; `buried`: sie sind fast ganz im Staub versunken (Fangeisen, Rang 5). */
+  showTraps(traps: readonly Site[], buried = false): void {
     const count = Math.min(traps.length, this.openTraps.instanceMatrix.count);
     for (let i = 0; i < count; i++) {
       const trap = traps[i];
       if (!trap) continue;
-      pose.position.set(trap.x, 0, trap.z);
+      pose.position.set(trap.x, buried ? -0.045 : 0, trap.z);
       // Jede Falle liegt etwas anders, aber von Bild zu Bild gleich.
       pose.rotation.set(0, trap.x * 12.9898 + trap.z * 78.233, 0);
-      pose.scale.setScalar(1.15);
+      pose.scale.setScalar(buried ? 1 : 1.15);
       pose.updateMatrix();
       this.openTraps.setMatrixAt(i, pose.matrix);
     }
@@ -477,6 +487,88 @@ export class Effects {
     });
     this.sparks(x, 0.35, z, 12, 0xfff0c8, 5);
     for (let i = 0; i < 4; i++) this.puff(x, z, this.random() * TAU, 1.5, DUST);
+  }
+
+  /**
+   * Die Köderpuppe: Ein fahler Ring und ein Hauch Staub zeigen, wie weit ihr Schatten reicht, solange sie steht; der Staub, den
+   * sie beim Einrammen aufwirbelt. Das Gestell selbst zeichnet `showDecoys`.
+   */
+  decoy(x: number, z: number, radius: number, seconds: number): void {
+    this.strips.spawn({ look: 'ring', x, z, inner: radius * 0.95, outer: radius * 1.02, y: 0.05, color: 0xcfc6a4, opacity: 0.4, life: seconds });
+    this.strips.spawn({ look: 'glow', x, z, inner: 0, outer: radius * 1.1, y: 0.04, color: 0x6e6a58, opacity: 0.12, life: seconds });
+    this.groundWave(x, z, radius * 0.55, DUST, 0.45);
+    for (let i = 0; i < 6; i++) this.puff(x, z, this.random() * TAU, 1.6, DUST);
+  }
+
+  /** Die Köderpuppen, die gerade stehen: `count` Orte aus `sites`. Die Umhänge wiegen sich. */
+  showDecoys(sites: readonly Site[], count: number): void {
+    const shown = Math.min(count, DECOY_CAPACITY);
+    for (let i = 0; i < shown; i++) {
+      const site = sites[i];
+      if (!site) continue;
+      pose.position.set(site.x, 0, site.z);
+      pose.rotation.set(0.025 * Math.sin(this.swayTime * 1.4 + site.x), site.x * 7.31 + site.z * 31.7, 0.03 * Math.sin(this.swayTime * 1.1 + site.z));
+      pose.scale.setScalar(1);
+      pose.updateMatrix();
+      this.decoyMesh.setMatrixAt(i, pose.matrix);
+    }
+    this.decoyMesh.count = shown;
+    this.decoyMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Die Pilzkapseln, die gerade liegen. */
+  showPods(sites: readonly Site[]): void {
+    const shown = Math.min(sites.length, POD_CAPACITY);
+    for (let i = 0; i < shown; i++) {
+      const site = sites[i];
+      if (!site) continue;
+      pose.position.set(site.x, 0, site.z);
+      pose.rotation.set(0, site.x * 12.9898 + site.z * 78.233, 0);
+      pose.scale.setScalar(1);
+      pose.updateMatrix();
+      this.podMesh.setMatrixAt(i, pose.matrix);
+    }
+    this.podMesh.count = shown;
+    this.podMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Die Kapsel platzt: Eine graugrüne Wolke steigt auf und bleibt `seconds` liegen. */
+  sporeCloud(x: number, z: number, radius: number, seconds: number): void {
+    this.strips.spawn({ look: 'glow', x, z, inner: 0, outer: radius * 1.15, y: 0.05, color: 0x8a9a72, opacity: 0.2, life: seconds });
+    this.strips.spawn({ look: 'ring', x, z, inner: radius * 0.94, outer: radius * 1.02, y: 0.05, color: 0xa9b88f, opacity: 0.3, life: seconds });
+    this.groundWave(x, z, radius * 0.7, 0x9aa886, 0.5);
+    for (let i = 0; i < 9; i++) {
+      const a = this.random() * TAU;
+      const r = Math.sqrt(this.random()) * radius * 0.7;
+      this.puff(x + Math.sin(a) * r, z + Math.cos(a) * r, a, 1, 0x9aa886, 0.6);
+    }
+  }
+
+  /** Die Wolke atmet: Bei jedem Takt steigen ein paar Schwaden auf. */
+  sporeDrift(x: number, z: number, radius: number): void {
+    for (let i = 0; i < 3; i++) {
+      const a = this.random() * TAU;
+      const r = Math.sqrt(this.random()) * radius * 0.85;
+      this.puff(x + Math.sin(a) * r, z + Math.cos(a) * r, a, 0.5, 0x9aa886, 0.45);
+    }
+  }
+
+  /** Das Fangnetz: Ringe und Spannfäden auf dem Boden, die sich langsam im Staub verlieren. */
+  net(x: number, z: number, radius: number, seconds: number): void {
+    for (const share of [0.4, 0.7, 1]) {
+      this.strips.spawn({ look: 'ring', x, z, inner: radius * share * 0.97, outer: radius * share * 1.02, y: 0.06, color: 0xd9cfb0, opacity: 0.5, life: seconds });
+    }
+    this.strips.spawn({ look: 'crack', x, z, inner: 0, outer: radius, y: 0.06, color: 0xd9cfb0, opacity: 0.55, life: seconds });
+    this.groundWave(x, z, radius * 0.8, DUST, 0.5);
+    for (let i = 0; i < 8; i++) this.puff(x, z, this.random() * TAU, radius, DUST, 0.5);
+  }
+
+  /** Die Köderpuppe löst sich auf: Eine schrille Welle aus Staub und Knochensplittern geht nach außen. */
+  blast(x: number, z: number, radius: number): void {
+    this.strips.spawn({ look: 'ring', x, z, inner: radius * 0.2, outer: radius * 0.35, innerTo: radius * 0.9, outerTo: radius, y: 0.1, color: 0xe6dcc0, opacity: 0.7, life: 0.4 });
+    this.groundWave(x, z, radius, DUST, 0.7);
+    this.sparks(x, 0.5, z, 14, 0xe9e2cc, 7);
+    for (let i = 0; i < 12; i++) this.puff(x, z, this.random() * TAU, 3.2, DUST);
   }
 
   // ----------------------------------------------------------------- Magier

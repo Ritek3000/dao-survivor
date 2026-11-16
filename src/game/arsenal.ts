@@ -4,7 +4,7 @@ import { CONFIG, type EnemyModel } from '../config';
 import type { Random } from '../core/random';
 import type { BuffSpec } from './buffs';
 import type { ClassDef } from './classes';
-import { BANNER_CAPACITY, Effects, type StrikeKind } from './effects';
+import { BANNER_CAPACITY, DECOY_CAPACITY, Effects, type StrikeKind } from './effects';
 import type { Enemies, Enemy } from './enemies';
 import { sourceOf, type CombatListener, type Source } from './events';
 import type { Field, FieldDef, Fields } from './fields';
@@ -69,11 +69,16 @@ interface Placed extends Site {
 const TRAP_CAPACITY = 12;
 const FOLLOW_UPS = 12;
 const KAEMPFER = CONFIG.skills.kaempfer;
+const LAEUFER = CONFIG.skills.laeufer;
 /** Die zeitweiligen Werte der Kämpfer-Fertigkeiten; `seconds` stellt der Aufrufer vor dem Setzen ein. */
 const GUARD: BuffSpec = { id: 'schutz', stat: 'taken', mode: 'mul', amount: 1, seconds: 1 };
 const WHIRL_SPEED: BuffSpec = { id: 'wirbelschlag-tempo', stat: 'speed', mode: 'mul', amount: KAEMPFER.whirlSpeed, seconds: KAEMPFER.whirlSpeedSeconds };
 const SHOUT_HASTE: BuffSpec = { id: 'kriegsschrei-tempo', stat: 'cooldown', mode: 'mul', amount: KAEMPFER.shoutAdvantageCooldown, seconds: KAEMPFER.shoutAdvantageSeconds };
 const SHOUT_CRIT: BuffSpec = { id: 'kriegsschrei-krit', stat: 'critChance', mode: 'add', amount: KAEMPFER.shoutAdvantageCrit, seconds: KAEMPFER.shoutAdvantageSeconds };
+/** Der Schleier der Köderpuppe (Rang 4): Fernangriffe richten weniger an, solange die Figur im Schatten der Puppe steht. */
+const SHELTER: BuffSpec = { id: 'koederpuppe-schleier', stat: 'rangedTaken', mode: 'mul', amount: LAEUFER.decoyShelter, seconds: 0.8 };
+/** Der Urheber der Wolke, die ein Gestorbener hinterlässt (Sporenfalle, Rang 5). */
+const REST_ID = 'sporenfalle-rest';
 /** Die Glut der Feuerschalen (Kwests Esse) als Urheber ihres Schadens. */
 const SEAR_SOURCE = sourceOf('kwests-esse');
 const lightAt = new THREE.Vector3();
@@ -106,6 +111,7 @@ export class Arsenal {
   private readonly effects = new Effects();
   private readonly projectiles = new Projectiles<OwnedWeapon>();
   private readonly traps: Placed[] = [];
+  private readonly pods: Placed[] = [];
   private readonly volleys: Placed[] = [];
   private available: readonly WeaponDef[] = [];
   /** Die Bewegungen der Figur zu den Angriffen ihrer Klasse. */
@@ -115,13 +121,22 @@ export class Arsenal {
   private readonly followUps: FollowUp[] = [];
   /** Das Dornenschild der Figur, wenn sie eines hat. */
   private thorns: OwnedWeapon | null = null;
+  /** Das Fangeisen der Figur, wenn sie eines hat (Rang 5 wartet auf Tote im Eisen). */
+  private trapper: OwnedWeapon | null = null;
   /** Faktor auf den Schaden des nächsten Treffers; Aufrufer stellen ihn vor einem Schlag ein und danach zurück auf 1. */
   private factor = 1;
   /** Wie viele Gegner der laufende Schlag getroffen hat. */
   private swept = 0;
   private readonly options = new Map<ResolvedRank, ProjectileOptions>();
   private readonly bannerFields = new Map<ResolvedRank, FieldDef>();
+  private readonly decoyFields = new Map<ResolvedRank, FieldDef>();
+  private readonly sporeFields = new Map<ResolvedRank, FieldDef>();
+  private readonly restFields = new Map<ResolvedRank, FieldDef>();
   private readonly bannerSites: Site[] = [];
+  private readonly decoySites: Site[] = [];
+  /** Die Splitter eines Fangeisens (Rang 5) und Schläge ohne Zustände: Sie wirken nicht in Ketten und bringen nichts an. */
+  private splintering = false;
+  private plain = false;
   /** Stand der Kuppel im letzten Bild: Daran erkennt man, dass sie gerade einen Treffer abgefangen hat. */
   private shieldWasUp = false;
 
@@ -145,6 +160,7 @@ export class Arsenal {
       });
     }
     for (let i = 0; i < BANNER_CAPACITY; i++) this.bannerSites.push({ x: 0, z: 0 });
+    for (let i = 0; i < DECOY_CAPACITY; i++) this.decoySites.push({ x: 0, z: 0 });
   }
 
   /** Neue Nacht: nur der Startangriff der Klasse. */
@@ -153,9 +169,13 @@ export class Arsenal {
     this.swings = playerClass.swings;
     this.owned.length = 0;
     this.traps.length = 0;
+    this.pods.length = 0;
     this.volleys.length = 0;
     for (const followUp of this.followUps) followUp.active = false;
     this.thorns = null;
+    this.trapper = null;
+    this.splintering = false;
+    this.plain = false;
     this.factor = 1;
     this.shieldCharging = 0;
     this.shieldWasUp = false;
@@ -197,6 +217,7 @@ export class Arsenal {
       };
       this.owned.push(owned);
       if (def.kind === 'thorns') this.thorns = owned;
+      if (def.kind === 'trap') this.trapper = owned;
     }
   }
 
@@ -231,15 +252,17 @@ export class Arsenal {
     this.updateFollowUps(dt);
     this.updateVolleys(dt);
     this.updateTraps();
+    this.updatePods();
     this.projectiles.update(dt, this.enemies, this.onProjectileHit, origin, this.trail);
-    this.showBanners();
+    this.showFields();
     this.effects.embers(aura !== null, origin.x, origin.z, aura ? this.auraRadius(aura) : 0, time, dt);
     // Wer den Schild gebrochen hat, ist meist der nächste Gegner; von dort aus zerfällt die Kuppel.
     const broken = this.shieldWasUp && !this.player.shield;
     const attacker = broken ? this.enemies.nearest(origin.x, origin.z, 4) : null;
     this.effects.shield(this.player.shield, origin.x, origin.z, attacker ? Math.atan2(attacker.x - origin.x, attacker.z - origin.z) : undefined);
     this.shieldWasUp = this.player.shield;
-    this.effects.showTraps(this.traps);
+    this.effects.showTraps(this.traps, this.trapper !== null && hasFlag(this.trapper.rules, 'splitter'));
+    this.effects.showPods(this.pods);
     this.effects.lightSource(this.player.lightSource(lightAt), lightAt, dt);
     this.effects.update(dt, this.player.light, this.player.lightColor);
   }
@@ -288,9 +311,8 @@ export class Arsenal {
     const { def, rules } = weapon;
     const range = def.range * this.stats.reach * rules.range;
 
-    if (def.kind === 'trap') {
-      this.traps.push({ x: origin.x, z: origin.z, weapon, delay: 0 });
-      if (this.traps.length > Math.min(def.maxActive ?? TRAP_CAPACITY, TRAP_CAPACITY)) this.traps.shift();
+    if (def.kind === 'trap' || def.kind === 'pod') {
+      this.lay(weapon, origin);
       audio.play(`angriff.${def.id}`, origin.x, origin.z);
       return true;
     }
@@ -302,7 +324,7 @@ export class Arsenal {
       return true;
     }
 
-    if (def.kind === 'field') return this.plantBanner(weapon, origin);
+    if (def.kind === 'field') return def.id === 'koederpuppe' ? this.plantDecoy(weapon, origin) : this.plantBanner(weapon, origin);
 
     const target = this.enemies.nearest(origin.x, origin.z, range);
     if (!target) return false;
@@ -325,8 +347,8 @@ export class Arsenal {
           this.projectiles.spawn(
             origin.x,
             origin.z,
-            angle + (i - (count - 1) / 2) * (def.spread ?? 0),
-            def.speed ?? 15,
+            angle + (i - (count - 1) / 2) * (def.spread ?? 0) * rules.spread,
+            (def.speed ?? 15) * rules.speed,
             range,
             rules.pierce,
             def.shape ?? 'arrow',
@@ -344,11 +366,12 @@ export class Arsenal {
         const delay = def.delay ?? 0.5;
         this.volleys.push({ x: target.x, z: target.z, weapon, delay });
         // Ein Kreis kündigt den Einschlag an, dann kommen die Pfeile herab.
-        this.effects.hailMark(target.x, target.z, this.area(weapon), delay, origin.x, origin.z);
+        this.effects.hailMark(target.x, target.z, this.area(weapon), delay, origin.x, origin.z, rules.count > 1 ? Math.round(rules.count * 1.4) + 2 : undefined);
         break;
       }
       case 'root':
-        this.burst(weapon, target.x, target.z, this.area(weapon), def.maxTargets, this.entangle);
+        if (def.look === 'netz') this.net(weapon, target);
+        else this.burst(weapon, target.x, target.z, this.area(weapon), def.maxTargets, this.entangle);
         break;
     }
     return true;
@@ -523,20 +546,33 @@ export class Arsenal {
   };
 
   private bannerCount = 0;
+  private decoyCount = 0;
 
-  private readonly showBanner = (field: Field): void => {
-    if (field.def.id !== 'banner' || this.bannerCount >= BANNER_CAPACITY) return;
-    const site = this.bannerSites[this.bannerCount++];
-    if (!site) return;
-    site.x = field.x;
-    site.z = field.z;
+  private readonly showField = (field: Field): void => {
+    if (field.def.id === 'banner') {
+      if (this.bannerCount >= BANNER_CAPACITY) return;
+      const site = this.bannerSites[this.bannerCount++];
+      if (site) {
+        site.x = field.x;
+        site.z = field.z;
+      }
+    } else if (field.def.id === 'koederpuppe') {
+      if (this.decoyCount >= DECOY_CAPACITY) return;
+      const site = this.decoySites[this.decoyCount++];
+      if (site) {
+        site.x = field.x;
+        site.z = field.z;
+      }
+    }
   };
 
-  /** Die Banner, die gerade stehen, für die Zeichnung. */
-  private showBanners(): void {
+  /** Die Banner und Köderpuppen, die gerade stehen, für die Zeichnung. */
+  private showFields(): void {
     this.bannerCount = 0;
-    this.support.fields.eachActive(this.showBanner);
+    this.decoyCount = 0;
+    this.support.fields.eachActive(this.showField);
     this.effects.showBanners(this.bannerSites, this.bannerCount);
+    this.effects.showDecoys(this.decoySites, this.decoyCount);
   }
 
   // ---------------------------------------------------------------- Dornenschild
@@ -544,6 +580,7 @@ export class Arsenal {
   /** Für `CombatEvents`: Wird die Figur getroffen, sticht das Dornenschild zurück. Das Spiel meldet ihn zu Beginn jeder Nacht an. */
   readonly listener: CombatListener = {
     hurt: (attacker) => this.sting(attacker),
+    kill: (enemy) => this.trapKill(enemy),
   };
 
   /** Ein Gegner trifft die Figur: Das Dornenschild sticht zurück. */
@@ -591,6 +628,268 @@ export class Arsenal {
       );
     }
   }
+
+  // ------------------------------------------------------------------ Wildnisläufer
+
+  /** Legt Fangeisen oder Pilzkapseln an die Stelle der Figur; mehrere liegen quer zur Blickrichtung nebeneinander. */
+  private lay(weapon: OwnedWeapon, origin: Site): void {
+    const { def, rules } = weapon;
+    const pod = def.kind === 'pod';
+    const list = pod ? this.pods : this.traps;
+    const spacing = pod ? LAEUFER.sporeSpacing : LAEUFER.trapSpacing;
+    const limit = pod ? LAEUFER.sporeMax : Math.min(def.maxActive ?? TRAP_CAPACITY, TRAP_CAPACITY);
+    const facing = this.player.facing;
+    for (let i = 0; i < rules.count; i++) {
+      const side = (i - (rules.count - 1) / 2) * spacing;
+      list.push({ x: origin.x + Math.cos(facing) * side, z: origin.z - Math.sin(facing) * side, weapon, delay: 0 });
+      if (list.length > limit) list.shift();
+    }
+  }
+
+  /** Fangeisen, Rang 5: Stirbt ein Gefangener im Eisen, schleudert die Falle Splitter auf die Gegner ringsum. */
+  private trapKill(enemy: Enemy): void {
+    const weapon = this.trapper;
+    if (!weapon || this.splintering || weapon.rules.flags.length === 0 || !hasFlag(weapon.rules, 'splitter')) return;
+    const held = enemy.status.hold;
+    if (held.time <= 0 || held.source !== weapon.source) return;
+    this.splintering = true;
+    this.plain = true;
+    this.factor = LAEUFER.trapSplinterDamage;
+    this.burst(weapon, enemy.x, enemy.z, LAEUFER.trapSplinterRadius);
+    this.factor = 1;
+    this.plain = false;
+    this.splintering = false;
+    this.effects.trapSnap(enemy.x, enemy.z, LAEUFER.trapSplinterRadius);
+    audio.play(`einschlag.${weapon.def.id}`, enemy.x, enemy.z);
+  }
+
+  // Der Schwerpunkt der Gruppe, der eine Salve folgt (Pfeilhagel, Rang 5).
+  private sumX = 0;
+  private sumZ = 0;
+  private sumN = 0;
+  private sumRadius = 0;
+  private sumFromX = 0;
+  private sumFromZ = 0;
+
+  private readonly gather = (enemy: Enemy): void => {
+    if (enemy.hp <= 0 || Math.hypot(enemy.x - this.sumFromX, enemy.z - this.sumFromZ) > this.sumRadius + enemy.type.radius) return;
+    this.sumX += enemy.x;
+    this.sumZ += enemy.z;
+    this.sumN++;
+  };
+
+  /** Pfeilhagel, Rang 5: Bis zum Einschlag ist die Gruppe weitergezogen; die Salve rückt ein Stück zu ihrer Mitte vor. */
+  private follow(volley: Placed, radius: number): void {
+    this.sumX = this.sumZ = this.sumN = 0;
+    this.sumRadius = radius * 1.3;
+    this.sumFromX = volley.x;
+    this.sumFromZ = volley.z;
+    this.enemies.queryRadius(volley.x, volley.z, this.sumRadius, this.gather);
+    if (this.sumN === 0) return;
+    const dx = this.sumX / this.sumN - volley.x;
+    const dz = this.sumZ / this.sumN - volley.z;
+    const distance = Math.hypot(dx, dz);
+    if (distance < 1e-3) return;
+    const step = Math.min(distance, LAEUFER.hailFollow) / distance;
+    volley.x += dx * step;
+    volley.z += dz * step;
+  }
+
+  private impactWeapon: OwnedWeapon | null = null;
+  private impactX = 0;
+  private impactZ = 0;
+  private impactRadius = 0;
+  /** Bis zu diesem Abstand von der Mitte erleidet ein Gegner mehr Schaden; kleiner als 0: für niemanden. */
+  private impactCenter = -1;
+
+  private readonly impactEach = (enemy: Enemy): void => {
+    const weapon = this.impactWeapon;
+    if (!weapon || enemy.hp <= 0) return;
+    const distance = Math.hypot(enemy.x - this.impactX, enemy.z - this.impactZ);
+    if (distance > this.impactRadius + enemy.type.radius) return;
+    this.factor = distance <= this.impactCenter ? LAEUFER.hailCenterFactor : 1;
+    this.hit(enemy, weapon, this.impactX, this.impactZ);
+    this.factor = 1;
+  };
+
+  /** Eine Salve schlägt ein: alle Gegner im Kreis; im Zentrum trifft sie härter (Rang 5). */
+  private impact(weapon: OwnedWeapon, x: number, z: number, radius: number): void {
+    this.impactWeapon = weapon;
+    this.impactX = x;
+    this.impactZ = z;
+    this.impactRadius = radius;
+    this.impactCenter = weapon.rules.flags.length > 0 && hasFlag(weapon.rules, 'mitte') ? radius * LAEUFER.hailCenter : -1;
+    this.enemies.queryRadius(x, z, radius, this.impactEach);
+  }
+
+  // Das Netz: wohin es fällt und wie weit es reicht, für `netCatch`.
+  private netX = 0;
+  private netZ = 0;
+
+  /** Das Netz fällt auf die nächste Gruppe. */
+  private net(weapon: OwnedWeapon, target: Enemy): void {
+    const radius = this.area(weapon);
+    this.netX = target.x;
+    this.netZ = target.z;
+    this.burst(weapon, target.x, target.z, radius, Infinity, this.netCatch);
+    this.effects.net(target.x, target.z, radius, 2.5);
+  }
+
+  /** Was das Netz mit jedem Gefangenen tut: zusammenziehen (Rang 3), Staub (Rang 5). */
+  private readonly netCatch = (enemy: Enemy, weapon: OwnedWeapon): void => {
+    const { rules } = weapon;
+    if (rules.flags.length === 0) return;
+    if (hasFlag(rules, 'zug') && !enemy.driven) {
+      const dx = this.netX - enemy.x;
+      const dz = this.netZ - enemy.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance > 1e-3) {
+        const step = Math.min(LAEUFER.netPull, distance * LAEUFER.netPullShare) / distance;
+        enemy.x += dx * step;
+        enemy.z += dz * step;
+      }
+    }
+    if (hasFlag(rules, 'staub')) {
+      applyStatus(enemy.status, 'silence', LAEUFER.netSilence, undefined, weapon.source);
+      if (enemy.type.scale < BIG_GAME_SCALE) applyStatus(enemy.status, 'hold', LAEUFER.netHold, undefined, weapon.source);
+    }
+  };
+
+  // ----------------------------------------------------------------- Sporenfalle
+
+  private updatePods(): void {
+    for (let i = this.pods.length - 1; i >= 0; i--) {
+      const pod = this.pods[i];
+      if (!pod || !this.enemies.nearest(pod.x, pod.z, LAEUFER.sporeTrigger)) continue;
+      this.pods.splice(i, 1);
+      this.openPod(pod);
+    }
+  }
+
+  /** Eine Kapsel platzt: Eine Wolke bleibt liegen. */
+  private openPod(pod: Placed): void {
+    const { weapon } = pod;
+    const radius = this.area(weapon);
+    const field = this.sporeField(weapon, false);
+    this.support.fields.spawn(field, pod.x, pod.z, {
+      radius,
+      scale: weapon.rules.damage * this.stats.damage * this.traits.dealt,
+      source: weapon.source,
+    });
+    this.effects.sporeCloud(pod.x, pod.z, radius, field.duration);
+    audio.play(`einschlag.${weapon.def.id}`, pod.x, pod.z);
+  }
+
+  /** Die Beschreibung der Wolke (oder der kleinen Wolke eines Gestorbenen) für einen Rang; einmal angelegt und wiederverwendet. */
+  private sporeField(weapon: OwnedWeapon, rest: boolean): FieldDef {
+    const { def, rules } = weapon;
+    const cache = rest ? this.restFields : this.sporeFields;
+    let field = cache.get(rules);
+    if (!field) {
+      field = {
+        id: rest ? REST_ID : def.id,
+        shape: 'circle',
+        duration: rest ? LAEUFER.sporeAgainSeconds : rules.duration,
+        every: 0.5,
+        instant: true,
+        damage: def.damage,
+        statuses: rules.statuses.length > 0 ? rules.statuses : undefined,
+        onTick: this.sporeDrift,
+        onKill: !rest && hasFlag(rules, 'platzen') ? this.sporeKill : undefined,
+      };
+      cache.set(rules, field);
+    }
+    return field;
+  }
+
+  private readonly sporeDrift = (field: Field): void => {
+    this.effects.sporeDrift(field.x, field.z, field.radius);
+  };
+
+  private crowdX = 0;
+  private crowdZ = 0;
+  private crowded = false;
+
+  private readonly nearRest = (field: Field): void => {
+    if (field.def.id === REST_ID && Math.hypot(field.x - this.crowdX, field.z - this.crowdZ) < 1) this.crowded = true;
+  };
+
+  /** Sporenfalle, Rang 5: Wer in der Wolke stirbt, platzt auf und lässt eine kleine frische Wolke zurück. */
+  private readonly sporeKill = (field: Field, enemy: Enemy): void => {
+    const fields = this.support.fields;
+    // Der Vorrat an Feldern ist begrenzt; Banner und Köderpuppe sollen nicht von Wolken verdrängt werden.
+    if (fields.count >= LAEUFER.sporeAgainLimit) return;
+    this.crowdX = enemy.x;
+    this.crowdZ = enemy.z;
+    this.crowded = false;
+    fields.eachActive(this.nearRest);
+    if (this.crowded) return;
+    const weapon = this.owned.find((candidate) => candidate.source === field.source);
+    if (!weapon) return;
+    const radius = LAEUFER.sporeAgainRadius * this.stats.reach;
+    const rest = this.sporeField(weapon, true);
+    fields.spawn(rest, enemy.x, enemy.z, { radius, scale: field.scale, source: field.source });
+    this.effects.sporeCloud(enemy.x, enemy.z, radius, rest.duration);
+  };
+
+  // ---------------------------------------------------------------- Köderpuppe
+
+  /** Rammt die Köderpuppe an die Stelle der Figur, wenn ein Gegner nah genug ist. */
+  private plantDecoy(weapon: OwnedWeapon, origin: Site): boolean {
+    const { def, rules } = weapon;
+    if (!this.enemies.nearest(origin.x, origin.z, def.range * this.stats.reach * rules.range)) return false;
+    const radius = this.area(weapon);
+    this.support.fields.spawn(this.decoyField(weapon), origin.x, origin.z, { radius, duration: rules.duration, source: weapon.source });
+    this.effects.decoy(origin.x, origin.z, radius, rules.duration);
+    audio.play(`angriff.${def.id}`, origin.x, origin.z);
+    return true;
+  }
+
+  private decoyField(weapon: OwnedWeapon): FieldDef {
+    const { def, rules } = weapon;
+    let field = this.decoyFields.get(rules);
+    if (!field) {
+      field = {
+        id: def.id,
+        shape: 'circle',
+        duration: rules.duration,
+        every: 0.5,
+        instant: true,
+        statuses: rules.statuses.length > 0 ? rules.statuses : undefined,
+        buffs: hasFlag(rules, 'schleier') ? [SHELTER] : undefined,
+        onTick: hasFlag(rules, 'furcht') ? this.decoyTick : undefined,
+        onEnd: hasFlag(rules, 'knall') ? this.decoyEnd : undefined,
+      };
+      this.decoyFields.set(rules, field);
+    }
+    return field;
+  }
+
+  private scared: Field | null = null;
+
+  private readonly scare = (enemy: Enemy): void => {
+    const field = this.scared;
+    if (!field || enemy.hp <= 0 || enemy.type.scale >= BIG_GAME_SCALE) return;
+    if (Math.hypot(enemy.x - field.x, enemy.z - field.z) > field.radius + enemy.type.radius) return;
+    applyStatus(enemy.status, 'fear', LAEUFER.decoyFearSeconds, undefined, field.source);
+  };
+
+  /** Rang 3: Wer zu lange im Schatten der Puppe steht, fürchtet sich (Große nicht). */
+  private readonly decoyTick = (field: Field): void => {
+    if (field.age < LAEUFER.decoyFearAfter) return;
+    this.scared = field;
+    this.enemies.queryRadius(field.x, field.z, field.radius, this.scare);
+  };
+
+  /** Rang 5: Die Puppe löst sich auf, der gebundene Staub schleudert Gegner zurück. */
+  private readonly decoyEnd = (field: Field): void => {
+    const weapon = this.owned.find((candidate) => candidate.source === field.source);
+    if (!weapon) return;
+    const radius = field.radius * LAEUFER.decoyBlast;
+    this.burst(weapon, field.x, field.z, radius);
+    this.effects.blast(field.x, field.z, radius);
+    audio.play(`einschlag.${weapon.def.id}`, field.x, field.z);
+  };
 
   // ---------------------------------------------------------------------- Wurfaxt
 
@@ -702,7 +1001,9 @@ export class Arsenal {
       // Gegen Markierte kommt Kritchance dazu (Vorteil); der Zufall wird in jedem Fall einmal gezogen.
       // Ein vorbereiteter Schlag (Wuchthieb, Rang 5) ist sicher kritisch.
       const roll = this.random();
-      if (weapon.primed || roll < this.stats.critChance + markChance(enemy.status)) amount *= this.stats.critDamage;
+      let chance = this.stats.critChance + markChance(enemy.status);
+      if (rules.flags.length > 0 && hasFlag(rules, 'vorteil') && this.disadvantaged(enemy)) chance += LAEUFER.advantageCrit;
+      if (weapon.primed || roll < chance) amount *= this.stats.critDamage;
       amount *= takenFactor(enemy.status);
       if (this.traits.finsternisDamage !== 1 && this.zones.finsternisAt(enemy.x, enemy.z) > 0.5) {
         amount *= this.traits.finsternisDamage;
@@ -731,7 +1032,14 @@ export class Arsenal {
       pushZ = dz * push;
     }
     this.enemies.damage(enemy, amount, pushX, pushZ, weapon.source);
+    if (this.plain) return;
     for (const apply of rules.statuses) applyStatus(enemy.status, apply.kind, apply.seconds, apply.power, weapon.source);
+  }
+
+  /** Steht der Gegner im Nachteil, ist er verlangsamt oder blutet er? Dann treffen Pfeile und Messer mit Vorteil. */
+  private disadvantaged(enemy: Enemy): boolean {
+    const { status } = enemy;
+    return status.weak.time > 0 || status.slow.time > 0 || status.bleed.time > 0;
   }
 
   /** Läuft die Figur auf den Gegner zu? Dann trifft der Axthieb ab Rang 2 härter. */
@@ -748,11 +1056,19 @@ export class Arsenal {
   }
 
   private readonly onProjectileHit = (enemy: Enemy, projectile: Projectile<OwnedWeapon>): void => {
+    const weapon = projectile.payload;
+    const { rules } = weapon;
     // Eisensplitter des Dornenschilds treffen schwächer als der Stich selbst.
-    this.factor = projectile.payload.def.kind === 'thorns' ? KAEMPFER.splitterDamage : 1;
+    this.factor = weapon.def.kind === 'thorns' ? KAEMPFER.splitterDamage : 1;
+    // Wer als Zweiter getroffen wird, erleidet weniger (Bogenschuss ab Rang 2, Wurfmesser auf Rang 5).
+    const first = projectile.struck.length <= 1;
+    if (!first && rules.flags.length > 0 && hasFlag(rules, 'abfall')) this.factor *= LAEUFER.pierceFalloff;
     // Der Rückstoß wirkt in Flugrichtung.
-    this.hit(enemy, projectile.payload, enemy.x - projectile.directionX, enemy.z - projectile.directionZ);
+    this.hit(enemy, weapon, enemy.x - projectile.directionX, enemy.z - projectile.directionZ);
     this.factor = 1;
+    if (first && rules.flags.length > 0 && hasFlag(rules, 'ruestung')) {
+      applyStatus(enemy.status, 'weak', LAEUFER.armorSeconds, LAEUFER.armorFactor, weapon.source);
+    }
   };
 
   private updateShield(dt: number, weapon: OwnedWeapon): void {
@@ -775,7 +1091,8 @@ export class Arsenal {
       volley.delay -= dt;
       if (volley.delay > 0) continue;
       const radius = this.area(volley.weapon);
-      this.burst(volley.weapon, volley.x, volley.z, radius);
+      if (volley.weapon.rules.flags.length > 0 && hasFlag(volley.weapon.rules, 'folgen')) this.follow(volley, radius);
+      this.impact(volley.weapon, volley.x, volley.z, radius);
       this.effects.hailImpact(volley.x, volley.z, radius);
       audio.play(`einschlag.${volley.weapon.def.id}`, volley.x, volley.z);
       this.volleys.splice(i, 1);
