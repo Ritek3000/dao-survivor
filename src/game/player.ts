@@ -476,7 +476,7 @@ export class Player {
     } else if (zone === 'licht') {
       this.verstaubung = Math.max(0, this.verstaubung - clearPerSecond * dt);
       // Heilung gibt es nur bei der Rast im Licht, nie im Kampf.
-      this.hp += CONFIG.islands.regenPerSecond * dt;
+      this.hp += CONFIG.islands.regenPerSecond * this.stats.restHeal * dt;
     } else if (this.stats.dustClear > 0) {
       // Sors Läuterung: Der Staub löst sich auch in der gewöhnlichen Nacht. Leben gibt sie nicht zurück.
       this.verstaubung = Math.max(0, this.verstaubung - this.stats.dustClear * dt);
@@ -503,7 +503,9 @@ export class Player {
       audio.play('schild.faengt', this.position.x, this.position.z);
       return;
     }
-    const taken = Math.max(1, amount * this.takenFactor - this.stats.armor);
+    // Rüstung kann einen Treffer nicht aufheben: Mindestens ein Viertel (und 1 Schaden) kommt immer durch.
+    const incoming = amount * this.takenFactor;
+    const taken = Math.max(1, incoming * CONFIG.player.minDamageShare, incoming - this.stats.armor);
     this.hp -= taken;
     if (verstaubt) {
       this.verstaubung = Math.min(this.stats.maxHp, this.verstaubung + taken * this.stats.verstaubung);

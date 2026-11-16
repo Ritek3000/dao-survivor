@@ -1,5 +1,5 @@
 /**
- * Der Spielstand, der den Neustart überdauern soll: das Gold und die Ränge der Steigerungen jeder Klasse.
+ * Der Spielstand, der den Neustart überdauern soll: das Gold, die Ränge der Steigerungen und die Gegenstände jeder Klasse.
  *
  * Wo er liegt, versteckt `TextStore` (siehe `storage.ts`): im Browser in `localStorage`, in einer Desktop-Hülle
  * später etwa in einer Datei; dafür gibt es `useSavegameStore`. Gespeichert wird als JSON mit Versionsnummer.
@@ -13,10 +13,23 @@
 import { browserTextStore, type TextStore } from './storage';
 
 /** Die Fassung des Formats, die dieser Code schreibt. */
-export const SAVEGAME_VERSION = 1;
+export const SAVEGAME_VERSION = 2;
 
 /** Obergrenze für einen Rang beim Lesen; schützt vor Unsinn in einer von Hand bearbeiteten Datei. */
 const MAX_STORED_RANK = 99;
+/** Obergrenze für die Plätze, die je Klasse gelesen werden; das Spiel selbst kennt weniger (`CONFIG.items.inventorySize`). */
+const MAX_STORED_SLOTS = 200;
+
+/**
+ * Die Gegenstände der Klassen, so wie sie im Spielstand liegen. Was ein Gegenstand ist, kennt `game/items.ts`; dieser Teil
+ * reicht die Einträge unverändert weiter und prüft sie nicht, damit auch Gegenstände einer anderen Fassung erhalten bleiben.
+ */
+export interface StoredItems {
+  /** Die nächste Nummer, die ein neuer Gegenstand bekommt. */
+  next: number;
+  /** Je Klasse das Inventar (Plätze in Reihenfolge, leere als `null`) und die angelegten Gegenstände nach Platz. */
+  classes: Record<string, { inventory: unknown[]; equipment: Record<string, unknown> }>;
+}
 
 export interface Savegame {
   version: number;
@@ -24,6 +37,8 @@ export interface Savegame {
   gold: number;
   /** Rang jeder Steigerung je Klasse: `ranks[klasse][steigerung]`. */
   ranks: Record<string, Record<string, number>>;
+  /** Seit Fassung 2: die Gegenstände. */
+  items: StoredItems;
 }
 
 export type SavegameStore = TextStore;
@@ -38,7 +53,11 @@ export function useSavegameStore(next: SavegameStore): void {
 }
 
 export function emptySavegame(): Savegame {
-  return { version: SAVEGAME_VERSION, gold: 0, ranks: {} };
+  return { version: SAVEGAME_VERSION, gold: 0, ranks: {}, items: emptyItems() };
+}
+
+function emptyItems(): StoredItems {
+  return { next: 1, classes: {} };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -53,16 +72,17 @@ function wholeNumber(value: unknown, max: number): number {
 export function parseSavegame(text: string | null): Savegame {
   const save = emptySavegame();
   if (text === null) return save;
-  let raw: unknown;
+  let parsed: unknown;
   try {
-    raw = JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch {
     // Beschädigter Text: Es beginnt ein leerer Stand. Überschrieben wird erst beim nächsten Speichern.
     return save;
   }
-  if (!isRecord(raw)) return save;
+  if (!isRecord(parsed)) return save;
+  // Ältere Fassungen werden Schritt für Schritt auf die nächste gehoben.
+  const raw = typeof parsed.version === 'number' && parsed.version >= 2 ? parsed : von1auf2(parsed);
 
-  // Hier kämen die Schritte älterer Fassungen hin (`if (version < 2) raw = von1auf2(raw)` …). Es gibt noch keine.
   if (typeof raw.version === 'number' && Number.isFinite(raw.version)) {
     // Ein Stand aus einer neueren Fassung wird so gut gelesen wie möglich, seine Nummer aber nicht zurückgesetzt.
     save.version = Math.max(SAVEGAME_VERSION, Math.floor(raw.version));
@@ -79,7 +99,28 @@ export function parseSavegame(text: string | null): Savegame {
       save.ranks[classId] = ranks;
     }
   }
+  save.items = parseItems(raw.items);
   return save;
+}
+
+/** Fassung 1 kannte keine Gegenstände; Gold und Ränge bleiben, wie sie sind. */
+function von1auf2(raw: Record<string, unknown>): Record<string, unknown> {
+  return { ...raw, version: 2, items: emptyItems() };
+}
+
+function parseItems(raw: unknown): StoredItems {
+  const items = emptyItems();
+  if (!isRecord(raw)) return items;
+  items.next = Math.max(1, wholeNumber(raw.next, Number.MAX_SAFE_INTEGER));
+  if (!isRecord(raw.classes)) return items;
+  for (const [classId, perClass] of Object.entries(raw.classes)) {
+    if (!isRecord(perClass)) continue;
+    items.classes[classId] = {
+      inventory: Array.isArray(perClass.inventory) ? perClass.inventory.slice(0, MAX_STORED_SLOTS) : [],
+      equipment: isRecord(perClass.equipment) ? { ...perClass.equipment } : {},
+    };
+  }
+  return items;
 }
 
 /** Liest den gespeicherten Stand; ohne oder mit unbrauchbarem Stand ein leerer. */

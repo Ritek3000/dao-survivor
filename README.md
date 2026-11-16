@@ -54,6 +54,7 @@ Nach jedem Merge auf `main` baut GitHub das Spiel und veröffentlicht den Stand 
 | M                          | Ton an oder aus                         |
 | 1, 2, 3 oder Pfeile, Enter | Klasse und Stärkungen wählen, Bestätigen |
 | U                          | Steigerungen öffnen (bei der Klassenwahl und am Ende der Nacht) |
+| L                          | Ausrüstung öffnen (ebenso; sobald es Gegenstände gibt, siehe [Gegenstände](#gegenstände)) |
 
 Im Menü der Steigerungen wählen Auf und Ab (W, S oder Pfeile) die Steigerung, Links und Rechts (oder 1, 2, 3) die Klasse,
 Enter kauft den nächsten Rang, Esc oder U führen zurück.
@@ -82,10 +83,10 @@ public/audio/         Klänge und Musik (sfx/, schleifen/, musik/) und audio.jso
 src/
   main.ts             Einstieg: baut das Spiel und hängt Entwicklungswerkzeuge nur im Dev-Modus an
   config.ts           Zentrale Stellschrauben: Nachtdauer, Welt, Gegnerarten, Kulisse
-  core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Steigerungen)
+  core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Steigerungen, Gegenstände)
   audio/              Ton und Musik: Engine, Ereignisnamen, Lesen von audio.json
   game/               Spiellogik und Darstellung (siehe unten)
-  ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Anleitung, Rückfragen
+  ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Anleitung, Rückfragen; lagerView.ts: Ausrüstung
   tools/              Entwicklungswerkzeuge: Messlauf und Modell-Prüfer
 tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
@@ -102,6 +103,7 @@ Wichtige Teile von `src/game/`:
 | `enemies.ts`, `boss.ts`, `threats.ts` | Horde, Verschlinger und die Zauber der Gegner                    |
 | `progression.ts`               | Stufen, Stärkungen und die Segen der Höheren Mächte                     |
 | `steigerung.ts`, `coins.ts`    | Dauerhafte Steigerungen der Klassen und die Münzen, die das Gold bringen |
+| `items.ts`, `ausruestung.ts`, `lager.ts` | Gegenstände (Eigenschaften, Würfeln), die Gegenstände jeder Klasse und das Menü der Ausrüstung |
 | `zones.ts`, `darkness.ts`, `dust.ts` | Lichtinseln, Finsternis und Verstaubung                           |
 | `world.ts`, `ground.ts`, `scenery.ts` | Welt, Boden und Kulisse                                          |
 | `models.ts`                    | Lädt GLB-Dateien und bringt sie auf die Maße, die das Spiel braucht     |
@@ -156,7 +158,7 @@ Eine neue Steigerung ist ein weiterer Eintrag. Beim Start einer Nacht wirken die
 bzw. gerade gespielte Klasse.
 
 **Speicherung.** Gold und Ränge liegen im Browser (`localStorage`, Schlüssel `dao-survivor.spielstand`) als JSON mit Versionsnummer
-(`version`, jetzt 1). Der Zugriff steckt hinter `TextStore` in `src/core/storage.ts` und `src/core/savegame.ts`; wo `localStorage` fehlt oder
+(`version`, jetzt 2). Der Zugriff steckt hinter `TextStore` in `src/core/storage.ts` und `src/core/savegame.ts`; wo `localStorage` fehlt oder
 gesperrt ist, gilt der Stand nur für die Sitzung. Eine Desktop-Fassung kann mit `useSavegameStore` eine Datei an die Stelle setzen.
 Ein unlesbarer Stand beginnt bei null; was das Spiel nicht kennt (etwa eine entfernte Steigerung), bleibt beim Speichern erhalten.
 Zurücksetzen lässt sich der Stand mit „Neues Spiel“ im Startbildschirm (mit Rückfrage); in den Entwicklerwerkzeugen genügt auch `localStorage.removeItem('dao-survivor.spielstand')`.
@@ -169,6 +171,44 @@ Abweichungen von der Lore: Die Währung der Spielwelt sind Kupferpfennig, Silber
 Im Spiel heißt sie schlicht Gold, und die drei Münzfarben stehen für kleine, mittlere und große Beträge im Verhältnis 1 zu 5 zu 25,
 sonst gäbe es keine Goldkronen zu sehen. Auch dass man mit Gold Werte steigert, ist eine Spielvereinfachung: In der Lore kaufen
 Spielende Steigerungen mit Charakterpunkten (`Steigerungskosten`), nicht mit Geld; die steigenden Preise je Rang stammen von dort.
+
+## Gegenstände
+
+Zwischen den Nächten legen die Klassen Gegenstände an: Fackel, Helm, Gürtel, Waffe, Handschuh, Schuh, Ring, Brustrüstung und Amulett. Sie sollen
+die Steigerungen später ersetzen; das System entsteht in Paketen (Entwurf: „Item-, Loot- und Händlersystem“). **Stand: Grundlage.** Beute,
+Truhe und Händler folgen. Bis dahin gibt es im fertigen Spiel noch keine Gegenstände, und das Menü der Ausrüstung bleibt verborgen, solange kein
+Gegenstand im Spielstand liegt. Im Entwicklungsmodus (`npm run dev`) ist es immer da, und die Browser-Konsole erzeugt Gegenstände zum Ausprobieren
+(`__items.fuellen()`, `__items.geben(0, 'ring', 'rar')`, `__items.leeren()`; Beschreibung in `src/tools/items.ts`).
+
+**Aufbau.** Ein Gegenstand trägt je nach Seltenheit eine (Normal), zwei (Selten) oder drei (Rar) Eigenschaften; Legendär trägt drei und später
+die Evolution einer Fertigkeit, und gibt es vorerst nur als Ring (`LEGENDARY_SLOTS`). Jede Eigenschaft würfelt ihren Wert einmal beim Entstehen
+aus einem Bereich, der von der Eigenschaft und vom Platz abhängt; ein Kernplatz hebt ihn an (Schaden auf der Waffe, Leben und Rüstung auf der
+Brust, Lauftempo am Schuh, Sammelradius am Handschuh, Lichtschein an der Fackel). Es gibt 17 Eigenschaften (die zwölf der Steigerungen plus
+Krit-Schaden, Schonfrist, Rastheilung, Brenndauer und Zündtempo); welche auf welchem Platz vorkommen kann, steht als Daten in `src/game/items.ts`
+(`PROPERTIES`), die Zahlen und Höchstwerte in `CONFIG.items` (`src/config.ts`). Fackel, Waffe und legendäre Gegenstände gehören zu einer Klasse und
+lassen sich nur von ihr anlegen; für den Magier heißt die Fackel „Kerzenwort“. Gegenstände ändern nur Werte, nicht das Aussehen der Figur.
+
+**Wirkung.** Beim Start einer Nacht werden die Eigenschaften der angelegten Gegenstände je Eigenschaft summiert (nach oben auf `cap` begrenzt) und
+auf die Werte der Figur gesetzt (`Progression.reset`, wie die Steigerungen); die Stärkungen und Segen der Nacht kommen obendrauf. Angelegt wird nur
+zwischen den Nächten. Zwei Werte sind neu: `critDamage` (bisher fest doppelter Schaden bei einem kritischen Treffer) und `restHeal` (Heilung bei
+der Rast im Licht).
+
+**Mindestschaden.** Rüstung nimmt von einem Treffer nicht mehr alles weg: Mindestens ein Viertel (`CONFIG.player.minDamageShare`), mindestens 1 Schaden
+kommt durch. Sonst machte Rüstung aus Steigerungen, Stärkungen und Gegenständen zusammen die Figur gegen die Horde unverwundbar.
+
+**Menü.** Bei der Klassenwahl und am Ende der Nacht öffnet **L** (oder der Knopf) die Ausrüstung der gewählten bzw. gerade gespielten Klasse: links die
+neun angelegten Gegenstände, daneben das Inventar (25 Plätze je Klasse), rechts die Karte des markierten Gegenstands mit Wurf im Bereich und
+Vergleich mit dem angelegten, darunter die Summe aller angelegten. Klick oder Enter legt an (ein Gegenstand im Inventar) bzw. ab (ein angelegter);
+Pfeile bewegen den Zeiger, 1, 2, 3 wechseln die Klasse, Esc oder L führen zurück. Maus und Tastatur sind gleichwertig. Das Menü ist
+`src/game/lager.ts` (Bedienung) und `src/ui/lagerView.ts` (Oberfläche); die Zeichen der Gegenstände sind selbst gezeichnete Platzhalter
+(`src/ui/itemIcons.ts`).
+
+**Speicherung.** Die Gegenstände liegen im selben Spielstand wie Gold und Ränge (Feld `items`; `src/game/ausruestung.ts`), Fassung 2. Ältere
+Stände (Fassung 1) haben keine Gegenstände und werden unverändert übernommen. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
+Name, unmögliche Eigenschaft), wird beim Lesen verworfen, Werte außerhalb des heutigen Bereichs rücken an dessen Rand.
+
+**Gleichgewicht.** `__messlauf.start({ ausruestung: 'rar' })` belegt alle neun Plätze jeder Klasse mit rar gewürfelten Gegenständen
+(`'normal'`, `'selten'` oder `'rar'`); ohne Angabe ist nichts angelegt. Auch das schreibt nichts in den echten Spielstand.
 
 ## Ton und Musik
 
