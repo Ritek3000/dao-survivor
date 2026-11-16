@@ -54,7 +54,8 @@ Nach jedem Merge auf `main` baut GitHub das Spiel und veröffentlicht den Stand 
 | M                          | Ton an oder aus                         |
 | 1, 2, 3 oder Pfeile, Enter | Klasse und Stärkungen wählen, Bestätigen |
 | U                          | Steigerungen öffnen (bei der Klassenwahl und am Ende der Nacht) |
-| L                          | Ausrüstung öffnen (ebenso; sobald es Gegenstände gibt, siehe [Gegenstände](#gegenstände)) |
+| L                          | Lager öffnen: Ausrüstung und Truhe (ebenso; sobald es Gegenstände gibt, siehe [Gegenstände](#gegenstände)) |
+| Tab, E (im Lager)          | Ansicht wechseln (Ausrüstung, Truhe); Gegenstand gleich anlegen, abnehmen oder umräumen |
 
 Im Menü der Steigerungen wählen Auf und Ab (W, S oder Pfeile) die Steigerung, Links und Rechts (oder 1, 2, 3) die Klasse,
 Enter kauft den nächsten Rang, Esc oder U führen zurück.
@@ -86,7 +87,7 @@ src/
   core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Steigerungen, Gegenstände)
   audio/              Ton und Musik: Engine, Ereignisnamen, Lesen von audio.json
   game/               Spiellogik und Darstellung (siehe unten)
-  ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Anleitung, Rückfragen; lagerView.ts: Ausrüstung
+  ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Anleitung, Rückfragen; lagerView.ts: Lager (Ausrüstung und Truhe)
   tools/              Entwicklungswerkzeuge: Messlauf und Modell-Prüfer
 tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
@@ -103,7 +104,7 @@ Wichtige Teile von `src/game/`:
 | `enemies.ts`, `boss.ts`, `threats.ts` | Horde, Verschlinger und die Zauber der Gegner                    |
 | `progression.ts`               | Stufen, Stärkungen und die Segen der Höheren Mächte                     |
 | `steigerung.ts`, `coins.ts`    | Dauerhafte Steigerungen der Klassen und die Münzen, die das Gold bringen |
-| `items.ts`, `ausruestung.ts`, `lager.ts` | Gegenstände (Eigenschaften, Würfeln), die Gegenstände jeder Klasse und das Menü der Ausrüstung |
+| `items.ts`, `ausruestung.ts`, `truhe.ts`, `lager.ts` | Gegenstände (Eigenschaften, Würfeln), die Gegenstände jeder Klasse samt Truhe und das Menü des Lagers |
 | `beute.ts`, `drops.ts`         | Beute: was aus Gegnern und der Kiste des Verschlingers fällt, der Beutel der Nacht, die Gegenstände am Boden und die Kiste |
 | `zones.ts`, `darkness.ts`, `dust.ts` | Lichtinseln, Finsternis und Verstaubung                           |
 | `world.ts`, `ground.ts`, `scenery.ts` | Welt, Boden und Kulisse                                          |
@@ -159,7 +160,7 @@ Eine neue Steigerung ist ein weiterer Eintrag. Beim Start einer Nacht wirken die
 bzw. gerade gespielte Klasse.
 
 **Speicherung.** Gold und Ränge liegen im Browser (`localStorage`, Schlüssel `dao-survivor.spielstand`) als JSON mit Versionsnummer
-(`version`, jetzt 3). Der Zugriff steckt hinter `TextStore` in `src/core/storage.ts` und `src/core/savegame.ts`; wo `localStorage` fehlt oder
+(`version`, jetzt 4). Der Zugriff steckt hinter `TextStore` in `src/core/storage.ts` und `src/core/savegame.ts`; wo `localStorage` fehlt oder
 gesperrt ist, gilt der Stand nur für die Sitzung. Eine Desktop-Fassung kann mit `useSavegameStore` eine Datei an die Stelle setzen.
 Ein unlesbarer Stand beginnt bei null; was das Spiel nicht kennt (etwa eine entfernte Steigerung), bleibt beim Speichern erhalten.
 Zurücksetzen lässt sich der Stand mit „Neues Spiel“ im Startbildschirm (mit Rückfrage); in den Entwicklerwerkzeugen genügt auch `localStorage.removeItem('dao-survivor.spielstand')`.
@@ -176,10 +177,10 @@ Spielende Steigerungen mit Charakterpunkten (`Steigerungskosten`), nicht mit Gel
 ## Gegenstände
 
 Zwischen den Nächten legen die Klassen Gegenstände an: Fackel, Helm, Gürtel, Waffe, Handschuh, Schuh, Ring, Brustrüstung und Amulett. Sie sollen
-die Steigerungen später ersetzen; das System entsteht in Paketen (Entwurf: „Item-, Loot- und Händlersystem“). **Stand: Grundlage und Beute.**
-Truhe und Händler folgen. Das Menü der Ausrüstung bleibt verborgen, solange kein Gegenstand im Spielstand liegt; der erste Fund schaltet es frei.
+die Steigerungen später ersetzen; das System entsteht in Paketen (Entwurf: „Item-, Loot- und Händlersystem“). **Stand: Grundlage, Beute und Truhe.**
+Der Händler folgt. Das Lager (Ausrüstung und Truhe) bleibt verborgen, solange kein Gegenstand im Spielstand liegt; der erste Fund schaltet es frei.
 Im Entwicklungsmodus (`npm run dev`) ist es immer da, und die Browser-Konsole erzeugt Gegenstände und Beute zum Ausprobieren
-(`__items.fuellen()`, `__items.geben(0, 'ring', 'rar')`, `__items.fallen('rar')`, `__items.kiste()`, `__items.leeren()`; Beschreibung in `src/tools/items.ts`).
+(`__items.fuellen()`, `__items.geben(0, 'ring', 'rar')`, `__items.fallen('rar')`, `__items.kiste()`, `__items.truhe(30)`, `__items.leeren()`; Beschreibung in `src/tools/items.ts`).
 
 **Aufbau.** Ein Gegenstand trägt je nach Seltenheit eine (Normal), zwei (Selten) oder drei (Rar) Eigenschaften; Legendär trägt drei und später
 die Evolution einer Fertigkeit, und gibt es vorerst nur als Ring (`LEGENDARY_SLOTS`). Jede Eigenschaft würfelt ihren Wert einmal beim Entstehen
@@ -197,10 +198,27 @@ der Rast im Licht).
 **Mindestschaden.** Rüstung nimmt von einem Treffer nicht mehr alles weg: Mindestens ein Viertel (`CONFIG.player.minDamageShare`), mindestens 1 Schaden
 kommt durch. Sonst machte Rüstung aus Steigerungen, Stärkungen und Gegenständen zusammen die Figur gegen die Horde unverwundbar.
 
-**Menü.** Bei der Klassenwahl und am Ende der Nacht öffnet **L** (oder der Knopf) die Ausrüstung der gewählten bzw. gerade gespielten Klasse: links die
-neun angelegten Gegenstände, daneben das Inventar (25 Plätze je Klasse), rechts die Karte des markierten Gegenstands mit Wurf im Bereich und
-Vergleich mit dem angelegten, darunter die Summe aller angelegten. Klick oder Enter legt an (ein Gegenstand im Inventar) bzw. ab (ein angelegter);
-Pfeile bewegen den Zeiger, 1, 2, 3 wechseln die Klasse, Esc oder L führen zurück. Maus und Tastatur sind gleichwertig. Das Menü ist
+**Lager.** Bei der Klassenwahl und am Ende der Nacht öffnet **L** (oder der Knopf) das Lager, mit der gewählten bzw. gerade gespielten Klasse. Es hat zwei
+Ansichten, die man mit **Tab** oder den Knöpfen oben wechselt:
+- *Ausrüstung:* links die neun angelegten Gegenstände, daneben das Inventar (25 Plätze je Klasse), rechts die Karte des markierten Gegenstands mit Wurf
+  im Bereich und Vergleich mit dem angelegten, darunter die Summe aller angelegten.
+- *Truhe:* links das Inventar der Klasse, daneben die Truhe, eine für alle Klassen, in Reitern zu je 25 Plätzen (siehe unten).
+
+**Gegenstände bewegen.** Enter oder Klick *nimmt einen Gegenstand auf*, der nächste Druck legt ihn auf einen anderen Platz (liegt dort einer, tauschen beide).
+Ziehen mit der Maus oder dem Finger tut dasselbe in einem Zug. Aufgenommen ist ein Gegenstand nur gemerkt: Erst das Ablegen ändert etwas, Esc legt ihn
+zurück, und ein Neuladen mitten im Zug verliert nichts. Die Aufnahme bleibt beim Wechsel der Ansicht und der Klasse bestehen; so wandert ein Gegenstand
+von einer Klasse zur anderen, und aus der Ausrüstung in die Truhe. Ein Platz der Ausrüstung nimmt nur den passenden Gegenstand an (Platz, Klasse); sonst sagt
+das Spiel unten, warum nicht. **E** erledigt das Häufige gleich ohne Aufnehmen: Es legt an, was die gezeigte Klasse tragen kann (der getragene nimmt den Platz), nimmt Angelegtes
+ab und räumt alles andere zwischen Inventar und Truhe um. Pfeile bewegen den Zeiger, 1, 2, 3 wechseln die Klasse, Esc oder L führen zurück. Alles geht
+mit Maus und Tastatur gleichwertig (`src/core/input.ts`: die Aktionen `use` und `switch`; ein späteres Gamepad belegt sie mit Knöpfen).
+
+**Truhe.** Alle Zahlen stehen in `CONFIG.items.truhe`. Ein neuer Spielstand beginnt mit einem Reiter; **Reiter** lassen sich anlegen (bis 16), umbenennen
+(höchstens 16 Zeichen), mit einer von acht Farben markieren und löschen. Die ersten fünf Reiter sind gratis, jeder weitere kostet 500 Gold mal seiner Nummer über
+fünf (der sechste 500, der siebte 1.000, …; mit `tabPrice: 0` sind alle gratis). Ein Reiter mit Gegenständen wird nie einfach gelöscht: Das Spiel fragt, und die Gegenstände ziehen
+dann in die anderen Reiter um; reicht dort der Platz nicht, bleibt alles, wie es ist. Der letzte Reiter bleibt immer. Mit der Tastatur geht es
+aus der obersten Reihe der Truhe nach oben in die Leiste der Reiter und Befehle (Links und Rechts wählen, ein Reiter öffnet sich beim Hinzeigen, Enter führt einen Befehl aus;
+mit einem Gegenstand in der Hand legt Enter ihn in den Reiter). Der Name eines Reiters lässt sich tippen: `core/input.ts` ignoriert die Tasten, solange ein
+Textfeld den Fokus hat. Die Truhe ist `src/game/truhe.ts` (Form, Namen, Preise) und `Ausruestung` (Speicherung, `move`); das Menü
 `src/game/lager.ts` (Bedienung) und `src/ui/lagerView.ts` (Oberfläche); die Zeichen der Gegenstände sind selbst gezeichnete Platzhalter
 (`src/ui/itemIcons.ts`).
 
@@ -218,16 +236,16 @@ Pfeile bewegen den Zeiger, 1, 2, 3 wechseln die Klasse, Esc oder L führen zurü
 - *Zur Figur:* Gefallene Gegenstände liegen einen Augenblick unter einem Lichtstrahl in der Farbe der Seltenheit (mit eigenem Klang) und fliegen
   dann der Figur zu, wo sie auch steht; so geht auch der Fund kurz vor Sonnenaufgang nicht verloren. Rare und legendäre Funde meldet das Spiel im Bild.
   Neben dem Geldbeutel zählt ein Stein in der Farbe des besten Funds die Gegenstände dieser Nacht.
-- *Am Ende der Nacht:* Der Beutel wandert ins Inventar der gespielten Klasse, die wertvollsten Gegenstände zuerst. Was nicht mehr hineinpasst, wird
-  zum Verkaufspreis verkauft (ein Viertel des Werts; `CONFIG.items.price`) und der Börse gutgeschrieben; die Endanzeige nennt jeden Gegenstand.
-  Die Beute bleibt auch bei einem Sturz oder Abbruch erhalten. Die Truhe (später) kommt zwischen Inventar und Verkauf.
+- *Am Ende der Nacht:* Der Beutel wandert ins Inventar der gespielten Klasse, die wertvollsten Gegenstände zuerst. Was nicht mehr hineinpasst, kommt auf
+  den ersten freien Platz der Truhe; findet er auch dort keinen, wird er zum Verkaufspreis verkauft (ein Viertel des Werts; `CONFIG.items.price`) und
+  der Börse gutgeschrieben. Die Endanzeige nennt jeden Gegenstand und wohin er kam. Die Beute bleibt auch bei einem Sturz oder Abbruch erhalten.
 - *Zufall:* Die Beute hat einen eigenen Zufallsstrom, der mit der Uhrzeit des Nachtbeginns beginnt (nicht mit dem Seed der Welt, sonst fielen nach
   jedem Neustart dieselben Gegenstände). Der Messlauf legt einen festen Anfang fest und schreibt die gefallenen Gegenstände je Nacht mit (`beute`).
 - Noch nicht umgesetzt: Die Evolution der legendären Ringe und die Zielhilfe bei ihrer Wahl (Paket „Evolutionen“); der legendäre Ring ist bis dahin
   ein Ring mit drei Eigenschaften. Auch der Händler (0,1 % Legendäres im Angebot) kommt später.
 
-**Speicherung.** Die Gegenstände liegen im selben Spielstand wie Gold und Ränge (Feld `items`; `src/game/ausruestung.ts`), Fassung 3 (der
-Pech-Schutz ist neu). Ältere Stände (Fassung 1 und 2) werden Schritt für Schritt gehoben; Gold, Ränge und Gegenstände bleiben unverändert. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
+**Speicherung.** Die Gegenstände liegen im selben Spielstand wie Gold und Ränge (Feld `items`; `src/game/ausruestung.ts`), Fassung 4 (neu:
+die Truhe mit ihren Reitern; Fassung 3 brachte den Pech-Schutz). Ältere Stände (Fassung 1 bis 3) werden Schritt für Schritt gehoben; Gold, Ränge und Gegenstände bleiben unverändert. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
 Name, unmögliche Eigenschaft), wird beim Lesen verworfen, Werte außerhalb des heutigen Bereichs rücken an dessen Rand.
 
 **Gleichgewicht.** `__items.verteilung('stark')` und `__items.kisten()` würfeln die Seltenheiten und den Pech-Schutz in der Konsole tausendfach nach

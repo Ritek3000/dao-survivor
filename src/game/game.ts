@@ -43,7 +43,7 @@ const BOSS_SEGEN_SECONDS = 3;
 /**
  * 'loading' = Modelle werden geladen, 'title' = Startbildschirm, 'select' = Klassenwahl vor der Nacht,
  * 'levelup' = Wahl einer Stärkung, 'steigerung' = Menü, in dem man zwischen den Nächten Gold für dauerhafte Ränge
- * der Klassen ausgibt, 'lager' = Menü der Ausrüstung zwischen den Nächten. Der Startbildschirm und die Pause tragen die Menüs (Optionen, Anleitung, Rückfragen) als Unterseiten.
+ * der Klassen ausgibt, 'lager' = Lager (Ausrüstung und Truhe) zwischen den Nächten. Der Startbildschirm und die Pause tragen die Menüs (Optionen, Anleitung, Rückfragen) als Unterseiten.
  */
 type Phase = 'loading' | 'title' | 'select' | 'playing' | 'paused' | 'levelup' | 'steigerung' | 'lager' | 'ended';
 
@@ -83,7 +83,7 @@ export class Game {
   /** Die beste Seltenheit im Beutel dieser Nacht, für die Anzeige. */
   private lootBest: Rarity | null = null;
   private readonly lager: Lager;
-  /** Sind die Knöpfe und die Taste zur Ausrüstung freigeschaltet? */
+  /** Sind die Knöpfe und die Taste zum Lager freigeschaltet? */
   private lagerEnabled = false;
   private readonly arsenal: Arsenal;
   private readonly threats = new Threats();
@@ -168,7 +168,12 @@ export class Game {
       this.dust.points,
     );
 
-    this.lager = new Lager(new LagerView(), this.ausruestung, () => this.steigerungen.gold);
+    this.lager = new Lager(
+      new LagerView(),
+      this.ausruestung,
+      () => this.steigerungen.gold,
+      (gold) => this.steigerungen.spend(gold),
+    );
     this.lager.onClose = () => this.closeLager();
     this.hud.onLager = () => this.openLagerFromMenu();
     this.hud.onPick = (index) => this.pick(index);
@@ -464,11 +469,12 @@ export class Game {
 
   /** Die Zeilen der Endanzeige: jeder Gegenstand der Nacht und was aus ihm wurde. */
   private lootLines(loot: LootSettlement): EndLoot[] {
-    return loot.items.map(({ item, stored, gold }) => ({
+    return loot.items.map(({ item, place, gold }) => ({
       name: itemName(item),
       rarity: item.rarity,
       detail: `${RARITY_LABELS[item.rarity]} · ${slotLabel(item.slot, item.classId)}`,
-      note: stored ? 'im Inventar' : `verkauft für ${gold} Gold (Inventar voll)`,
+      note:
+        place === 'inventar' ? 'im Inventar' : place === 'truhe' ? 'in der Truhe (Inventar voll)' : `verkauft für ${gold} Gold (Inventar und Truhe voll)`,
     }));
   }
 
@@ -581,7 +587,7 @@ export class Game {
   /** Warnt vor dem Löschen des Spielstands und nennt, was verloren ginge. */
   private confirmNewGame(): void {
     const ranks = CLASSES.reduce((sum, entry) => sum + this.steigerungen.totalRanks(entry.id), 0);
-    const items = CLASSES.reduce((sum, entry) => sum + this.ausruestung.count(entry.id), 0);
+    const items = CLASSES.reduce((sum, entry) => sum + this.ausruestung.count(entry.id), this.ausruestung.chestCount());
     const lost: string[] = [];
     if (this.steigerungen.gold > 0) lost.push(`${this.steigerungen.gold} Gold`);
     if (ranks > 0) lost.push(`${ranks} Ränge der Steigerungen`);
@@ -958,7 +964,7 @@ export class Game {
   }
 
   /**
-   * Schaltet die Ausrüstung frei: im Entwicklungsmodus immer, im fertigen Spiel erst, wenn es Gegenstände gibt.
+   * Schaltet das Lager frei: im Entwicklungsmodus immer, im fertigen Spiel erst, wenn es Gegenstände gibt.
    * Bis die Beute (siehe unten) Gegenstände liefert, bliebe das Menü sonst ein leerer Bildschirm.
    */
   private updateLagerAccess(): void {
@@ -966,7 +972,7 @@ export class Game {
     this.hud.setLagerEnabled(this.lagerEnabled);
   }
 
-  /** Öffnet die Ausrüstung aus der Klassenwahl (für die markierte Klasse) oder vom Ende der Nacht (für die gespielte). */
+  /** Öffnet das Lager aus der Klassenwahl (für die markierte Klasse) oder vom Ende der Nacht (für die gespielte). */
   private openLagerFromMenu(): void {
     if (!this.lagerEnabled) return;
     if (this.phase === 'select') this.openLager(this.selected);

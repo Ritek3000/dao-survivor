@@ -1,5 +1,5 @@
 /**
- * Der Spielstand, der den Neustart überdauern soll: das Gold, die Ränge der Steigerungen und die Gegenstände jeder Klasse.
+ * Der Spielstand, der den Neustart überdauern soll: das Gold, die Ränge der Steigerungen, die Gegenstände jeder Klasse und die Truhe.
  *
  * Wo er liegt, versteckt `TextStore` (siehe `storage.ts`): im Browser in `localStorage`, in einer Desktop-Hülle
  * später etwa in einer Datei; dafür gibt es `useSavegameStore`. Gespeichert wird als JSON mit Versionsnummer.
@@ -13,7 +13,7 @@
 import { browserTextStore, type TextStore } from './storage';
 
 /** Die Fassung des Formats, die dieser Code schreibt. */
-export const SAVEGAME_VERSION = 3;
+export const SAVEGAME_VERSION = 4;
 
 /** Obergrenze für einen Rang beim Lesen; schützt vor Unsinn in einer von Hand bearbeiteten Datei. */
 const MAX_STORED_RANK = 99;
@@ -21,11 +21,20 @@ const MAX_STORED_RANK = 99;
 const MAX_STORED_SLOTS = 200;
 /** Obergrenze für die Zahl der Boss-Kisten ohne Legendäres, die der Pech-Schutz zählt. */
 const MAX_STORED_PITY = 99;
+/** Obergrenzen für die Reiter der Truhe beim Lesen; das Spiel selbst kennt weniger (`CONFIG.items.truhe`). */
+const MAX_STORED_TABS = 64;
+const MAX_STORED_NAME = 40;
+const MAX_STORED_COLOR = 99;
 
 /**
  * Die Gegenstände der Klassen, so wie sie im Spielstand liegen. Was ein Gegenstand ist, kennt `game/items.ts`; dieser Teil
  * reicht die Einträge unverändert weiter und prüft sie nicht, damit auch Gegenstände einer anderen Fassung erhalten bleiben.
  */
+export interface StoredChest {
+  /** Die Reiter in ihrer Reihenfolge; jeder hat einen Namen, eine Farbe (Nummer) und seine Plätze (leere als `null`). */
+  tabs: { name: string; color: number; slots: unknown[] }[];
+}
+
 export interface StoredItems {
   /** Die nächste Nummer, die ein neuer Gegenstand bekommt. */
   next: number;
@@ -33,6 +42,8 @@ export interface StoredItems {
   classes: Record<string, { inventory: unknown[]; equipment: Record<string, unknown> }>;
   /** Seit Fassung 3: Wie viele Boss-Kisten in Folge ohne Legendäres blieben (Pech-Schutz, siehe `game/beute.ts`). */
   pity: number;
+  /** Seit Fassung 4: die Truhe für alle Klassen. Ohne Reiter beginnt das Spiel mit einem leeren. */
+  chest: StoredChest;
 }
 
 export interface Savegame {
@@ -61,7 +72,7 @@ export function emptySavegame(): Savegame {
 }
 
 function emptyItems(): StoredItems {
-  return { next: 1, classes: {}, pity: 0 };
+  return { next: 1, classes: {}, pity: 0, chest: { tabs: [] } };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -89,6 +100,7 @@ export function parseSavegame(text: string | null): Savegame {
   let raw = parsed;
   if (version < 2) raw = von1auf2(raw);
   if (version < 3) raw = von2auf3(raw);
+  if (version < 4) raw = von3auf4(raw);
 
   if (typeof raw.version === 'number' && Number.isFinite(raw.version)) {
     // Ein Stand aus einer neueren Fassung wird so gut gelesen wie möglich, seine Nummer aber nicht zurückgesetzt.
@@ -121,11 +133,32 @@ function von2auf3(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, version: 3, items: { ...items, pity: 0 } };
 }
 
+/** Fassung 3 kannte keine Truhe; sie beginnt mit einem leeren Reiter (den legt das Spiel an). */
+function von3auf4(raw: Record<string, unknown>): Record<string, unknown> {
+  const items = isRecord(raw.items) ? raw.items : emptyItems();
+  return { ...raw, version: 4, items: { ...items, chest: { tabs: [] } } };
+}
+
+function parseChest(raw: unknown): StoredChest {
+  const chest: StoredChest = { tabs: [] };
+  if (!isRecord(raw) || !Array.isArray(raw.tabs)) return chest;
+  for (const tab of raw.tabs.slice(0, MAX_STORED_TABS)) {
+    if (!isRecord(tab)) continue;
+    chest.tabs.push({
+      name: typeof tab.name === 'string' ? tab.name.slice(0, MAX_STORED_NAME) : '',
+      color: wholeNumber(tab.color, MAX_STORED_COLOR),
+      slots: Array.isArray(tab.slots) ? tab.slots.slice(0, MAX_STORED_SLOTS) : [],
+    });
+  }
+  return chest;
+}
+
 function parseItems(raw: unknown): StoredItems {
   const items = emptyItems();
   if (!isRecord(raw)) return items;
   items.next = Math.max(1, wholeNumber(raw.next, Number.MAX_SAFE_INTEGER));
   items.pity = wholeNumber(raw.pity, MAX_STORED_PITY);
+  items.chest = parseChest(raw.chest);
   if (!isRecord(raw.classes)) return items;
   for (const [classId, perClass] of Object.entries(raw.classes)) {
     if (!isRecord(perClass)) continue;

@@ -195,6 +195,16 @@ export class Steigerungen {
     this.persistNow();
   }
 
+  /** Zahlt Gold aus der Geldbörse, etwa für einen Reiter der Truhe. Gibt false zurück, wenn es nicht reicht. */
+  spend(gold: number): boolean {
+    this.refresh();
+    const price = Math.floor(gold);
+    if (!(price >= 0) || price > this.save.gold) return false;
+    this.save.gold -= price;
+    this.persistNow();
+    return true;
+  }
+
   /** Setzt einen Rang, ohne zu bezahlen und ohne zu speichern. Nur für Werkzeuge; das Spiel selbst kauft mit `buy`. */
   setRank(classId: ClassId, steigerung: Steigerung, rank: number): void {
     const ranks = (this.save.ranks[classId] ??= {});

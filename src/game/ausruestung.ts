@@ -1,9 +1,13 @@
 /**
- * Die Gegenstände jeder Klasse: ein Inventar mit festen Plätzen und die neun angelegten Gegenstände.
+ * Die Gegenstände jeder Klasse: ein Inventar mit festen Plätzen und die neun angelegten Gegenstände, dazu die Truhe, die allen
+ * Klassen gemeinsam gehört (`truhe.ts`).
  *
  * Jede Klasse hat ihr eigenes Inventar und ihre eigene Ausrüstung; das Gold gehört weiterhin allen gemeinsam
  * (`steigerung.ts`). Gespeichert wird im Spielstand (`core/savegame.ts`, Feld `items`). Wie bei den Steigerungen liest jede
  * Änderung den gespeicherten Stand neu, damit zwei offene Tabs einander nicht überschreiben.
+ *
+ * Ein Gegenstand wandert zwischen Inventar, Truhe und Ausrüstung mit `move`: Beide Plätze ändern sich in einem Zug oder keiner,
+ * so geht auch bei einem Fehlschlag oder einem Neuladen nichts verloren.
  *
  * Angelegt wird nur zwischen den Nächten: Die Werte einer Nacht stehen beim Start fest (`apply` über `Progression.reset`).
  */
@@ -13,6 +17,24 @@ import { loadSavegame, writeSavegame, type Savegame, type StoredItems } from '..
 import { CLASSES, type ClassId } from './classes';
 import { applyItems, canEquip, ITEM_SLOTS, parseItem, propertyTotals, type Item, type ItemSlot, type PropertyId } from './items';
 import type { Stats } from './progression';
+import { defaultReiterName, emptyReiter, nextReiterPrice, parseTruhe, serializeTruhe, type TruheReiter } from './truhe';
+
+/** Ein Platz, auf dem ein Gegenstand liegen kann. */
+export type Place =
+  | { kind: 'inventar'; classId: ClassId; index: number }
+  | { kind: 'ausruestung'; classId: ClassId; slot: ItemSlot }
+  | { kind: 'truhe'; tab: number; index: number };
+
+export function samePlace(a: Place, b: Place): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'inventar' && b.kind === 'inventar') return a.classId === b.classId && a.index === b.index;
+  if (a.kind === 'ausruestung' && b.kind === 'ausruestung') return a.classId === b.classId && a.slot === b.slot;
+  if (a.kind === 'truhe' && b.kind === 'truhe') return a.tab === b.tab && a.index === b.index;
+  return false;
+}
+
+/** Was beim Löschen eines Reiters geschehen ist. */
+export type RemoveResult = 'ok' | 'letzter' | 'belegt' | 'voll';
 
 interface ClassItems {
   /** Immer `CONFIG.items.inventorySize` Plätze; leere sind `null`. */
@@ -32,6 +54,7 @@ export class Ausruestung {
   persist = true;
   private save: Savegame = loadSavegame();
   private classes = new Map<ClassId, ClassItems>();
+  private tabs: TruheReiter[] = [];
   private nextId = 1;
   private pityCount = 0;
 
@@ -45,16 +68,16 @@ export class Ausruestung {
     this.parse();
   }
 
-  /** Gibt es Gegenstände, die bei einem neuen Spiel verloren gingen? */
+  /** Gibt es Gegenstände, die bei einem neuen Spiel verloren gingen (auch in der Truhe)? */
   hasAny(): boolean {
     this.refresh();
-    return CLASSES.some((entry) => this.count(entry.id) > 0);
+    return CLASSES.some((entry) => this.count(entry.id) > 0) || this.chestCount() > 0;
   }
 
-  /** Löscht alle Gegenstände; Gold und Ränge bleiben. Der Messlauf (`persist = false`) schreibt dabei nichts. */
+  /** Löscht alle Gegenstände, auch die der Truhe; Gold und Ränge bleiben. Der Messlauf (`persist = false`) schreibt dabei nichts. */
   reset(): void {
     this.refresh();
-    this.save.items = { next: 1, classes: {}, pity: 0 };
+    this.save.items = { next: 1, classes: {}, pity: 0, chest: { tabs: [] } };
     this.parse();
     this.persistNow();
   }
@@ -77,6 +100,138 @@ export class Ausruestung {
   count(classId: ClassId): number {
     const { inventory } = this.of(classId);
     return this.equippedItems(classId).length + inventory.filter((item) => item !== null).length;
+  }
+
+  /** Die Reiter der Truhe. Es gibt immer mindestens einen. */
+  truhe(): readonly TruheReiter[] {
+    return this.tabs;
+  }
+
+  /** Anzahl der Gegenstände in der Truhe, über alle Reiter. */
+  chestCount(): number {
+    return this.tabs.reduce((sum, tab) => sum + tab.slots.filter((item) => item !== null).length, 0);
+  }
+
+  /** Der Gegenstand auf einem Platz; `null`, wenn er leer ist oder es den Platz nicht gibt. */
+  itemAt(place: Place): Item | null {
+    switch (place.kind) {
+      case 'inventar':
+        return this.of(place.classId).inventory[place.index] ?? null;
+      case 'ausruestung':
+        return this.of(place.classId).equipment[place.slot] ?? null;
+      case 'truhe':
+        return this.tabs[place.tab]?.slots[place.index] ?? null;
+    }
+  }
+
+  /**
+   * Warum ein Gegenstand nicht von `from` nach `to` wandern kann; `null`, wenn es geht. Nur die Ausrüstung stellt Bedingungen:
+   * Der Gegenstand muss auf den Platz passen und zur Klasse gehören, und tauscht er mit einem anderen, muss auch dieser zurück
+   * auf den Platz passen, den der erste verlässt.
+   */
+  refusal(from: Place, to: Place): string | null {
+    const item = this.itemAt(from);
+    if (!item) return 'Dort liegt nichts.';
+    const reason = this.refusalFor(item, to);
+    if (reason) return reason;
+    const other = this.itemAt(to);
+    if (other && this.refusalFor(other, from)) return 'Der andere Gegenstand passt nicht auf den freiwerdenden Platz.';
+    return null;
+  }
+
+  /** Verschiebt den Gegenstand von `from` nach `to`; liegt dort schon einer, tauschen beide. Gibt false zurück, wenn es nicht geht. */
+  move(from: Place, to: Place): boolean {
+    this.refresh();
+    if (samePlace(from, to) || this.refusal(from, to)) return false;
+    const item = this.itemAt(from);
+    const other = this.itemAt(to);
+    if (!item) return false;
+    this.put(to, item);
+    this.put(from, other);
+    this.persistNow();
+    return true;
+  }
+
+  /** Der erste freie Platz im Inventar der Klasse. */
+  freeInventory(classId: ClassId): Place | null {
+    const index = this.of(classId).inventory.indexOf(null);
+    return index < 0 ? null : { kind: 'inventar', classId, index };
+  }
+
+  /** Der erste freie Platz der Truhe; `first` ist der Reiter, in dem zuerst gesucht wird, danach der Reihe nach. */
+  freeChest(first = 0): Place | null {
+    const order = [first, ...this.tabs.keys()].filter((tab, position, all) => this.tabs[tab] && all.indexOf(tab) === position);
+    for (const tab of order) {
+      const index = this.tabs[tab]?.slots.indexOf(null) ?? -1;
+      if (index >= 0) return { kind: 'truhe', tab, index };
+    }
+    return null;
+  }
+
+  /** Legt einen Gegenstand auf den ersten freien Platz der Truhe. Gibt false zurück, wenn alle Reiter voll sind. */
+  addToChest(item: Item): boolean {
+    this.refresh();
+    const place = this.freeChest();
+    if (!place) return false;
+    this.put(place, { ...item, id: item.id > 0 ? item.id : this.nextId++ });
+    this.persistNow();
+    return true;
+  }
+
+  /** Was der nächste Reiter kostet (Gold); `null`, wenn es keinen weiteren geben darf. Bezahlen muss der Aufrufer. */
+  nextTabPrice(): number | null {
+    return nextReiterPrice(this.tabs.length);
+  }
+
+  /** Legt einen neuen, leeren Reiter an und gibt seine Stelle zurück; -1, wenn es schon die Höchstzahl gibt. */
+  addTab(): number {
+    this.refresh();
+    if (nextReiterPrice(this.tabs.length) === null) return -1;
+    const { colors } = CONFIG.items.truhe;
+    // Die Farbe läuft der Reihe nach durch, damit neue Reiter sich unterscheiden.
+    this.tabs.push(emptyReiter(this.freeTabName(), this.tabs.length % colors.length));
+    this.persistNow();
+    return this.tabs.length - 1;
+  }
+
+  renameTab(index: number, name: string): boolean {
+    this.refresh();
+    const tab = this.tabs[index];
+    if (!tab || name === '') return false;
+    tab.name = name;
+    this.persistNow();
+    return true;
+  }
+
+  colorTab(index: number, color: number): boolean {
+    this.refresh();
+    const tab = this.tabs[index];
+    if (!tab) return false;
+    tab.color = ((color % CONFIG.items.truhe.colors.length) + CONFIG.items.truhe.colors.length) % CONFIG.items.truhe.colors.length;
+    this.persistNow();
+    return true;
+  }
+
+  /**
+   * Löscht einen Reiter. Ein voller Reiter geht nur mit `moveItems`: Seine Gegenstände ziehen dann auf freie Plätze der anderen
+   * Reiter um. Es geht nie etwas verloren: Reicht der Platz nicht (`voll`) oder ist es der letzte Reiter (`letzter`), bleibt alles.
+   */
+  removeTab(index: number, moveItems: boolean): RemoveResult {
+    this.refresh();
+    const tab = this.tabs[index];
+    if (!tab) return 'letzter';
+    if (this.tabs.length <= 1) return 'letzter';
+    const items = tab.slots.filter((item): item is Item => item !== null);
+    if (items.length > 0 && !moveItems) return 'belegt';
+    const free = this.tabs.reduce((sum, other) => (other === tab ? sum : sum + other.slots.filter((slot) => slot === null).length), 0);
+    if (items.length > free) return 'voll';
+    this.tabs.splice(index, 1);
+    for (const item of items) {
+      const place = this.freeChest();
+      if (place) this.put(place, item);
+    }
+    this.persistNow();
+    return 'ok';
   }
 
   /** Wie viele Boss-Kisten in Folge ohne Legendäres blieben; je eine hebt die Chance der nächsten (`game/beute.ts`). */
@@ -145,6 +300,41 @@ export class Ausruestung {
     for (const item of items) classItems.equipment[item.slot] = { ...item, id: item.id > 0 ? item.id : this.nextId++ };
   }
 
+  /** Der Name für einen neuen Reiter: „Reiter n“ mit der kleinsten Nummer, die noch nicht vergeben ist. */
+  private freeTabName(): string {
+    let number = this.tabs.length + 1;
+    while (this.tabs.some((tab) => tab.name === defaultReiterName(number))) number++;
+    return defaultReiterName(number);
+  }
+
+  private refusalFor(item: Item, to: Place): string | null {
+    if (to.kind !== 'ausruestung') return null;
+    if (item.slot !== to.slot) return 'Das gehört auf einen anderen Platz.';
+    if (!canEquip(item, to.classId)) {
+      const owner = CLASSES.find((entry) => entry.id === item.classId);
+      return owner ? `Nur der ${owner.name} kann das tragen.` : 'Das kann diese Klasse nicht tragen.';
+    }
+    return null;
+  }
+
+  /** Legt einen Gegenstand (oder nichts) auf einen Platz, ohne zu prüfen und ohne zu speichern. */
+  private put(place: Place, item: Item | null): void {
+    switch (place.kind) {
+      case 'inventar':
+        this.of(place.classId).inventory[place.index] = item;
+        break;
+      case 'ausruestung':
+        if (item) this.of(place.classId).equipment[place.slot] = item;
+        else delete this.of(place.classId).equipment[place.slot];
+        break;
+      case 'truhe': {
+        const tab = this.tabs[place.tab];
+        if (tab) tab.slots[place.index] = item;
+        break;
+      }
+    }
+  }
+
   private of(classId: ClassId): ClassItems {
     let items = this.classes.get(classId);
     if (!items) {
@@ -159,6 +349,9 @@ export class Ausruestung {
     const stored = this.save.items;
     this.nextId = stored.next;
     this.pityCount = stored.pity;
+    this.tabs = parseTruhe(stored.chest, (item) => {
+      this.nextId = Math.max(this.nextId, item.id + 1);
+    });
     for (const entry of CLASSES) {
       const raw = stored.classes[entry.id];
       const items = emptyClassItems();
@@ -189,7 +382,7 @@ export class Ausruestung {
       const items = this.of(entry.id);
       classes[entry.id] = { inventory: [...items.inventory], equipment: { ...items.equipment } };
     }
-    return { next: this.nextId, classes, pity: this.pityCount };
+    return { next: this.nextId, classes, pity: this.pityCount, chest: serializeTruhe(this.tabs) };
   }
 
   /**
