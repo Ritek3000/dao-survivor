@@ -154,9 +154,8 @@ export class Evolutions {
   }
 
   /** Der Mittelpunkt, zu dem der Staub beim Ausholen zieht: ein Stück vor der Figur, in Richtung des Ziels. */
-  windupStart(weapon: OwnedWeapon, x: number, z: number, angle: number, seconds: number): void {
+  windupStart(x: number, z: number, angle: number, seconds: number): void {
     this.host.effects.evolution.cleaveMark(x + Math.sin(angle) * K.cleaveImpact, z + Math.cos(angle) * K.cleaveImpact, K.cleaveReach, seconds);
-    void weapon;
   }
 
   /** Während des Ausholens zieht der Staub nahe Gegner leicht zum Einschlagpunkt. */

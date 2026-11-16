@@ -194,12 +194,14 @@ export class EvolutionEffects {
     for (let i = 0; i < shown; i++) {
       const site = sites[i];
       if (!site) continue;
+      // Flach und um die Hochachse kreiselnd: Von der Kamera aus zeigt die Klinge so immer ihre Fläche.
       pose.position.set(site.x, 1.1, site.z);
-      pose.rotation.set(time * 16 + i, site.angle, 0);
-      pose.scale.setScalar(1.5);
+      pose.rotation.set(1.15, site.angle + time * 14 + i, 0, 'YXZ');
+      pose.scale.setScalar(2.3);
       pose.updateMatrix();
       this.axeMesh.setMatrixAt(i, pose.matrix);
     }
+    pose.rotation.order = 'XYZ';
     this.axeMesh.count = shown;
     this.axeMesh.instanceMatrix.needsUpdate = true;
   }

@@ -438,7 +438,7 @@ export class Arsenal {
     if (!target) return;
     weapon.windingUp = true;
     if (weapon.rank === EVOLUTION_RANK && hasFlag(weapon.rules, 'spalter')) {
-      this.evolutions.windupStart(weapon, origin.x, origin.z, Math.atan2(target.x - origin.x, target.z - origin.z), lead);
+      this.evolutions.windupStart(origin.x, origin.z, Math.atan2(target.x - origin.x, target.z - origin.z), lead);
     }
     // Wuchthieb und Wirbelschlag schützen die Figur beim Ausholen; der Wirbel noch durch das Ausschwingen.
     if (weapon.rules.flags.length > 0 && hasFlag(weapon.rules, 'schutz')) {
