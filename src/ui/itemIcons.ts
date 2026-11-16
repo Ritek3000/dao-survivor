@@ -1,5 +1,5 @@
 import type { ClassId } from '../game/classes';
-import type { ItemSlot } from '../game/items';
+import { ITEM_SLOTS, type ItemSlot } from '../game/items';
 
 /** Welches Zeichen ein Gegenstand trägt: der Platz, bei Waffe und Fackel nach Klasse. */
 export type ItemIconId = Exclude<ItemSlot, 'waffe'> | 'axt' | 'bogen' | 'buch' | 'kerze';
@@ -11,8 +11,8 @@ export function itemIconId(slot: ItemSlot, classId?: ClassId): ItemIconId {
 }
 
 /**
- * Selbst gezeichnete Zeichen als Platzhalter, 24 × 24, nur Linien: Die Farbe kommt von der Seltenheit (`currentColor`).
- * Wer echte Bilder hat, ersetzt `iconMarkup`; nichts anderes im Spiel hängt an diesen Pfaden.
+ * Selbst gezeichnete Zeichen, 24 × 24, nur Linien: Die Farbe kommt von der Seltenheit (`currentColor`). Sie stehen für leere
+ * Plätze der Ausrüstung und springen für ein Bild ein, das nicht geladen werden kann.
  */
 const ICONS: Readonly<Record<ItemIconId, string>> = {
   fackel:
@@ -30,10 +30,54 @@ const ICONS: Readonly<Record<ItemIconId, string>> = {
   amulett: '<path d="M5 3l7 9 7-9"/><circle cx="12" cy="16.5" r="4"/>',
 };
 
-/** Der Inhalt eines SVG-Zeichens; die Pfade oben sind feste Zeichenketten, keine Eingaben. */
+/** Das SVG-Zeichen als Markup; die Pfade oben sind feste Zeichenketten, keine Eingaben. */
+function iconMarkup(id: ItemIconId): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[id]}</svg>`;
+}
+
+/** Das Umrisszeichen eines Platzes: für leere Plätze der Ausrüstung. */
 export function iconElement(id: ItemIconId): HTMLSpanElement {
   const node = document.createElement('span');
   node.className = 'icon';
-  node.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[id]}</svg>`;
+  node.innerHTML = iconMarkup(id);
   return node;
+}
+
+/**
+ * Welches Bild ein Gegenstand trägt: sein Platz und der Stil einer Klasse. Fackel, Waffe und legendärer Ring gehören einer
+ * Klasse und tragen ihren Stil; alles andere kann jede Klasse tragen und zeigt den Stil der Klasse, deren Lager offen ist
+ * (siehe `game/lager.ts`).
+ */
+export interface ItemImage {
+  slot: ItemSlot;
+  look: ClassId;
+}
+
+/** Adresse eines Bildes; über BASE_URL, damit der Build mit relativen Pfaden läuft (siehe CLAUDE.md, „Zielplattform offen“). */
+export function itemImageUrl({ slot, look }: ItemImage): string {
+  return `${import.meta.env.BASE_URL}icons/items/${slot}-${look}.webp`;
+}
+
+/** Das Bild eines Gegenstands; lässt es sich nicht laden, tritt das Umrisszeichen `fallback` an seine Stelle. */
+export function itemImageElement(image: ItemImage, fallback: ItemIconId): HTMLSpanElement {
+  const node = document.createElement('span');
+  node.className = 'icon picture';
+  const picture = document.createElement('img');
+  picture.alt = '';
+  picture.draggable = false;
+  picture.decoding = 'async';
+  picture.addEventListener('error', () => {
+    node.className = 'icon';
+    node.innerHTML = iconMarkup(fallback);
+  });
+  picture.src = itemImageUrl(image);
+  node.append(picture);
+  return node;
+}
+
+/** Lädt alle Bilder einmal vor, damit sie beim ersten Öffnen des Lagers ohne Verzögerung stehen (zusammen rund 0,5 MB). */
+export function preloadItemImages(looks: readonly ClassId[]): void {
+  for (const slot of ITEM_SLOTS) {
+    for (const look of looks) new Image().src = itemImageUrl({ slot, look });
+  }
 }

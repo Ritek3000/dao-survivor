@@ -1,6 +1,6 @@
 import type { Rarity } from '../game/items';
 import { element, span } from './dom';
-import { iconElement, type ItemIconId } from './itemIcons';
+import { iconElement, itemImageElement, type ItemIconId, type ItemImage } from './itemIcons';
 
 /** Ein Gegenstand, wie ihn die Oberfläche zeigt; den Text und die Zahlen bereitet `game/lager.ts` auf. */
 export interface ItemView {
@@ -8,7 +8,10 @@ export interface ItemView {
   rarity: Rarity;
   /** Zweite Zeile unter dem Namen, etwa „Rar · Ring“. */
   subtitle: string;
+  /** Das Umrisszeichen des Gegenstands; es tritt an die Stelle des Bildes, falls das nicht geladen werden kann. */
   icon: ItemIconId;
+  /** Das Bild des Gegenstands: sein Platz im Stil einer Klasse. */
+  image: ItemImage;
   props: readonly { text: string; range: string; quality: number }[];
   /** Hinweis zur Bindung an eine Klasse („Nur für den Magier“), sonst `null`. */
   bound: string | null;
@@ -287,7 +290,7 @@ export class LagerView {
     head.className = 'head';
     const title = document.createElement('div');
     title.append(span('name', item.name), span('sub', item.subtitle));
-    head.append(iconElement(item.icon), title);
+    head.append(itemImageElement(item.image, item.icon), title);
     const props = document.createElement('ul');
     props.className = 'props';
     for (const prop of item.props) {
@@ -381,8 +384,8 @@ export class LagerView {
     button.type = 'button';
     button.className = slot.item ? `slot rarity-${slot.item.rarity}` : 'slot empty';
     button.title = slot.item ? slot.item.name : slot.label;
-    const icon = slot.item?.icon ?? slot.icon;
-    if (icon) button.append(iconElement(icon));
+    if (slot.item) button.append(itemImageElement(slot.item.image, slot.item.icon));
+    else if (slot.icon) button.append(iconElement(slot.icon));
     if (zone === 'ausruestung') button.append(span('label', slot.label));
     if (slot.item && slot.price) {
       button.append(span(slot.price.poor ? 'price poor' : 'price', slot.price.text));
@@ -481,7 +484,7 @@ export class LagerView {
   private makeGhost(item: ItemView): HTMLElement {
     const ghost = document.createElement('div');
     ghost.className = `ghost rarity-${item.rarity}`;
-    ghost.append(iconElement(item.icon));
+    ghost.append(itemImageElement(item.image, item.icon));
     return ghost;
   }
 }

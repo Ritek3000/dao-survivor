@@ -34,9 +34,9 @@ import {
   type SlotView,
   type TruheModel,
 } from '../ui/lagerView';
-import { itemIconId } from '../ui/itemIcons';
+import { itemIconId, preloadItemImages } from '../ui/itemIcons';
 import { samePlace, type Ausruestung, type Place, type Scope } from './ausruestung';
-import { CLASSES, type ClassDef } from './classes';
+import { CLASSES, type ClassDef, type ClassId } from './classes';
 import { needsConfirm } from './haendler';
 import {
   compareItems,
@@ -56,13 +56,18 @@ import {
 } from './items';
 import { cleanReiterName } from './truhe';
 
-function itemView(item: Item): ItemView {
+/**
+ * Was die Oberfläche von einem Gegenstand zeigt. `viewer` ist die Klasse, deren Lager offen ist: Gegenstände ohne Klasse
+ * (alles außer Fackel, Waffe und legendärem Ring) zeigen ihr Bild im Stil dieser Klasse, damit das Lager einer Klasse nach ihr aussieht.
+ */
+function itemView(item: Item, viewer: ClassId): ItemView {
   const owner = item.classId ? CLASSES.find((entry) => entry.id === item.classId) : undefined;
   return {
     name: itemName(item),
     rarity: item.rarity,
     subtitle: `${RARITY_LABELS[item.rarity]} · ${slotLabel(item.slot, item.classId)}`,
     icon: itemIconId(item.slot, item.classId),
+    image: { slot: item.slot, look: item.classId ?? viewer },
     props: item.props.map((property) => ({
       text: describeProperty(property),
       range: formatRange(property.id, item.slot),
@@ -121,6 +126,7 @@ export class Lager {
     private readonly view: LagerView,
     private readonly ausruestung: Ausruestung,
   ) {
+    preloadItemImages(CLASSES.map((entry) => entry.id));
     view.onClass = (index) => this.selectClass(index);
     view.onMode = (mode) => this.setMode(mode);
     view.onActivate = (zone, index) => {
@@ -901,7 +907,7 @@ export class Lager {
     const comparable = canEquip(item, id);
     const worn = comparable ? this.ausruestung.equipped(id, item.slot) : null;
     return {
-      item: itemView(item),
+      item: itemView(item, id),
       emptyText: '',
       compare: comparable
         ? compareItems(item, worn).map(({ id: property, delta }) => ({
@@ -929,7 +935,7 @@ export class Lager {
         const slot = ITEM_SLOTS[this.cursor];
         const item = slot ? this.ausruestung.equipped(id, slot) : null;
         return {
-          item: item ? itemView(item) : null,
+          item: item ? itemView(item, id) : null,
           emptyText: slot ? `${slotLabel(slot, id)}: nichts angelegt.` : '',
           compare: null,
           compareTitle: '',
@@ -1039,7 +1045,8 @@ export class Lager {
     const tabs = this.ausruestung.truhe();
     const { colors } = CONFIG.items.truhe;
     const price = this.ausruestung.nextTabPrice();
-    const inventory = this.ausruestung.inventory(this.playerClass.id);
+    const { id } = this.playerClass;
+    const inventory = this.ausruestung.inventory(id);
     const chestTabs = tabs.map((tab) => ({
       name: tab.name,
       color: colors[tab.color] ?? INVENTORY_COLOR,
@@ -1053,7 +1060,7 @@ export class Lager {
         ? [{ name: 'Inventar', color: INVENTORY_COLOR, count: inventory.filter((item) => item !== null).length, size: inventory.length }, ...chestTabs]
         : chestTabs,
       active: this.tab + this.offset,
-      slots: shown.map((item) => ({ label: '', icon: null, item: item ? itemView(item) : null })),
+      slots: shown.map((item) => ({ label: '', icon: null, item: item ? itemView(item, id) : null })),
       commands: haendler
         ? []
         : [
@@ -1068,10 +1075,11 @@ export class Lager {
   private haendlerModel(): HaendlerModel {
     const stand = this.ausruestung.haendler();
     const { gold } = this;
+    const { id } = this.playerClass;
     const priced = (item: Item | null, price: number): SlotView => ({
       label: '',
       icon: null,
-      item: item ? itemView(item) : null,
+      item: item ? itemView(item, id) : null,
       price: item ? { text: String(price), poor: price > gold } : null,
     });
     const reroll = this.ausruestung.nextRerollPrice();
@@ -1103,13 +1111,13 @@ export class Lager {
       return {
         label: slotLabel(slot, id),
         icon: itemIconId(slot, id),
-        item: item ? itemView(item) : null,
+        item: item ? itemView(item, id) : null,
       };
     });
     const inventory: SlotView[] = this.ausruestung.inventory(id).map((item) => ({
       label: '',
       icon: null,
-      item: item ? itemView(item) : null,
+      item: item ? itemView(item, id) : null,
     }));
     const summary = [...this.ausruestung.totals(id)].map(([property, total]) => ({
       text: `${propertyName(property)} ${formatValue(property, total)}`,
