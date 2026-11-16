@@ -10,6 +10,8 @@
   --gold: #ffc83d;
   /* Bronzebeschläge der Lebensgruppe und Zierlinien. */
   --fitting: #8a7447;
+  /* Höhe der Seite im Lager (siehe `#lager-page`). */
+  --lager-page-height: 900px;
 }
 
 html,
@@ -1139,15 +1141,62 @@ body[data-vitals^='bottom'] #loot {
 }
 
 /*
- * Ausrüstung: links die angelegten Gegenstände (3 × 3), daneben das Inventar (5 × 5), rechts die Karte des markierten
- * Gegenstands und die Summe der angelegten. Die Farbe eines Gegenstands folgt seiner Seltenheit.
+ * Nichts im Lager darf wandern, wenn die Karte des markierten Gegenstands die Höhe wechselt (sie ist je nach Eigenschaften,
+ * Vergleich und Preis zwischen etwa 170 und 380 px hoch). Die Lage der Seite hängt deshalb nicht von ihrem Inhalt ab:
+ *  - Die Seite (`#lager-page`) beginnt an einer Stelle, die nur von der Fensterhöhe abhängt, und hat eine feste Mindesthöhe.
+ *    Kopf und Raster stehen also immer am selben Ort; wird der Inhalt höher als die Seite, wächst sie nach unten.
+ *  - Der Fuß (Rückmeldung, Zurück, Tasten) klebt am unteren Rand der Seite statt am Ende des Inhalts.
+ *  - Der Platz für die Bildlaufleiste ist immer reserviert, sonst rückte die Seite seitlich, sobald sie sie braucht.
  */
 #lager {
-  justify-content: safe center;
+  justify-content: flex-start;
   overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
   background: rgba(3, 3, 4, 0.97);
 }
 
+#lager-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  /* Mittig im Fenster, gerechnet mit der Mindesthöhe und nicht mit dem Inhalt (24 px Rand oben und unten des Lagers). */
+  margin-top: max(0px, calc((100vh - 48px - var(--lager-page-height)) / 2));
+  /* Hoch genug für die höchste Karte neben einer vollen Übersicht; in niedrigeren Fenstern füllt die Seite das Fenster. */
+  min-height: min(100%, var(--lager-page-height));
+}
+
+#lager-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: stretch;
+  gap: 10px;
+  margin-top: auto;
+  /*
+   * Ist das Fenster niedriger als die Seite, bleibt der Fuß am unteren Rand des Fensters stehen, statt mit dem Inhalt zu
+   * wandern; der Inhalt läuft darunter weg und blendet aus. Die 24 px Rand des Lagers gehören dazu, damit nichts darunter hervorschaut.
+   */
+  position: sticky;
+  bottom: -24px;
+  z-index: 1;
+  padding: 20px 0 24px;
+  margin-bottom: -24px;
+  background: linear-gradient(transparent, rgb(3, 3, 4) 20px);
+}
+
+/* `scrollIntoView` (siehe `LagerView.setCursor`) soll den markierten Platz nicht unter den klebenden Fuß schieben. */
+#lager .slot,
+#lager .rtab,
+#lager .rcmd {
+  scroll-margin-bottom: 160px;
+}
+
+/*
+ * Ausrüstung: links die angelegten Gegenstände (3 × 3), daneben das Inventar (5 × 5), rechts die Karte des markierten
+ * Gegenstands und die Summe der angelegten. Die Farbe eines Gegenstands folgt seiner Seltenheit.
+ */
 #lager-body {
   display: flex;
   flex-wrap: wrap;
