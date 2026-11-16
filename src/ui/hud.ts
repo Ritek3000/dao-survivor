@@ -1,4 +1,5 @@
 import type { VitalsPosition } from '../core/settings';
+import type { Rarity } from '../game/items';
 import type { IslandBearing, Zone } from '../game/zones';
 import { element, span } from './dom';
 
@@ -12,6 +13,16 @@ export interface ChoiceCard {
   segen?: boolean;
   /** Zweites Kleingedrucktes, etwa wie weit die Klasse schon gesteigert ist. */
   extra?: string;
+}
+
+/** Ein Gegenstand der Nacht in der Endanzeige und was aus ihm wurde. */
+export interface EndLoot {
+  name: string;
+  rarity: Rarity;
+  /** Seltenheit und Platz, etwa „Rar · Ring“. */
+  detail: string;
+  /** Im Inventar gelandet oder verkauft. */
+  note: string;
 }
 
 /** Eine Zeile im Menü der Steigerungen. */
@@ -76,6 +87,8 @@ export class Hud {
   private readonly xpFill = element('xp-fill');
   private readonly level = element('level-text');
   private readonly gold = element('gold-text');
+  private readonly loot = element('loot');
+  private readonly lootText = element('loot-text');
   private readonly clockTime = element('clock-time');
   private readonly zone = element('zone');
   private readonly trait = element('trait');
@@ -107,6 +120,7 @@ export class Hud {
   private readonly endText = element('end-text');
   private readonly endStats = element('end-stats');
   private readonly endGold = element('end-gold');
+  private readonly endLoot = element('end-loot');
   private readonly steigerung = element('steigerung');
   private readonly steigerungGold = element('steigerung-gold');
   private readonly steigerungTabs = element('steigerung-tabs');
@@ -156,6 +170,18 @@ export class Hud {
     // Lange Zahlen werden kleiner gesetzt, damit sie im Beutel bleiben (siehe style.css).
     const long = text.length > 5 ? '2' : text.length > 4 ? '1' : '0';
     if (this.gold.dataset.long !== long) this.gold.dataset.long = long;
+  }
+
+  /** Gegenstände im Beutel dieser Nacht; der Stein trägt die Farbe des besten Funds. `null` blendet die Anzeige aus. */
+  setLoot(count: number, best: Rarity | null): void {
+    this.loot.hidden = count <= 0 || best === null;
+    if (count <= 0 || best === null) return;
+    this.text(this.lootText, String(count));
+    const cls = `rarity-${best}`;
+    if (this.loot.dataset.rarity !== cls) {
+      this.loot.className = cls;
+      this.loot.dataset.rarity = cls;
+    }
   }
 
   setClock(secondsLeft: number): void {
@@ -280,12 +306,26 @@ export class Hud {
     this.choice.hidden = true;
   }
 
-  /** `gold` beschreibt in einer Zeile den Ertrag der Nacht und die Geldbörse danach. */
-  showEnd(title: string, text: string, stats: string, gold: string): void {
+  /** `gold` beschreibt in einer Zeile den Ertrag der Nacht und die Geldbörse danach; `loot` die gefundenen Gegenstände. */
+  showEnd(title: string, text: string, stats: string, gold: string, loot: readonly EndLoot[] = []): void {
     this.endTitle.textContent = title;
     this.endText.textContent = text;
     this.endStats.textContent = stats;
     this.endGold.textContent = gold;
+    this.endLoot.hidden = loot.length === 0;
+    this.endLoot.replaceChildren(
+      ...(loot.length === 0
+        ? []
+        : [
+            span('title', loot.length === 1 ? 'Ein Gegenstand gefunden' : `${loot.length} Gegenstände gefunden`),
+            ...loot.map((entry) => {
+              const row = document.createElement('div');
+              row.className = `row rarity-${entry.rarity}`;
+              row.append(span('name', entry.name), span('detail', entry.detail), span('note', entry.note));
+              return row;
+            }),
+          ]),
+    );
     this.end.hidden = false;
   }
 

@@ -479,6 +479,63 @@ def sfx_muenze(rng, variant):
     return out
 
 
+def sfx_beute(rng, rarity):
+    """Ein Gegenstand faellt. Je seltener er ist, desto laenger und heller klingt es: Normal ein dumpfes Klacken mit einem
+    Klang dahinter, Selten zwei steigende Toene, Rar ein Lauf aus vier Toenen mit Hall, Legendaer ein Glockenakkord."""
+    partials = ((1, 1), (2.4, 0.5), (3.9, 0.25))
+    if rarity == 0:
+        out = np.zeros(n_of(0.5))
+        place(out, thump(300, 140, 0.12, 0.04), 0, 0.8)
+        place(out, noise_hit(rng, 1200, 4000, 0.04, 0.008), 0, 0.4)
+        place(out, chime(659.25, 0.4, 0.09, partials, rng), 0.03, 0.6)
+        return out
+    if rarity == 1:
+        out = np.zeros(n_of(0.8))
+        place(out, thump(320, 150, 0.12, 0.04), 0, 0.7)
+        place(out, chime(783.99, 0.6, 0.14, partials, rng), 0.02, 0.7)
+        place(out, chime(1174.66, 0.6, 0.16, partials, rng), 0.12, 0.6)
+        return out
+    if rarity == 2:
+        out = np.zeros(n_of(1.6))
+        place(out, thump(300, 130, 0.14, 0.05), 0, 0.7)
+        for index, f in enumerate((659.25, 830.61, 987.77, 1318.5)):
+            place(out, chime(f, 1.0, 0.3, ((1, 1), (2.01, 0.4), (3.98, 0.15)), rng), 0.02 + 0.09 * index, 0.6)
+        place(out, chime(2637.0, 0.5, 0.2, ((1, 1),), rng), 0.34, 0.2)
+        stereo = reverb(out, rt60=1.4, wet=0.25, seed='beute-rar')
+        return stereo.mean(axis=1)
+    out = np.zeros(n_of(3.2))
+    place(out, thump(160, 70, 0.3, 0.09), 0, 0.9)
+    place(out, bell(392.0, 2.8, rng, tau_scale=0.7, brightness=0.8), 0.02, 0.55)
+    for index, f in enumerate((523.25, 659.25, 783.99, 1046.5, 1318.5)):
+        place(out, chime(f, 2.0, 0.55, ((1, 1), (2.01, 0.35), (3.99, 0.12)), rng), 0.1 + 0.07 * index, 0.5)
+    place(out, chime(2093.0, 1.4, 0.4, ((1, 1), (2.76, 0.2)), rng), 0.55, 0.25)
+    stereo = reverb(out, rt60=2.6, wet=0.32, seed='beute-legendaer')
+    return stereo.mean(axis=1)
+
+
+def sfx_beute_kiste(rng):
+    """Die Kiste des Verschlingers: Sie setzt auf, der Deckel knarrt hoch und schlaegt an, dann klingt es golden heraus."""
+    out = np.zeros(n_of(2.4))
+    place(out, thump(120, 55, 0.35, 0.1), 0, 1.0)
+    place(out, noise_hit(rng, 200, 1200, 0.25, 0.06), 0, 0.4)
+    place(out, whoosh(rng, 0.7, 300, 1800, 0.35, 0.3, 4.0), 0.4, 0.45)
+    place(out, thump(200, 90, 0.2, 0.05), 1.05, 0.7)
+    place(out, noise_hit(rng, 800, 5000, 0.08, 0.02), 1.05, 0.35)
+    for index, f in enumerate((523.25, 659.25, 783.99, 1046.5)):
+        place(out, chime(f, 1.3, 0.4, ((1, 1), (2.01, 0.4), (3.99, 0.12)), rng), 1.1 + 0.08 * index, 0.5)
+    stereo = reverb(out, rt60=1.8, wet=0.28, seed='beute-kiste')
+    return stereo.mean(axis=1)
+
+
+def sfx_beute_eingesammelt(rng):
+    """Der Gegenstand erreicht die Figur: ein kurzes, helles Aufleuchten in zwei Toenen."""
+    out = np.zeros(n_of(0.45))
+    place(out, chime(1318.5, 0.35, 0.08, ((1, 1), (2.4, 0.4)), rng), 0, 0.7)
+    place(out, chime(1975.5, 0.3, 0.07, ((1, 1), (2.4, 0.3)), rng), 0.05, 0.5)
+    place(out, noise_hit(rng, 4000, 10000, 0.03, 0.006), 0, 0.2)
+    return out
+
+
 def sfx_steigerung(rng):
     # Gold klirrt auf den Tisch, danach ein warmer Klang: Der Rang ist bezahlt.
     out = np.zeros(n_of(1.0))
@@ -1355,6 +1412,10 @@ def build_catalogue():
     many('sfx/schritt', sfx_schritt, 3, -24.0)
     many('sfx/eingesammelt', sfx_eingesammelt, 3, -21.0)
     many('sfx/muenze', sfx_muenze, 3, -24.0)
+    for index, rarity in enumerate(('normal', 'selten', 'rar', 'legendaer')):
+        sfx('sfx/beute-' + rarity, (lambda rng, i=index: sfx_beute(rng, i)), -22.0 + 1.5 * index)
+    sfx('sfx/beute-kiste', sfx_beute_kiste, -18.0)
+    sfx('sfx/beute-eingesammelt', sfx_beute_eingesammelt, -24.0)
     sfx('sfx/stufe', sfx_stufe, -19.0)
     sfx('sfx/segen', sfx_segen, -19.0)
     sfx('sfx/steigerung', sfx_steigerung, -20.0)

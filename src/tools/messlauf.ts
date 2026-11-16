@@ -63,6 +63,10 @@ interface Internals {
   progression: { level: number; stats: Stats; blessed: { name: string }[] };
   steigerungen: Steigerungen;
   ausruestung: Ausruestung;
+  beute: {
+    fixedSeed: number | null;
+    settle(): { gold: number; items: { item: { rarity: Rarity } }[] };
+  };
   input: { getMove(out: MoveVector): MoveVector };
   hud: { hideEnd(): void };
 }
@@ -129,8 +133,10 @@ export interface NightResult {
   boss: string;
   /** Die Segen, die in dieser Nacht gewählt wurden. */
   segen: string[];
-  /** Gold, das die Nacht der Geldbörse eingebracht hat (Münzen, Sold und Prämie). */
+  /** Gold, das die Nacht der Geldbörse eingebracht hat (Münzen, Sold und Prämie; ohne den Verkauf überzähliger Gegenstände). */
   gold: number;
+  /** Die Gegenstände, die in der Nacht gefallen sind, nach Seltenheit (`CONFIG.loot`). */
+  beute: Record<Rarity, number>;
 }
 
 interface Options {
@@ -259,8 +265,19 @@ async function playNight(game: Game, classIndex: number, random: Random, maxSeco
     boss: 'nicht erschienen',
     segen: [],
     gold: 0,
+    beute: { normal: 0, selten: 0, rar: 0, legendaer: 0 },
   };
   const goldBefore = g.steigerungen.gold;
+  // Mithören: Was fiel, und was brachte der Verkauf überzähliger Gegenstände ein (das gehört nicht zum Ertrag der Nacht)?
+  const beute = g.beute;
+  const settleLoot = beute.settle;
+  let soldGold = 0;
+  beute.settle = function () {
+    const loot = settleLoot.call(this);
+    soldGold = loot.gold;
+    for (const entry of loot.items) result.beute[entry.item.rarity]++;
+    return loot;
+  };
 
   g.hud.hideEnd();
   g.openSelect();
@@ -344,6 +361,7 @@ async function playNight(game: Game, classIndex: number, random: Random, maxSeco
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
   } finally {
+    beute.settle = settleLoot;
     arsenal.hit = hit;
     player.hurt = hurt;
     g.input.getMove = getMove;
@@ -356,7 +374,7 @@ async function playNight(game: Game, classIndex: number, random: Random, maxSeco
   result.erschlagen = g.enemies.kills;
   result.boss = g.boss.slain ? 'erschlagen' : g.boss.appeared ? 'überlebt' : 'nicht erschienen';
   result.segen = g.progression.blessed.map((segen) => segen.name);
-  result.gold = g.steigerungen.gold - goldBefore;
+  result.gold = g.steigerungen.gold - goldBefore - soldGold;
   for (const weapon of g.arsenal.owned) {
     const name = weapon.def.name;
     result.raenge[name] = weapon.rank;
@@ -402,6 +420,8 @@ export function installMesslauf(game: Game): void {
       const ausruestung = (game as unknown as Internals).ausruestung;
       ausruestung.persist = false;
       const itemRandom = createRandom((options.seed ?? 12345) + 777);
+      // Die Beute würfelt sonst mit der Uhrzeit; für die Messung bekommt sie einen festen, in jeder Nacht weitergezählten Anfang.
+      (game as unknown as Internals).beute.fixedSeed = (options.seed ?? 12345) + 4242;
       for (const playerClass of CLASSES) {
         ausruestung.setLoadout(
           playerClass.id,
@@ -426,6 +446,7 @@ export function installMesslauf(game: Game): void {
         steigerungen.reload();
         ausruestung.persist = true;
         ausruestung.reload();
+        (game as unknown as Internals).beute.fixedSeed = null;
         (game as unknown as Internals).hud.hideEnd();
         (game as unknown as Internals).openSelect();
       }

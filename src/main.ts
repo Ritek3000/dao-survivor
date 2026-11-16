@@ -15,7 +15,7 @@ try {
     });
     // Der Messlauf gehört nicht ins fertige Spiel und wird deshalb nur hier nachgeladen.
     void import('./tools/messlauf').then(({ installMesslauf }) => installMesslauf(game));
-    // Gegenstände zum Ausprobieren, solange es noch keine Beute gibt.
+    // Gegenstände und Beute zum Ausprobieren.
     void import('./tools/items').then(({ installItemTools }) => installItemTools(game));
   }
 } catch (error) {

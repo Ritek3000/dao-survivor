@@ -22,6 +22,14 @@ export type SoundId =
   | 'schritt'
   | 'eingesammelt'
   | 'muenze'
+  // Beute: `beute.<normal|selten|rar|legendaer>` beim Fallen eines Gegenstands, `beute.kiste` beim Öffnen der Kiste des
+  // Verschlingers, `beute.eingesammelt` wenn ein Gegenstand die Figur erreicht
+  | 'beute.normal'
+  | 'beute.selten'
+  | 'beute.rar'
+  | 'beute.legendaer'
+  | 'beute.kiste'
+  | 'beute.eingesammelt'
   // Feuerschalen
   | 'feuer.entzuenden'
   | 'feuer.entzuendet'

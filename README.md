@@ -104,6 +104,7 @@ Wichtige Teile von `src/game/`:
 | `progression.ts`               | Stufen, Stärkungen und die Segen der Höheren Mächte                     |
 | `steigerung.ts`, `coins.ts`    | Dauerhafte Steigerungen der Klassen und die Münzen, die das Gold bringen |
 | `items.ts`, `ausruestung.ts`, `lager.ts` | Gegenstände (Eigenschaften, Würfeln), die Gegenstände jeder Klasse und das Menü der Ausrüstung |
+| `beute.ts`, `drops.ts`         | Beute: was aus Gegnern und der Kiste des Verschlingers fällt, der Beutel der Nacht, die Gegenstände am Boden und die Kiste |
 | `zones.ts`, `darkness.ts`, `dust.ts` | Lichtinseln, Finsternis und Verstaubung                           |
 | `world.ts`, `ground.ts`, `scenery.ts` | Welt, Boden und Kulisse                                          |
 | `models.ts`                    | Lädt GLB-Dateien und bringt sie auf die Maße, die das Spiel braucht     |
@@ -158,7 +159,7 @@ Eine neue Steigerung ist ein weiterer Eintrag. Beim Start einer Nacht wirken die
 bzw. gerade gespielte Klasse.
 
 **Speicherung.** Gold und Ränge liegen im Browser (`localStorage`, Schlüssel `dao-survivor.spielstand`) als JSON mit Versionsnummer
-(`version`, jetzt 2). Der Zugriff steckt hinter `TextStore` in `src/core/storage.ts` und `src/core/savegame.ts`; wo `localStorage` fehlt oder
+(`version`, jetzt 3). Der Zugriff steckt hinter `TextStore` in `src/core/storage.ts` und `src/core/savegame.ts`; wo `localStorage` fehlt oder
 gesperrt ist, gilt der Stand nur für die Sitzung. Eine Desktop-Fassung kann mit `useSavegameStore` eine Datei an die Stelle setzen.
 Ein unlesbarer Stand beginnt bei null; was das Spiel nicht kennt (etwa eine entfernte Steigerung), bleibt beim Speichern erhalten.
 Zurücksetzen lässt sich der Stand mit „Neues Spiel“ im Startbildschirm (mit Rückfrage); in den Entwicklerwerkzeugen genügt auch `localStorage.removeItem('dao-survivor.spielstand')`.
@@ -175,10 +176,10 @@ Spielende Steigerungen mit Charakterpunkten (`Steigerungskosten`), nicht mit Gel
 ## Gegenstände
 
 Zwischen den Nächten legen die Klassen Gegenstände an: Fackel, Helm, Gürtel, Waffe, Handschuh, Schuh, Ring, Brustrüstung und Amulett. Sie sollen
-die Steigerungen später ersetzen; das System entsteht in Paketen (Entwurf: „Item-, Loot- und Händlersystem“). **Stand: Grundlage.** Beute,
-Truhe und Händler folgen. Bis dahin gibt es im fertigen Spiel noch keine Gegenstände, und das Menü der Ausrüstung bleibt verborgen, solange kein
-Gegenstand im Spielstand liegt. Im Entwicklungsmodus (`npm run dev`) ist es immer da, und die Browser-Konsole erzeugt Gegenstände zum Ausprobieren
-(`__items.fuellen()`, `__items.geben(0, 'ring', 'rar')`, `__items.leeren()`; Beschreibung in `src/tools/items.ts`).
+die Steigerungen später ersetzen; das System entsteht in Paketen (Entwurf: „Item-, Loot- und Händlersystem“). **Stand: Grundlage und Beute.**
+Truhe und Händler folgen. Das Menü der Ausrüstung bleibt verborgen, solange kein Gegenstand im Spielstand liegt; der erste Fund schaltet es frei.
+Im Entwicklungsmodus (`npm run dev`) ist es immer da, und die Browser-Konsole erzeugt Gegenstände und Beute zum Ausprobieren
+(`__items.fuellen()`, `__items.geben(0, 'ring', 'rar')`, `__items.fallen('rar')`, `__items.kiste()`, `__items.leeren()`; Beschreibung in `src/tools/items.ts`).
 
 **Aufbau.** Ein Gegenstand trägt je nach Seltenheit eine (Normal), zwei (Selten) oder drei (Rar) Eigenschaften; Legendär trägt drei und später
 die Evolution einer Fertigkeit, und gibt es vorerst nur als Ring (`LEGENDARY_SLOTS`). Jede Eigenschaft würfelt ihren Wert einmal beim Entstehen
@@ -203,11 +204,34 @@ Pfeile bewegen den Zeiger, 1, 2, 3 wechseln die Klasse, Esc oder L führen zurü
 `src/game/lager.ts` (Bedienung) und `src/ui/lagerView.ts` (Oberfläche); die Zeichen der Gegenstände sind selbst gezeichnete Platzhalter
 (`src/ui/itemIcons.ts`).
 
-**Speicherung.** Die Gegenstände liegen im selben Spielstand wie Gold und Ränge (Feld `items`; `src/game/ausruestung.ts`), Fassung 2. Ältere
-Stände (Fassung 1) haben keine Gegenstände und werden unverändert übernommen. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
+**Beute.** Alle Zahlen stehen in `CONFIG.loot` und bei den Gegnerarten (`loot`) in `src/config.ts`; gewürfelt wird in `src/game/beute.ts`.
+
+- *Aus Gegnern:* Jeder erschlagene Gegner lässt mit kleiner Wahrscheinlichkeit einen Gegenstand fallen (Schänder und Behemoth 0,08 %, Troll 0,8 %,
+  Dhargass-Priester 1,2 %, Mantelträger 2 %). Bei einer vollen Nacht sind das im Schnitt 4 bis 5 Gegenstände, nach acht Minuten 1 bis 2. Starke Gegner
+  würfeln bessere Gegenstände (Schänder und Behemoth: 72 % Normal, 22 % Selten, 5,5 % Rar, 0,5 % Legendär; die übrigen: 55 / 30 / 13,5 / 1,5 %).
+  Der Platz ist gleich verteilt (je ein Neuntel). Fackel und Waffe gehören zur gespielten Klasse, alle anderen Plätze sind klassenneutral;
+  Legendäres ist immer ein Ring der gespielten Klasse.
+- *Die Kiste des Verschlingers:* Wer ihn erschlägt, bekommt eine Kiste mit 3 Gegenständen (kein Normal: 45 % Selten, 42 % Rar, 13 % Legendär).
+  Der **Pech-Schutz** hebt die Chance auf Legendäres in der nächsten Kiste um 5 Prozentpunkte je Gegenstand, für jede Kiste, die ohne Legendäres
+  blieb (zu Lasten von Selten); nach einem Legendären fällt sie auf 13 % zurück. Im Schnitt kommt so nach gut zwei Kisten ein Legendäres. Der Zähler
+  liegt im Spielstand (`items.pity`), damit ein Neuladen die Kiste nicht neu würfelt. Es gibt noch kein Modell für die Kiste; sie ist ein Platzhalter aus Quadern.
+- *Zur Figur:* Gefallene Gegenstände liegen einen Augenblick unter einem Lichtstrahl in der Farbe der Seltenheit (mit eigenem Klang) und fliegen
+  dann der Figur zu, wo sie auch steht; so geht auch der Fund kurz vor Sonnenaufgang nicht verloren. Rare und legendäre Funde meldet das Spiel im Bild.
+  Neben dem Geldbeutel zählt ein Stein in der Farbe des besten Funds die Gegenstände dieser Nacht.
+- *Am Ende der Nacht:* Der Beutel wandert ins Inventar der gespielten Klasse, die wertvollsten Gegenstände zuerst. Was nicht mehr hineinpasst, wird
+  zum Verkaufspreis verkauft (ein Viertel des Werts; `CONFIG.items.price`) und der Börse gutgeschrieben; die Endanzeige nennt jeden Gegenstand.
+  Die Beute bleibt auch bei einem Sturz oder Abbruch erhalten. Die Truhe (später) kommt zwischen Inventar und Verkauf.
+- *Zufall:* Die Beute hat einen eigenen Zufallsstrom, der mit der Uhrzeit des Nachtbeginns beginnt (nicht mit dem Seed der Welt, sonst fielen nach
+  jedem Neustart dieselben Gegenstände). Der Messlauf legt einen festen Anfang fest und schreibt die gefallenen Gegenstände je Nacht mit (`beute`).
+- Noch nicht umgesetzt: Die Evolution der legendären Ringe und die Zielhilfe bei ihrer Wahl (Paket „Evolutionen“); der legendäre Ring ist bis dahin
+  ein Ring mit drei Eigenschaften. Auch der Händler (0,1 % Legendäres im Angebot) kommt später.
+
+**Speicherung.** Die Gegenstände liegen im selben Spielstand wie Gold und Ränge (Feld `items`; `src/game/ausruestung.ts`), Fassung 3 (der
+Pech-Schutz ist neu). Ältere Stände (Fassung 1 und 2) werden Schritt für Schritt gehoben; Gold, Ränge und Gegenstände bleiben unverändert. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
 Name, unmögliche Eigenschaft), wird beim Lesen verworfen, Werte außerhalb des heutigen Bereichs rücken an dessen Rand.
 
-**Gleichgewicht.** `__messlauf.start({ ausruestung: 'rar' })` belegt alle neun Plätze jeder Klasse mit rar gewürfelten Gegenständen
+**Gleichgewicht.** `__items.verteilung('stark')` und `__items.kisten()` würfeln die Seltenheiten und den Pech-Schutz in der Konsole tausendfach nach
+und zählen. `__messlauf.start({ ausruestung: 'rar' })` belegt alle neun Plätze jeder Klasse mit rar gewürfelten Gegenständen
 (`'normal'`, `'selten'` oder `'rar'`); ohne Angabe ist nichts angelegt. Auch das schreibt nichts in den echten Spielstand.
 
 ## Ton und Musik

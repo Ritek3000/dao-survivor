@@ -51,6 +51,8 @@
           <circle class="purse-knot" cx="36" cy="17.5" r="2.6" />
         </svg>
         <span id="gold-text">0</span>
+        <!-- Gegenstände im Beutel dieser Nacht; der Stein trägt die Farbe der besten Seltenheit (class kommt von hud.ts). -->
+        <span id="loot" hidden><i class="gem"></i><span id="loot-text">0</span></span>
       </div>
     </div>
 
@@ -270,6 +272,7 @@
       <p id="end-text"></p>
       <p id="end-stats"></p>
       <p id="end-gold"></p>
+      <div id="end-loot" hidden></div>
       <div class="buttons">
         <button id="end-steigern" class="button" type="button">Gold ausgeben (U)</button>
         <button id="end-lager" class="button" type="button" hidden>Ausrüstung (L)</button>

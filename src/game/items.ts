@@ -296,6 +296,22 @@ export function itemName(item: Item): string {
   return best ? `${label} ${PROPERTIES[best.id].suffix}` : label;
 }
 
+/** Wie gut der Wurf insgesamt ist: der Durchschnitt der Güte seiner Eigenschaften, von 0 bis 1. */
+export function itemQuality(item: Item): number {
+  if (item.props.length === 0) return 0;
+  return item.props.reduce((sum, property) => sum + propertyQuality(item.slot, property), 0) / item.props.length;
+}
+
+/** Was der Gegenstand wert ist: die Basis seiner Seltenheit mal (0,75 + 0,5 × Güte), also 75 bis 125 % davon. */
+export function itemValue(item: Item): number {
+  return Math.round(CONFIG.items.price[item.rarity] * (0.75 + 0.5 * itemQuality(item)));
+}
+
+/** Was ein Verkauf einbringt: ein Viertel des Werts (`CONFIG.items.price.sellShare`), mindestens 1 Gold. */
+export function sellPrice(item: Item): number {
+  return Math.max(1, Math.round(itemValue(item) * CONFIG.items.price.sellShare));
+}
+
 function rollValue(random: Random, id: PropertyId, slot: ItemSlot): number {
   const { min, max } = propertyRange(id, slot);
   const step = CONFIG.items.properties[id].step;

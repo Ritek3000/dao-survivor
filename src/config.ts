@@ -87,6 +87,14 @@ export interface EnemyGold {
   value: number;
 }
 
+/** Was eine Gegnerart an Gegenständen fallen lässt (`game/beute.ts`). */
+export interface EnemyLoot {
+  /** Wahrscheinlichkeit von 0 bis 1, dass ein erschlagener Gegner einen Gegenstand fallen lässt (0,008 = 0,8 %). */
+  chance: number;
+  /** Welche Verteilung der Seltenheiten gilt: eine Zeile aus `CONFIG.loot.rarity`. */
+  tier: 'schwach' | 'stark';
+}
+
 export interface EnemyType {
   id: string;
   radius: number;
@@ -100,6 +108,8 @@ export interface EnemyType {
   xp: number;
   /** Fehlt der Eintrag, fallen keine Münzen. */
   gold?: EnemyGold;
+  /** Fehlt der Eintrag, fallen keine Gegenstände. */
+  loot?: EnemyLoot;
   color: number;
   /** Ab welcher Sekunde der Nacht dieser Typ auftaucht. */
   from: number;
@@ -253,6 +263,7 @@ export const CONFIG = {
         model: { file: 'schaender.glb', height: 1.8, clip: 'Walking', stride: 1.5 },
         radius: 0.4, scale: 1, speed: 2.3, hp: 14, damage: 8, xp: 1, color: 0x6a3b35, from: 0, weight: 10,
         gold: { chance: 0.12, value: 1 },
+        loot: { chance: 0.0008, tier: 'schwach' },
       },
       // Schnell: der Behemoth.
       {
@@ -260,6 +271,7 @@ export const CONFIG = {
         model: { file: 'behemoth.glb', height: 1, clip: 'Walking', stride: 2.2 },
         radius: 0.45, scale: 0.72, speed: 4.3, hp: 8, damage: 5, xp: 1, color: 0x7a5a2c, from: 60, weight: 4,
         gold: { chance: 0.12, value: 1 },
+        loot: { chance: 0.0008, tier: 'schwach' },
       },
       // Groß: der Troll.
       {
@@ -267,6 +279,7 @@ export const CONFIG = {
         model: { file: 'troll.glb', height: 2.5, clip: 'Walking', stride: 2.2 },
         radius: 0.75, scale: 1.75, speed: 1.6, hp: 90, damage: 18, xp: 6, color: 0x3d2a3f, from: 180, weight: 1,
         gold: { chance: 0.6, value: 5 },
+        loot: { chance: 0.008, tier: 'stark' },
       },
       // Dhargass-Priester: hält Abstand und wirkt den Schwarzen Sog. Er schwebt und hebt zum Zaubern die Arme.
       {
@@ -282,6 +295,7 @@ export const CONFIG = {
         },
         radius: 0.42, scale: 1.1, speed: 2.6, hp: 30, damage: 6, xp: 4, color: 0x5563c8, from: 240, weight: 0.6,
         gold: { chance: 0.6, value: 4 },
+        loot: { chance: 0.012, tier: 'stark' },
         maxAlive: 4,
         cast: { keep: 9, range: 13, cooldown: 4.5, windup: 1.3, radius: 2.6, damage: 9 },
       },
@@ -301,6 +315,7 @@ export const CONFIG = {
         },
         radius: 0.5, scale: 1.25, speed: 1.9, hp: 60, damage: 18, xp: 5, color: 0x7a4f9e, from: 360, weight: 0.35,
         gold: { chance: 0.7, value: 6 },
+        loot: { chance: 0.02, tier: 'stark' },
         maxAlive: 2,
         mantle: 6,
         // Die Kralle reicht gut 1,3 m vor ihn (bei 2,1 m Größe); `reach` rechnet bis zur Mitte der Spielfigur (Radius 0,8).
@@ -414,6 +429,12 @@ export const CONFIG = {
   items: {
     /** Plätze im Inventar einer Figur. */
     inventorySize: 25,
+    /**
+     * Preis eines Gegenstands (`itemValue`): die Basis der Seltenheit mal (0,75 + 0,5 × Güte des Wurfs), die Güte von 0 bis 1.
+     * Der Verkaufspreis ist ein Viertel davon (`sellShare`); der Händler (später) kauft zum vollen Preis. Wer Gold braucht und
+     * das Inventar voll hat, verkauft so, was nicht mehr hineinpasst.
+     */
+    price: { normal: 100, selten: 400, rar: 1600, legendaer: 6400, sellShare: 0.25 },
     properties: {
       schaden: { min: 6, max: 14, step: 1, cap: 50, core: { waffe: 1.5 } },
       tempo: { min: 3, max: 10, step: 1, cap: 30, core: {} },
@@ -433,6 +454,52 @@ export const CONFIG = {
       brenndauer: { min: 10, max: 30, step: 1, cap: 30, core: {} },
       zuendtempo: { min: 10, max: 30, step: 1, cap: 30, core: {} },
     },
+  },
+  /**
+   * Beute (`game/beute.ts`, `game/drops.ts`): Was fällt, wie selten und wie es zur Figur kommt. Die Chance je Gegner steht bei der
+   * Gegnerart (`loot`); gerechnet sind es bei einer vollen Nacht (900 s) im Schnitt 4 bis 5 Gegenstände, nach acht Minuten 1 bis 2.
+   * Dazu kommt die Kiste des Verschlingers mit drei Gegenständen.
+   */
+  loot: {
+    /**
+     * Gewichte der Seltenheiten in Prozent je Quelle (die Summe muss nicht 100 sein). Starke Gegner würfeln bessere Gegenstände;
+     * die Kiste hat kein Normal, damit sie sich lohnt. Legendäres gibt es nur als Ring der gespielten Klasse (`LEGENDARY_SLOTS`).
+     */
+    rarity: {
+      schwach: { normal: 72, selten: 22, rar: 5.5, legendaer: 0.5 },
+      stark: { normal: 55, selten: 30, rar: 13.5, legendaer: 1.5 },
+      kiste: { normal: 0, selten: 45, rar: 42, legendaer: 13 },
+    },
+    chest: {
+      /** Gegenstände in der Kiste des Verschlingers. */
+      items: 3,
+      /**
+       * Pech-Schutz: Jede Kiste ohne Legendäres hebt die Chance auf Legendäres in der nächsten um so viele Prozentpunkte je Gegenstand
+       * (zu Lasten von Selten); nach einem Legendären fällt sie auf den Wert in `rarity.kiste` zurück. Der Zähler liegt im Spielstand.
+       */
+      pityStep: 5,
+      /** Sekunden vom Sturz des Verschlingers bis die Kiste offen ist, und Sekunden zwischen zwei Gegenständen, die herausspringen. */
+      openSeconds: 1.1,
+      spillSeconds: 0.28,
+      /** Größe der Platzhalter-Kiste (Breite) in Metern; ein Modell gibt es noch nicht. */
+      size: 1.5,
+    },
+    /** Gegenstände am Boden: Sie liegen kurz da und fliegen dann der Figur zu, wo sie auch sei. */
+    drop: {
+      /** So viele liegen höchstens zugleich da; weitere gehen sofort in den Beutel. */
+      max: 24,
+      /** Sekunden, die ein Gegenstand liegt, ehe er fliegt: Der Lichtstrahl zeigt in der Zeit, was gefallen ist. */
+      wait: 1.3,
+      /** Anfangstempo (m/s) und Beschleunigung (m/s²) im Flug. */
+      speed: 6,
+      accel: 34,
+      /** Größe des Steins in Metern, Höhe und Radius des Lichtstrahls. */
+      size: 0.42,
+      beamHeight: 9,
+      beamRadius: 0.14,
+    },
+    /** Farbe je Seltenheit für Stein und Strahl (wie in style.css die Rahmen der Gegenstände). */
+    colors: { normal: 0xb9b3a5, selten: 0x6fa8e8, rar: 0xe6c04a, legendaer: 0xff8a3d },
   },
   xp: {
     /** Bedarf für die nächste Stufe: base + linear * Stufe + quadratic * Stufe². */

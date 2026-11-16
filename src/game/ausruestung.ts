@@ -33,6 +33,7 @@ export class Ausruestung {
   private save: Savegame = loadSavegame();
   private classes = new Map<ClassId, ClassItems>();
   private nextId = 1;
+  private pityCount = 0;
 
   constructor() {
     this.parse();
@@ -53,7 +54,7 @@ export class Ausruestung {
   /** Löscht alle Gegenstände; Gold und Ränge bleiben. Der Messlauf (`persist = false`) schreibt dabei nichts. */
   reset(): void {
     this.refresh();
-    this.save.items = { next: 1, classes: {} };
+    this.save.items = { next: 1, classes: {}, pity: 0 };
     this.parse();
     this.persistNow();
   }
@@ -76,6 +77,18 @@ export class Ausruestung {
   count(classId: ClassId): number {
     const { inventory } = this.of(classId);
     return this.equippedItems(classId).length + inventory.filter((item) => item !== null).length;
+  }
+
+  /** Wie viele Boss-Kisten in Folge ohne Legendäres blieben; je eine hebt die Chance der nächsten (`game/beute.ts`). */
+  get pity(): number {
+    return this.pityCount;
+  }
+
+  /** Merkt sich den Pech-Schutz im Spielstand, damit ein Neuladen ihn nicht zurücksetzt. */
+  setPity(count: number): void {
+    this.refresh();
+    this.pityCount = Math.max(0, Math.floor(count));
+    this.persistNow();
   }
 
   /** Legt einen Gegenstand auf den ersten freien Platz im Inventar. Gibt false zurück, wenn es voll ist. */
@@ -145,6 +158,7 @@ export class Ausruestung {
     this.classes.clear();
     const stored = this.save.items;
     this.nextId = stored.next;
+    this.pityCount = stored.pity;
     for (const entry of CLASSES) {
       const raw = stored.classes[entry.id];
       const items = emptyClassItems();
@@ -175,7 +189,7 @@ export class Ausruestung {
       const items = this.of(entry.id);
       classes[entry.id] = { inventory: [...items.inventory], equipment: { ...items.equipment } };
     }
-    return { next: this.nextId, classes };
+    return { next: this.nextId, classes, pity: this.pityCount };
   }
 
   /**
