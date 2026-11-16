@@ -24,8 +24,8 @@ npm run build        # typecheck + vite build nach dist/
 npm run preview      # gebauten Stand ansehen
 ```
 
-Es gibt keine automatischen Tests und keinen Linter. **Bevor ein Pull Request aufgeht, laufen `npm run typecheck` und
-`npm run build` fehlerfrei.** Wer Spielverhalten ändert, prüft es im Browser (`npm run dev`); wer das Gleichgewicht
+Es gibt keine automatischen Tests und keinen Linter. **Bevor ein Pull Request aufgeht, ist die Version erhöht (siehe
+„Versionsnummer“) und laufen `npm run typecheck` und `npm run build` fehlerfrei.** Wer Spielverhalten ändert, prüft es im Browser (`npm run dev`); wer das Gleichgewicht
 ändert, nutzt zusätzlich den Messlauf (`__messlauf` in der Browser-Konsole, Beschreibung in `src/tools/messlauf.ts`).
 
 ## Stack und Struktur
@@ -85,13 +85,38 @@ Ob das Spiel im Browser bleibt oder als Desktop-Programm erscheint, ist noch nic
   - Keine Node- oder Electron-Pakete in `src/` einziehen. Desktop-Code käme später in einen eigenen Ordner.
 - Wer etwas ändert, das diese Linie berührt, erwähnt es im Pull Request.
 
+## Versionsnummer
+
+Jedes Update des Spiels bekommt eine Versionsnummer: **Jeder Pull Request erhöht sie und nennt sie.** So sieht Fabian auf dem
+Startbildschirm (unten rechts, auch auf GitHub Pages), welcher Stand gerade läuft, und kann ihn beim Besprechen benennen.
+
+- Die Nummer steht **nur in `package.json`** (und im Lockfile). `vite.config.ts` schreibt sie beim Bauen und im Dev-Modus in den
+  Platzhalter `%APP_VERSION%` in `index.html`. Im Code steht keine zweite Zahl, die mitgepflegt werden müsste.
+- Format `MAJOR.MINOR.PATCH`, solange das Spiel ein Prototyp ist, mit Major 0:
+  - **Minor** (`0.2.0` → `0.3.0`): neue Funktion oder neuer Inhalt (Klasse, Segen, Gegnerart, Menü, ein Paket des Gegenstandssystems),
+    ebenso größere Eingriffe ins Gleichgewicht oder ins Format des Spielstands.
+  - **Patch** (`0.3.0` → `0.3.1`): Fehlerkorrektur, kleine Anpassung, Optik, Ton, Texte, Dokumentation, Werkzeuge, Workflow.
+    Auch ein Pull Request ohne sichtbare Änderung im Spiel erhöht mindestens den Patch.
+  - **Major**: `1.0.0` setzt Fabian fest, wenn das Spiel kein Prototyp mehr ist. Nicht von allein erhöhen.
+- Erhöht wird mit `npm version minor --no-git-tag-version` bzw. `npm version patch --no-git-tag-version`. Das ändert `package.json`
+  und `package-lock.json` zugleich und legt weder Commit noch Tag an. Die Zahl nie von Hand in nur einer der beiden Dateien ändern.
+- **Von der Version auf `origin/main` aus erhöhen**, nicht von der des eigenen Branches: vor dem Öffnen des Pull Requests
+  `git fetch origin` und die Version von `main` ansehen. Wird später ein anderer Pull Request zuerst zusammengeführt, zieht der eigene
+  nach: Branch mit `main` zusammenführen, den Konflikt in `package.json` und `package-lock.json` lösen (die höhere Nummer nehmen und
+  noch einmal erhöhen), Titel und Beschreibung anpassen. Zwei Pull Requests tragen nie dieselbe Nummer.
+- Der **Titel** des Pull Requests beginnt mit der neuen Version (`v0.3.0: Gegenstände: Beute und Truhe`), und die Beschreibung
+  nennt die Änderung als „Version: 0.2.0 → 0.3.0“. In Antworten an Fabian wird der Stand mit seiner Nummer benannt.
+- Nicht verwechseln: Die Version des **Spielstands** (`SAVEGAME_VERSION` in `src/core/savegame.ts`) ist eine eigene Zahl und steigt nur,
+  wenn sich das Format der gespeicherten Daten ändert (siehe „Zielplattform offen“). Sie folgt nicht der Version des Spiels.
+
 ## Arbeitsweise
 
 - **Nie direkt auf `main`.** Jede Änderung entsteht auf einem eigenen Feature-Branch und kommt als **Pull Request an Fabian**
   (GitHub-Login `Ritek3000`). Fabian entscheidet über das Zusammenführen; Claude merged nicht selbst.
 - Ein Pull Request, ein Thema. Lieber mehrere kleine als ein großer, der Aufräumen und neue Funktion mischt.
 - Die Beschreibung sagt auf Deutsch, was sich ändert und warum, wie es geprüft wurde (`typecheck`, `build`, im Browser
-  angesehen?) und ob von der Lore oder von diesen Regeln abgewichen wird.
+  angesehen?) und ob von der Lore oder von diesen Regeln abgewichen wird. Titel und Beschreibung nennen die neue Version
+  (siehe „Versionsnummer“).
 - Commit-Nachrichten auf Deutsch, in der Gegenwart oder als kurzer Titel (wie im ersten Commit), mit Begründung im Text,
   wenn die Änderung nicht selbsterklärend ist.
 - Vor dem Löschen oder Umbenennen von Dateien prüfen, ob sie irgendwo eingebunden sind (`grep`). Keine Sicherungskopien im
