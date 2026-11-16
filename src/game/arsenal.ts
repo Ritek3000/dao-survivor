@@ -49,7 +49,7 @@ interface FollowUp {
   active: boolean;
   weapon: OwnedWeapon;
   delay: number;
-  kind: 'rueckhand' | 'wirbel' | 'echo';
+  kind: 'rueckhand' | 'wirbel' | 'echo' | 'welle' | 'lanze';
   angle: number;
 }
 
@@ -70,6 +70,7 @@ const TRAP_CAPACITY = 12;
 const FOLLOW_UPS = 12;
 const KAEMPFER = CONFIG.skills.kaempfer;
 const LAEUFER = CONFIG.skills.laeufer;
+const MAGIER = CONFIG.skills.magier;
 /** Die zeitweiligen Werte der Kämpfer-Fertigkeiten; `seconds` stellt der Aufrufer vor dem Setzen ein. */
 const GUARD: BuffSpec = { id: 'schutz', stat: 'taken', mode: 'mul', amount: 1, seconds: 1 };
 const WHIRL_SPEED: BuffSpec = { id: 'wirbelschlag-tempo', stat: 'speed', mode: 'mul', amount: KAEMPFER.whirlSpeed, seconds: KAEMPFER.whirlSpeedSeconds };
@@ -79,6 +80,16 @@ const SHOUT_CRIT: BuffSpec = { id: 'kriegsschrei-krit', stat: 'critChance', mode
 const SHELTER: BuffSpec = { id: 'koederpuppe-schleier', stat: 'rangedTaken', mode: 'mul', amount: LAEUFER.decoyShelter, seconds: 0.8 };
 /** Der Urheber der Wolke, die ein Gestorbener hinterlässt (Sporenfalle, Rang 5). */
 const REST_ID = 'sporenfalle-rest';
+/** Der Schub nach der Sturmböe (Rang 2). */
+const BOOST: BuffSpec = { id: 'sturmboee-tempo', stat: 'speed', mode: 'mul', amount: MAGIER.boostSpeed, seconds: MAGIER.boostSeconds };
+/** Die Zauber des Magiers: Nur ihre Tode und Treffer zählen für den Schild (Rang 5). */
+const SPELLS: ReadonlySet<string> = new Set(['hitze-werfen', 'sorlanze', 'glut-formen', 'erdstoss', 'wurzelgriff', 'sturmboee']);
+/** Ein Rückstoß mit Tempo v trägt einen Gegner um v / 8 Meter weit: Er klingt mit exp(−8 t) ab (`Enemies.update`). */
+const PUSH_PER_METER = 8;
+/** So viele Gegner merkt sich die Sorlanze auf einmal, wenn sie nur die ersten trifft (Rang 1); mehr gelten als unbegrenzt. */
+const BEAM_SLOTS = 8;
+const LINE_COLOR = 0xffb454;
+const ASH_COLOR = 0xff6a24;
 /** Die Glut der Feuerschalen (Kwests Esse) als Urheber ihres Schadens. */
 const SEAR_SOURCE = sourceOf('kwests-esse');
 const lightAt = new THREE.Vector3();
@@ -137,8 +148,37 @@ export class Arsenal {
   /** Die Splitter eines Fangeisens (Rang 5) und Schläge ohne Zustände: Sie wirken nicht in Ketten und bringen nichts an. */
   private splintering = false;
   private plain = false;
-  /** Stand der Kuppel im letzten Bild: Daran erkennt man, dass sie gerade einen Treffer abgefangen hat. */
-  private shieldWasUp = false;
+  /** Wie viele Ladungen der Schild im letzten Bild hatte: Daran erkennt man, dass er gerade einen Treffer abgefangen hat. */
+  private shieldSeen = 0;
+  /** Der Wurzelgriff der Figur (Rang 4 und 5 lauern auf Gefesselte) und ihr Schild (Rang 4 und 5 lauern auf den Bruch). */
+  private rooter: OwnedWeapon | null = null;
+  private shielder: OwnedWeapon | null = null;
+  /** Hat der Schild Rang 5? Dann zählt er Tode durch Zauber und Treffer an Großen. */
+  private primed = false;
+  private primeKills = 0;
+  private primeHits = 0;
+  /** Läuft die Ladezeit des Schilds, seit er zuletzt abgefangen hat? */
+  private shieldStarted = false;
+  /** Die Spielzeit des Bilds, für „wie lange steht er im Glutkreis“. */
+  private now = 0;
+  /** Zustand des Schlags, der gerade läuft: Pulse der Glut, Betäubung der zweiten Erdwelle. */
+  private pulsing = false;
+  private stun = false;
+  private glowX = 0;
+  private glowZ = 0;
+  private glowRadius = 0;
+  /** Die Sorlanze merkt sich, wen sie trifft, damit sie nur die ersten Gegner in der Reihe nimmt. */
+  private readonly beamEnemy: (Enemy | null)[] = Array.from({ length: BEAM_SLOTS }, () => null);
+  private readonly beamAlong: number[] = Array.from({ length: BEAM_SLOTS }, () => 0);
+  /** Die Beschreibungen der Felder des Magiers; sie hängen nicht vom Rang ab, einmal angelegt. */
+  private lineDef: FieldDef | null = null;
+  private ashDef: FieldDef | null = null;
+  private ringDef: FieldDef | null = null;
+  private trailDef: FieldDef | null = null;
+  /** Die Staubspur der Sturmböe (Rang 5): wie lange sie noch entsteht und wann das nächste Feld fällt. */
+  private trailWeapon: OwnedWeapon | null = null;
+  private trailTime = 0;
+  private trailGap = 0;
 
   constructor(
     private readonly stats: Stats,
@@ -178,8 +218,18 @@ export class Arsenal {
     this.plain = false;
     this.factor = 1;
     this.shieldCharging = 0;
-    this.shieldWasUp = false;
-    this.player.shield = false;
+    this.shieldStarted = false;
+    this.shieldSeen = 0;
+    this.rooter = null;
+    this.shielder = null;
+    this.primed = false;
+    this.primeKills = 0;
+    this.primeHits = 0;
+    this.pulsing = false;
+    this.stun = false;
+    this.trailWeapon = null;
+    this.trailTime = 0;
+    this.player.shieldCharges = 0;
     this.projectiles.reset();
     this.effects.reset();
     const start = this.available[0];
@@ -218,11 +268,15 @@ export class Arsenal {
       this.owned.push(owned);
       if (def.kind === 'thorns') this.thorns = owned;
       if (def.kind === 'trap') this.trapper = owned;
+      if (def.id === 'wurzelgriff') this.rooter = owned;
+      if (def.kind === 'shield') this.shielder = owned;
     }
+    this.primed = this.shielder !== null && hasFlag(this.shielder.rules, 'staub');
   }
 
   update(dt: number, time: number, traits: CombatTraits): void {
     this.traits = traits;
+    this.now = time;
     const origin = this.player.position;
     let aura: OwnedWeapon | null = null;
 
@@ -253,14 +307,18 @@ export class Arsenal {
     this.updateVolleys(dt);
     this.updateTraps();
     this.updatePods();
+    this.updateTrail(dt);
     this.projectiles.update(dt, this.enemies, this.onProjectileHit, origin, this.trail);
     this.showFields();
     this.effects.embers(aura !== null, origin.x, origin.z, aura ? this.auraRadius(aura) : 0, time, dt);
-    // Wer den Schild gebrochen hat, ist meist der nächste Gegner; von dort aus zerfällt die Kuppel.
-    const broken = this.shieldWasUp && !this.player.shield;
-    const attacker = broken ? this.enemies.nearest(origin.x, origin.z, 4) : null;
-    this.effects.shield(this.player.shield, origin.x, origin.z, attacker ? Math.atan2(attacker.x - origin.x, attacker.z - origin.z) : undefined);
-    this.shieldWasUp = this.player.shield;
+    // Wer den Schild getroffen hat, ist meist der nächste Gegner; von dort aus zerfällt die Kuppel oder stieben die Splitter.
+    const charges = this.player.shieldCharges;
+    const absorbed = charges < this.shieldSeen;
+    const attacker = absorbed ? this.enemies.nearest(origin.x, origin.z, 4) : null;
+    const from = attacker ? Math.atan2(attacker.x - origin.x, attacker.z - origin.z) : undefined;
+    this.effects.shield(charges > 0, origin.x, origin.z, from);
+    if (absorbed && charges > 0) this.effects.shieldHit(origin.x, origin.z, from ?? 0);
+    this.shieldSeen = charges;
     this.effects.showTraps(this.traps, this.trapper !== null && hasFlag(this.trapper.rules, 'splitter'));
     this.effects.showPods(this.pods);
     this.effects.lightSource(this.player.lightSource(lightAt), lightAt, dt);
@@ -317,9 +375,7 @@ export class Arsenal {
       return true;
     }
     if (def.kind === 'aura') {
-      const radius = this.auraRadius(weapon);
-      this.burst(weapon, origin.x, origin.z, radius);
-      this.effects.emberPulse(origin.x, origin.z, radius);
+      this.glow(weapon, origin, this.auraRadius(weapon));
       audio.play(`angriff.${def.id}`, origin.x, origin.z);
       return true;
     }
@@ -358,10 +414,13 @@ export class Arsenal {
         }
         break;
       }
-      case 'beam':
-        this.lance(weapon, origin, angle, range, def.width ?? 0.4);
-        this.effects.lance(origin.x, origin.z, angle, range);
+      case 'beam': {
+        // Rang 5: zwei Lanzen kurz nacheinander, die erste ein wenig links, die zweite rechts der Mitte.
+        const twice = rules.flags.length > 0 && hasFlag(rules, 'doppel');
+        this.shoot(weapon, origin.x, origin.z, angle, range, twice ? -MAGIER.lanceOffset / 2 : 0);
+        if (twice) this.later(weapon, MAGIER.lanceAgain, 'lanze', angle);
         break;
+      }
       case 'volley': {
         const delay = def.delay ?? 0.5;
         this.volleys.push({ x: target.x, z: target.z, weapon, delay });
@@ -390,6 +449,7 @@ export class Arsenal {
     this.sweep(weapon, origin, angle, range, width);
     this.factor = 1;
     if (def.look === 'hitze') this.effects.heat(origin.x, origin.z, angle, range, width);
+    else if (def.look === 'boee') this.effects.gustLane(origin.x, origin.z, angle, range, width);
     else this.effects.slash(origin.x, origin.z, angle, range, width, def.look === 'wucht');
     if (rules.flags.length === 0 && rules.statuses.length === 0) return;
     // Der Staub des Wuchthiebs ab Rang 3: Er blendet und betäubt, und man sieht ihn.
@@ -401,6 +461,16 @@ export class Arsenal {
       weapon.refund = def.cooldown * this.stats.cooldown * rules.cooldown * KAEMPFER.chainRefund;
     }
     if (hasFlag(rules, 'rueckhand')) this.later(weapon, KAEMPFER.backhandDelay, 'rueckhand', angle);
+    // Sturmböe: Schub nach jeder Böe, ab Rang 5 mit Staubspur; Hitze werfen, Rang 5: die Aschelinie am Ende des Kegels.
+    if (hasFlag(rules, 'schub')) {
+      this.support.progression.addBuff(BOOST);
+      if (hasFlag(rules, 'spur')) {
+        this.trailWeapon = weapon;
+        this.trailTime = MAGIER.boostSeconds;
+        this.trailGap = 0;
+      }
+    }
+    if (hasFlag(rules, 'asche')) this.ashLine(weapon, origin, angle, range, width);
   }
 
   /** Eine Wirkung rundum (Wirbelschlag, Kriegsschrei, Erdstoß, Sturmböe) mit dem Radius `radius`. */
@@ -418,7 +488,6 @@ export class Arsenal {
     if (def.look === 'wirbel') this.effects.whirl(origin.x, origin.z, angle, radius);
     else if (def.look === 'schrei') this.effects.shout(origin.x, origin.z, radius);
     else if (def.look === 'erdstoss') this.effects.quake(origin.x, origin.z, radius);
-    else if (def.look === 'boee') this.effects.gust(origin.x, origin.z, radius);
     if (!first || rules.flags.length === 0) return;
     if (hasFlag(rules, 'doppelt')) {
       this.later(weapon, KAEMPFER.whirlAgain, 'wirbel', angle);
@@ -429,6 +498,9 @@ export class Arsenal {
       this.support.progression.addBuff(SHOUT_CRIT);
     }
     if (hasFlag(rules, 'echo')) this.later(weapon, KAEMPFER.echoDelay, 'echo', angle);
+    // Erdstoß: eine engere zweite Welle (Rang 4) und der Ring aus Erde am Rand (Rang 5).
+    if (hasFlag(rules, 'welle')) this.later(weapon, MAGIER.waveDelay, 'welle', angle);
+    if (hasFlag(rules, 'ring')) this.earthRing(weapon, origin, radius);
   }
 
   /** Jeder Getroffene des Wirbelschlags verkürzt die nächste Abklingzeit, insgesamt höchstens um einen Anteil. */
@@ -486,10 +558,18 @@ export class Arsenal {
         if (swing) this.player.strike(swing, angle);
         audio.play(`angriff.${def.id}`, origin.x, origin.z);
         this.strikeArc(weapon, origin, angle, range, KAEMPFER.backhandDamage, false);
+      } else if (followUp.kind === 'lanze') {
+        // Die zweite Lanze richtet sich nach dem Gegner, der jetzt am nächsten steht.
+        const range = def.range * this.stats.reach * rules.range;
+        const target = this.enemies.nearest(origin.x, origin.z, range);
+        const angle = target ? Math.atan2(target.x - origin.x, target.z - origin.z) : followUp.angle;
+        audio.play(`angriff.${def.id}`, origin.x, origin.z);
+        this.shoot(weapon, origin.x, origin.z, angle, range, MAGIER.lanceOffset / 2);
       } else {
         const radius = def.range * this.stats.reach * rules.range * rules.radius;
         audio.play(`angriff.${def.id}`, origin.x, origin.z);
-        this.strikeNova(weapon, origin, followUp.angle, radius, followUp.kind === 'echo' ? KAEMPFER.echoFactor : 1, false);
+        if (followUp.kind === 'welle') this.wave(weapon, origin, radius * MAGIER.waveRadius);
+        else this.strikeNova(weapon, origin, followUp.angle, radius, followUp.kind === 'echo' ? KAEMPFER.echoFactor : 1, false);
       }
     }
   }
@@ -579,8 +659,18 @@ export class Arsenal {
 
   /** Für `CombatEvents`: Wird die Figur getroffen, sticht das Dornenschild zurück. Das Spiel meldet ihn zu Beginn jeder Nacht an. */
   readonly listener: CombatListener = {
-    hurt: (attacker) => this.sting(attacker),
-    kill: (enemy) => this.trapKill(enemy),
+    hurt: (attacker, _taken, absorbed) => {
+      this.sting(attacker);
+      if (absorbed) this.shieldBroke();
+    },
+    kill: (enemy, source) => {
+      this.trapKill(enemy);
+      this.rootKill(enemy);
+      if (this.primed) this.shieldKill(source);
+    },
+    hit: (enemy, _amount, source, dot) => {
+      if (this.primed) this.shieldHit(enemy, source, dot);
+    },
   };
 
   /** Ein Gegner trifft die Figur: Das Dornenschild sticht zurück. */
@@ -891,6 +981,225 @@ export class Arsenal {
     audio.play(`einschlag.${weapon.def.id}`, field.x, field.z);
   };
 
+  // ----------------------------------------------------------------------- Magier
+
+  /**
+   * Glut formen: Ein Schlag der Glut auf alle im Kreis. Rang 4 zählt, wie lange einer ohne Unterbrechung darin steht (und lässt ihn dann
+   * brennen); Rang 5 macht jeden achten Schlag zum Puls: doppelter Schaden, kleine Nahkämpfer werden zum Rand gestoßen.
+   */
+  private glow(weapon: OwnedWeapon, origin: Site, radius: number): void {
+    const { rules } = weapon;
+    const pulse = rules.flags.length > 0 && hasFlag(rules, 'puls') && ++weapon.counter % MAGIER.pulseEvery === 0;
+    this.glowX = origin.x;
+    this.glowZ = origin.z;
+    this.glowRadius = radius;
+    this.pulsing = pulse;
+    this.factor = pulse ? MAGIER.pulseFactor : 1;
+    this.burst(weapon, origin.x, origin.z, radius, Infinity, rules.flags.length > 0 ? this.scorch : undefined);
+    this.factor = 1;
+    this.pulsing = false;
+    this.effects.emberPulse(origin.x, origin.z, radius);
+    if (pulse) this.effects.emberBurst(origin.x, origin.z, radius);
+  }
+
+  private readonly scorch = (enemy: Enemy, weapon: OwnedWeapon): void => {
+    if (hasFlag(weapon.rules, 'entzuenden')) {
+      // Wer zwischen zwei Schlägen nicht im Kreis war, beginnt von vorn.
+      const gap = this.now - enemy.scorchAt;
+      enemy.scorch = gap > MAGIER.scorchGap ? 0 : enemy.scorch + gap;
+      enemy.scorchAt = this.now;
+      if (enemy.scorch >= MAGIER.scorchAfter) applyStatus(enemy.status, 'burn', MAGIER.scorchSeconds, MAGIER.scorchPower, weapon.source);
+    }
+    if (!this.pulsing || enemy.driven || enemy.type.cast || enemy.type.scale >= BIG_GAME_SCALE) return;
+    const dx = enemy.x - this.glowX;
+    const dz = enemy.z - this.glowZ;
+    const distance = Math.hypot(dx, dz);
+    // Bis an den Rand, höchstens ein Stück weit; wer in der Mitte steht, wird in eine beliebige Richtung gestoßen.
+    const meters = Math.min(Math.max(this.glowRadius - distance, 0), MAGIER.pulsePush);
+    const along = distance > 1e-3 ? 1 / distance : 0;
+    enemy.pushX += (distance > 1e-3 ? dx * along : 1) * meters * PUSH_PER_METER;
+    enemy.pushZ += (distance > 1e-3 ? dz * along : 0) * meters * PUSH_PER_METER;
+  };
+
+  /** Eine Lanze der Sorlanze von (x, z), `side` Meter seitlich versetzt, mit ihrer Glutspur (Rang 4). */
+  private shoot(weapon: OwnedWeapon, x: number, z: number, angle: number, range: number, side: number): void {
+    const ox = x + Math.cos(angle) * side;
+    const oz = z - Math.sin(angle) * side;
+    this.lance(weapon, ox, oz, angle, range, weapon.def.width ?? 0.4);
+    this.effects.lance(ox, oz, angle, range);
+    if (weapon.rules.flags.length > 0 && hasFlag(weapon.rules, 'glutspur')) {
+      this.lineDef ??= {
+        id: 'sorlanze-spur',
+        shape: 'line',
+        duration: MAGIER.lineSeconds,
+        every: 0.4,
+        damage: weapon.def.damage * MAGIER.lineDamage,
+        statuses: [{ kind: 'slow', seconds: MAGIER.lineSlowSeconds, power: MAGIER.lineSlow }],
+      };
+      this.support.fields.spawn(this.lineDef, ox, oz, {
+        angle,
+        length: range,
+        width: MAGIER.lineWidth,
+        scale: weapon.rules.damage * this.stats.damage * this.traits.dealt,
+        source: weapon.source,
+      });
+      this.effects.glowLine(ox, oz, angle, range, MAGIER.lineWidth, MAGIER.lineSeconds, LINE_COLOR);
+    }
+  }
+
+  /** Hitze werfen, Rang 5: Am Ende des Kegels bleibt eine Linie aus glühender Asche quer zur Richtung liegen. */
+  private ashLine(weapon: OwnedWeapon, origin: Site, angle: number, range: number, width: number): void {
+    const reach = range * 0.92;
+    const half = Math.min(MAGIER.ashLength, 2 * reach * Math.tan(Math.min(width, 2.2) / 2)) / 2;
+    const across = angle + Math.PI / 2;
+    const x = origin.x + Math.sin(angle) * reach - Math.sin(across) * half;
+    const z = origin.z + Math.cos(angle) * reach - Math.cos(across) * half;
+    this.ashDef ??= {
+      id: 'hitze-asche',
+      shape: 'line',
+      duration: MAGIER.ashSeconds,
+      every: 0.5,
+      damage: weapon.def.damage * MAGIER.ashDamage,
+      statuses: [{ kind: 'burn', seconds: MAGIER.ashBurnSeconds, power: MAGIER.ashBurnPower }],
+    };
+    this.support.fields.spawn(this.ashDef, x, z, {
+      angle: across,
+      length: half * 2,
+      width: MAGIER.ashWidth,
+      scale: weapon.rules.damage * this.stats.damage * this.traits.dealt,
+      source: weapon.source,
+    });
+    this.effects.glowLine(x, z, across, half * 2, MAGIER.ashWidth, MAGIER.ashSeconds, ASH_COLOR);
+  }
+
+  /** Erdstoß, Rang 4: Die engere zweite Welle trifft, wer dem ersten Stoß standgehalten hat, und betäubt ihn kurz. */
+  private wave(weapon: OwnedWeapon, origin: Site, radius: number): void {
+    this.factor = MAGIER.waveDamage;
+    this.stun = true;
+    this.burst(weapon, origin.x, origin.z, radius);
+    this.factor = 1;
+    this.stun = false;
+    this.effects.quake(origin.x, origin.z, radius);
+  }
+
+  /** Erdstoß, Rang 5: Am Rand der Welle steht für kurze Zeit ein Ring aus Erde, der nachrückende Gegner bremst. */
+  private earthRing(weapon: OwnedWeapon, origin: Site, radius: number): void {
+    this.ringDef ??= {
+      id: 'erdstoss-ring',
+      shape: 'ring',
+      duration: MAGIER.ringSeconds,
+      every: 0.25,
+      instant: true,
+      statuses: [{ kind: 'slow', seconds: MAGIER.ringSlowSeconds, power: MAGIER.ringSlow }],
+    };
+    this.support.fields.spawn(this.ringDef, origin.x, origin.z, { radius, width: MAGIER.ringWidth, source: weapon.source });
+    this.effects.earthRing(origin.x, origin.z, radius, MAGIER.ringWidth, MAGIER.ringSeconds);
+  }
+
+  /** Sturmböe, Rang 5: Solange der Schub währt, fällt hinter der Figur alle paar Atemzüge ein Feld Staub, das Verfolger bremst und schwächt. */
+  private updateTrail(dt: number): void {
+    const weapon = this.trailWeapon;
+    if (!weapon || this.trailTime <= 0) return;
+    this.trailTime -= dt;
+    this.trailGap -= dt;
+    if (this.trailGap > 0) return;
+    this.trailGap = MAGIER.trailEvery;
+    this.trailDef ??= {
+      id: 'sturmboee-spur',
+      shape: 'circle',
+      duration: MAGIER.trailSeconds,
+      every: 0.3,
+      instant: true,
+      statuses: [
+        { kind: 'slow', seconds: MAGIER.trailEffectSeconds, power: MAGIER.trailSlow },
+        { kind: 'feeble', seconds: MAGIER.trailEffectSeconds, power: MAGIER.trailFeeble },
+      ],
+    };
+    const origin = this.player.position;
+    const radius = MAGIER.trailRadius * this.stats.reach;
+    this.support.fields.spawn(this.trailDef, origin.x, origin.z, { radius, source: weapon.source });
+    this.effects.dustTrail(origin.x, origin.z, radius);
+  }
+
+  /** Wurzelgriff, Rang 5: Stirbt ein Gefesselter, schießt eine neue Wurzel zum nächsten freien Gegner in der Nähe. */
+  private rootKill(enemy: Enemy): void {
+    const weapon = this.rooter;
+    if (!weapon || weapon.rules.flags.length === 0 || !hasFlag(weapon.rules, 'nachwuchs')) return;
+    const held = enemy.status.hold;
+    if (held.time <= 0 || held.source !== weapon.source) return;
+    this.regrowX = enemy.x;
+    this.regrowZ = enemy.z;
+    this.regrowBest = null;
+    this.regrowDistance = MAGIER.regrowRange;
+    this.enemies.queryRadius(enemy.x, enemy.z, MAGIER.regrowRange, this.regrowPick);
+    const target = this.regrowBest as Enemy | null;
+    if (!target) return;
+    applyStatus(target.status, 'hold', MAGIER.regrowSeconds, undefined, weapon.source);
+    this.effects.entangle(target.x, target.z, target.type.radius, MAGIER.regrowSeconds);
+  }
+
+  private regrowX = 0;
+  private regrowZ = 0;
+  private regrowDistance = 0;
+  private regrowBest: Enemy | null = null;
+
+  private readonly regrowPick = (candidate: Enemy): void => {
+    // Wer schon festsitzt oder vom Verschlinger geführt wird, kommt nicht in Frage.
+    if (candidate.hp <= 0 || candidate.driven || candidate.status.hold.time > 0) return;
+    const distance = Math.hypot(candidate.x - this.regrowX, candidate.z - this.regrowZ) - candidate.type.radius;
+    if (distance >= this.regrowDistance) return;
+    this.regrowDistance = distance;
+    this.regrowBest = candidate;
+  };
+
+  /** Die Ladezeit des Schilds in Sekunden. */
+  private shieldTime(weapon: OwnedWeapon): number {
+    return weapon.def.cooldown * this.stats.cooldown * weapon.rules.cooldown;
+  }
+
+  /** Schild, Rang 4: Der letzte Schutz bricht unter einem Treffer, und der Impuls aus gebundenem Staub blendet und bremst Angreifer in der Nähe. */
+  private shieldBroke(): void {
+    const weapon = this.shielder;
+    if (!weapon || this.player.shield || weapon.rules.flags.length === 0 || !hasFlag(weapon.rules, 'impuls')) return;
+    const origin = this.player.position;
+    this.enemies.queryRadius(origin.x, origin.z, MAGIER.pulseRadius, this.pulseEach);
+    this.effects.dustPulse(origin.x, origin.z, MAGIER.pulseRadius);
+  }
+
+  private readonly pulseEach = (enemy: Enemy): void => {
+    const weapon = this.shielder;
+    if (!weapon || enemy.hp <= 0) return;
+    const origin = this.player.position;
+    if (Math.hypot(enemy.x - origin.x, enemy.z - origin.z) > MAGIER.pulseRadius + enemy.type.radius) return;
+    applyStatus(enemy.status, 'blind', MAGIER.pulseBlindSeconds, MAGIER.pulseBlind, weapon.source);
+    applyStatus(enemy.status, 'slow', MAGIER.pulseSlowSeconds, MAGIER.pulseSlow, weapon.source);
+  };
+
+  /** Schild, Rang 5: Jeder fünfte Tod durch einen Zauber verkürzt die Ladezeit. */
+  private shieldKill(source: Source | null): void {
+    if (!source || !SPELLS.has(source.id)) return;
+    if (++this.primeKills < MAGIER.primeKills) return;
+    this.primeKills = 0;
+    this.primeShield();
+  }
+
+  /** Schild, Rang 5: Jeder zehnte Treffer eines Zaubers an einem Großen (Troll, Verschlinger) verkürzt die Ladezeit. */
+  private shieldHit(enemy: Enemy, source: Source | null, dot: boolean): void {
+    if (dot || !source || enemy.type.scale < BIG_GAME_SCALE || !SPELLS.has(source.id)) return;
+    if (++this.primeHits < MAGIER.primeHits) return;
+    this.primeHits = 0;
+    this.primeShield();
+  }
+
+  /** Zieht einen Anteil von der Ladezeit ab, solange der Schild lädt. */
+  private primeShield(): void {
+    const weapon = this.shielder;
+    if (!weapon || !this.shieldStarted || this.player.shield) return;
+    this.shieldCharging -= this.shieldTime(weapon) * MAGIER.primeShare;
+    const origin = this.player.position;
+    this.effects.dustPulse(origin.x, origin.z, 1.2);
+  }
+
   // ---------------------------------------------------------------------- Wurfaxt
 
   /** Was die Äxte können: stecken bleiben, eine Staubspur ziehen, zurückkehren. Je Rang einmal angelegt. */
@@ -972,19 +1281,49 @@ export class Arsenal {
     this.effects.entangle(enemy.x, enemy.z, enemy.type.radius, statusSeconds(weapon.rules, 'hold') || 2);
   };
 
-  /** Trifft alle Gegner auf einer geraden Linie. */
-  private lance(weapon: OwnedWeapon, origin: Site, angle: number, length: number, width: number): void {
+  /**
+   * Trifft Gegner auf einer geraden Linie von (x, z): alle, oder (Sorlanze, Rang 1) nur die ersten `pierce + 1`; dann erleidet jeder
+   * weitere einen Teil weniger (`abfall`).
+   */
+  private lance(weapon: OwnedWeapon, x: number, z: number, angle: number, length: number, width: number): void {
     const directionX = Math.sin(angle);
     const directionZ = Math.cos(angle);
+    const limit = weapon.rules.pierce + 1;
+    const limited = limit <= BEAM_SLOTS;
+    let count = 0;
     for (const enemy of this.enemies.alive) {
       if (enemy.hp <= 0) continue;
-      const dx = enemy.x - origin.x;
-      const dz = enemy.z - origin.z;
+      const dx = enemy.x - x;
+      const dz = enemy.z - z;
       const along = dx * directionX + dz * directionZ;
       if (along < 0 || along > length + enemy.type.radius) continue;
       const across = Math.abs(dx * directionZ - dz * directionX);
-      if (across <= width / 2 + enemy.type.radius) this.hit(enemy, weapon, origin.x, origin.z);
+      if (across > width / 2 + enemy.type.radius) continue;
+      if (!limited) {
+        this.hit(enemy, weapon, x, z);
+        continue;
+      }
+      // Die ersten `limit` Gegner entlang der Linie, nach Abstand geordnet.
+      if (count < limit) count++;
+      else if (along >= (this.beamAlong[limit - 1] ?? Infinity)) continue;
+      let slot = count - 1;
+      while (slot > 0 && (this.beamAlong[slot - 1] ?? 0) > along) {
+        this.beamAlong[slot] = this.beamAlong[slot - 1] ?? 0;
+        this.beamEnemy[slot] = this.beamEnemy[slot - 1] ?? null;
+        slot--;
+      }
+      this.beamAlong[slot] = along;
+      this.beamEnemy[slot] = enemy;
     }
+    if (!limited) return;
+    const falloff = weapon.rules.flags.length > 0 && hasFlag(weapon.rules, 'abfall');
+    for (let i = 0; i < count; i++) {
+      const enemy = this.beamEnemy[i];
+      if (!enemy) continue;
+      this.factor = falloff ? MAGIER.lanceFalloff ** i : 1;
+      this.hit(enemy, weapon, x, z);
+    }
+    this.factor = 1;
   }
 
   /** Einziger Weg, auf dem ein Angriff Schaden und Wirkungen anbringt. */
@@ -1002,7 +1341,11 @@ export class Arsenal {
       // Ein vorbereiteter Schlag (Wuchthieb, Rang 5) ist sicher kritisch.
       const roll = this.random();
       let chance = this.stats.critChance + markChance(enemy.status);
-      if (rules.flags.length > 0 && hasFlag(rules, 'vorteil') && this.disadvantaged(enemy)) chance += LAEUFER.advantageCrit;
+      if (rules.flags.length > 0) {
+        if (hasFlag(rules, 'vorteil') && this.disadvantaged(enemy)) chance += LAEUFER.advantageCrit;
+        // Sorlanze, Rang 5: Gegen Gegner im Nachteil oder in Flammen trifft sie sicher kritisch.
+        else if (hasFlag(rules, 'treffsicher') && (enemy.status.weak.time > 0 || enemy.status.burn.time > 0)) chance = 1;
+      }
       if (weapon.primed || roll < chance) amount *= this.stats.critDamage;
       amount *= takenFactor(enemy.status);
       if (this.traits.finsternisDamage !== 1 && this.zones.finsternisAt(enemy.x, enemy.z) > 0.5) {
@@ -1017,6 +1360,11 @@ export class Arsenal {
         if (Math.hypot(enemy.x - origin.x, enemy.z - origin.z) <= this.player.light) amount *= litDamage;
       }
       const kind = strikeKind(def);
+      // Wurzelgriff, Rang 4: Im Griff der Wurzeln brennt das trockene Holz mit; Feuer und Licht schaden dort mehr.
+      const rooter = this.rooter;
+      if (rooter && (kind === 'brand' || kind === 'glut') && enemy.status.hold.time > 0 && enemy.status.hold.source === rooter.source && hasFlag(rooter.rules, 'trocken')) {
+        amount *= MAGIER.dryFactor;
+      }
       this.effects.strike(enemy.x, bodyHeight(enemy.type.model, 0.6), enemy.z, kind);
       audio.play(HIT_SOUNDS[kind], enemy.x, enemy.z);
     }
@@ -1034,6 +1382,9 @@ export class Arsenal {
     this.enemies.damage(enemy, amount, pushX, pushZ, weapon.source);
     if (this.plain) return;
     for (const apply of rules.statuses) applyStatus(enemy.status, apply.kind, apply.seconds, apply.power, weapon.source);
+    if (this.stun) applyStatus(enemy.status, 'hold', MAGIER.waveStun, undefined, weapon.source);
+    // Sturmböe, Rang 3: Wen die Böe trifft und zaubert (der Priester), dessen Zauber zerstreut sie.
+    if (enemy.type.cast && rules.flags.length > 0 && hasFlag(rules, 'zerstreuen')) applyStatus(enemy.status, 'silence', MAGIER.scatterSeconds, undefined, weapon.source);
   }
 
   /** Steht der Gegner im Nachteil, ist er verlangsamt oder blutet er? Dann treffen Pfeile und Messer mit Vorteil. */
@@ -1072,14 +1423,19 @@ export class Arsenal {
   };
 
   private updateShield(dt: number, weapon: OwnedWeapon): void {
-    if (this.player.shield) return;
-    // Erst nach einem abgefangenen Treffer beginnt das Laden von vorn.
-    if (this.shieldCharging <= 0) {
-      this.shieldCharging = weapon.def.cooldown * this.stats.cooldown * weapon.rules.cooldown;
+    if (this.player.shield) {
+      this.shieldStarted = false;
+      return;
+    }
+    // Erst nach dem letzten abgefangenen Treffer beginnt das Laden von vorn; dann ist der Schild wieder ganz da (ab Rang 3 zwei Ladungen).
+    if (!this.shieldStarted) {
+      this.shieldStarted = true;
+      this.shieldCharging = this.shieldTime(weapon);
     }
     this.shieldCharging -= dt * this.traits.haste;
     if (this.shieldCharging <= 0) {
-      this.player.shield = true;
+      this.shieldStarted = false;
+      this.player.shieldCharges = weapon.rules.count;
       audio.play('schild.bereit', this.player.position.x, this.player.position.z);
     }
   }
