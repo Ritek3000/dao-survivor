@@ -74,7 +74,7 @@ export class Hud {
   onPick: (index: number) => void = () => {};
   /** Die Knöpfe der Auswahl und des Steigerungsmenüs. */
   onSteigern: () => void = () => {};
-  /** Der Knopf zur Ausrüstung bei der Klassenwahl und am Ende der Nacht. */
+  /** Der Knopf zum Lager bei der Klassenwahl und am Ende der Nacht. */
   onLager: () => void = () => {};
   onSteigerungBuy: (index: number) => void = () => {};
   onSteigerungClass: (index: number) => void = () => {};
@@ -284,16 +284,16 @@ export class Hud {
     this.choiceKeys.textContent =
       gold === null
         ? '1 · 2 · 3 oder Pfeiltasten und Enter'
-        : `1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen · U: Klassen steigern${this.lagerEnabled ? ' · L: Ausrüstung' : ''} · Esc: Hauptmenü`;
+        : `1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen · U: Klassen steigern${this.lagerEnabled ? ' · L: Lager' : ''} · Esc: Hauptmenü`;
     this.select(selected);
     this.choice.hidden = false;
   }
 
-  /** Zeigt die Knöpfe zur Ausrüstung oder versteckt sie; wirkt ab dem nächsten Bild der Klassenwahl und des Endes. */
+  /** Zeigt die Knöpfe zum Lager oder versteckt sie; wirkt ab dem nächsten Bild der Klassenwahl und des Endes. */
   setLagerEnabled(enabled: boolean): void {
     this.lagerEnabled = enabled;
     this.endLager.hidden = !enabled;
-    this.endKeys.textContent = `Enter: Klasse wählen und neue Nacht beginnen · U: Gold für Steigerungen ausgeben${enabled ? ' · L: Ausrüstung' : ''} · Esc: Hauptmenü`;
+    this.endKeys.textContent = `Enter: Klasse wählen und neue Nacht beginnen · U: Gold für Steigerungen ausgeben${enabled ? ' · L: Lager' : ''} · Esc: Hauptmenü`;
   }
 
   select(index: number): void {

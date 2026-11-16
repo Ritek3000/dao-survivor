@@ -6,8 +6,8 @@
  * Anfang fest (`fixedSeed`), damit seine Nächte vergleichbar bleiben.
  *
  * Während der Nacht sammelt die Figur die Gegenstände nur im Beutel (`bag`). Erst am Ende der Nacht wandern sie ins Inventar
- * der gespielten Klasse (`settle`); was nicht mehr hineinpasst, wird zum Verkaufspreis verkauft. Die Truhe (später) kommt
- * zwischen Inventar und Verkauf.
+ * der gespielten Klasse (`settle`); was nicht mehr hineinpasst, kommt auf den ersten freien Platz der Truhe, und erst was auch
+ * dort keinen Platz findet, wird zum Verkaufspreis verkauft.
  */
 
 import { CONFIG } from '../config';
@@ -22,9 +22,9 @@ export type LootSource = keyof typeof CONFIG.loot.rarity;
 /** Ein Gegenstand der Nacht und was am Ende mit ihm geschah. */
 export interface SettledItem {
   item: Item;
-  /** Im Inventar der Klasse gelandet? Sonst verkauft. */
-  stored: boolean;
-  /** Was der Verkauf einbrachte; 0, wenn der Gegenstand im Inventar liegt. */
+  /** Wohin der Gegenstand kam: ins Inventar der Klasse, in die Truhe oder, wenn nirgends Platz war, in den Verkauf. */
+  place: 'inventar' | 'truhe' | 'verkauf';
+  /** Was der Verkauf einbrachte; 0, wenn der Gegenstand liegt. */
   gold: number;
 }
 
@@ -111,8 +111,9 @@ export class Beute {
   }
 
   /**
-   * Räumt den Beutel am Ende der Nacht aus: Die wertvollsten Gegenstände kommen zuerst ins Inventar der Klasse, was keinen
-   * Platz mehr findet, wird verkauft. Der Verkaufserlös gehört der Börse; ihn schreibt der Aufrufer gut.
+   * Räumt den Beutel am Ende der Nacht aus: Die wertvollsten Gegenstände kommen zuerst ins Inventar der Klasse, dann in die
+   * Truhe, und was auch dort keinen Platz mehr findet, wird verkauft. Der Verkaufserlös gehört der Börse; ihn schreibt der
+   * Aufrufer gut.
    */
   settle(): LootSettlement {
     const items = [...this.bag].sort((a, b) => itemValue(b) - itemValue(a));
@@ -121,11 +122,13 @@ export class Beute {
     let gold = 0;
     for (const item of items) {
       if (this.ausruestung.add(this.classId, item)) {
-        settled.push({ item, stored: true, gold: 0 });
+        settled.push({ item, place: 'inventar', gold: 0 });
+      } else if (this.ausruestung.addToChest(item)) {
+        settled.push({ item, place: 'truhe', gold: 0 });
       } else {
         const price = sellPrice(item);
         gold += price;
-        settled.push({ item, stored: false, gold: price });
+        settled.push({ item, place: 'verkauf', gold: price });
       }
     }
     return { items: settled, gold };

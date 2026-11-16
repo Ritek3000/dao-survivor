@@ -435,6 +435,19 @@ export const CONFIG = {
      * das Inventar voll hat, verkauft so, was nicht mehr hineinpasst.
      */
     price: { normal: 100, selten: 400, rar: 1600, legendaer: 6400, sellShare: 0.25 },
+    /**
+     * Die Truhe: eine für alle Klassen, in Reitern. Der erste Reiter ist von Anfang an da; die ersten `freeTabs` Reiter kosten
+     * nichts, jeder weitere `tabPrice` Gold mal seiner Nummer über dieser Zahl (der sechste 500, der siebte 1.000, …). Mit
+     * `tabPrice: 0` sind alle Reiter gratis. `colors` sind die acht Farben, mit denen sich ein Reiter markieren lässt.
+     */
+    truhe: {
+      tabSize: 25,
+      maxTabs: 16,
+      freeTabs: 5,
+      tabPrice: 500,
+      nameLength: 16,
+      colors: ['#d4604f', '#e0954a', '#d6c25a', '#8fc98a', '#5cc0b8', '#6f9be0', '#a47fd6', '#d67fb0'],
+    },
     properties: {
       schaden: { min: 6, max: 14, step: 1, cap: 50, core: { waffe: 1.5 } },
       tempo: { min: 3, max: 10, step: 1, cap: 30, core: {} },

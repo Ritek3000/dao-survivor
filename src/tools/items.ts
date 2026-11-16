@@ -5,7 +5,8 @@
  *   __items.fuellen()                        Inventar aller Klassen mit gewürfelten Gegenständen füllen (Seltenheit gemischt)
  *   __items.fuellen(2, 'rar')                nur das Inventar des Magiers (0 Kämpfer, 1 Wildnisläufer, 2 Magier), alle 'rar'
  *   __items.geben(0, 'ring', 'legendaer')    einen Gegenstand auf den ersten freien Platz im Inventar der Klasse legen
- *   __items.leeren()                         alle Gegenstände aller Klassen löschen
+ *   __items.leeren()                         alle Gegenstände aller Klassen und die Truhe löschen
+ *   __items.truhe(30, 'rar')                 30 Gegenstände (hier alle 'rar', ohne Angabe gemischt) in die Truhe legen, Reiter für Reiter
  *
  * Beute (nur während einer Nacht):
  *   __items.fallen('rar')                    lässt neben der Figur einen Gegenstand der Seltenheit fallen (Platz gewürfelt)
@@ -68,6 +69,19 @@ export function installItemTools(game: Game): void {
           if (!api.geben(index, slot, chosen)) break;
         }
       }
+    },
+    /** Legt `count` gewürfelte Gegenstände auf die ersten freien Plätze der Truhe (für alle Klassen, Waffen und Fackeln der ersten). */
+    truhe(count = 25, rarity?: Rarity): number {
+      let placed = 0;
+      for (let i = 0; i < count; i++) {
+        const slot = ITEM_SLOTS[i % ITEM_SLOTS.length] as ItemSlot;
+        const chosen = rarity ?? (MIXED[Math.floor(random() * MIXED.length)] as Rarity);
+        const fitting = isPossible(slot, chosen) ? chosen : 'rar';
+        const owner = CLASSES[i % CLASSES.length];
+        if (!owner || !internals.ausruestung.addToChest(rollItem(random, slot, fitting, owner.id))) break;
+        placed++;
+      }
+      return placed;
     },
     leeren(): void {
       internals.ausruestung.reset();

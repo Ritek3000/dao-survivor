@@ -15,6 +15,10 @@ export type Action =
   | 'upgrade'
   /** Öffnet die Ausrüstung der Klassen (Menü zwischen den Nächten). */
   | 'lager'
+  /** Im Lager: den markierten Gegenstand gleich anlegen oder wegräumen, ohne ihn erst aufzunehmen. */
+  | 'use'
+  /** Im Lager: zwischen Ausrüstung und Truhe wechseln. */
+  | 'switch'
   | 'choice1'
   | 'choice2'
   | 'choice3';
@@ -56,6 +60,8 @@ const ACTION_KEYS: Readonly<Record<string, Action>> = {
   ArrowDown: 'down',
   KeyU: 'upgrade',
   KeyL: 'lager',
+  KeyE: 'use',
+  Tab: 'switch',
   Digit1: 'choice1',
   Numpad1: 'choice1',
   Digit2: 'choice2',
@@ -63,6 +69,12 @@ const ACTION_KEYS: Readonly<Record<string, Action>> = {
   Digit3: 'choice3',
   Numpad3: 'choice3',
 };
+
+/** Ist das Ziel eines Tastendrucks ein Feld, in das man Text schreibt? */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && target.type === 'text') || target.isContentEditable;
+}
 
 export class Input {
   private readonly held = new Set<string>();
@@ -108,6 +120,8 @@ export class Input {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    // Tippt jemand in ein Eingabefeld (etwa den Namen eines Reiters der Truhe), gehören die Tasten dem Feld und nicht dem Spiel.
+    if (isTypingTarget(event.target)) return;
     const isMove = event.code in MOVE_KEYS;
     const action = ACTION_KEYS[event.code];
     if (!isMove && !action) return;

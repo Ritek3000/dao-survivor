@@ -1099,7 +1099,8 @@ body[data-vitals^='bottom'] #loot {
   }
 }
 
-#steigerung-tabs {
+#steigerung-tabs,
+#lager-tabs {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -1249,7 +1250,8 @@ body[data-vitals^='bottom'] #loot {
   grid-template-columns: repeat(3, 78px);
 }
 
-#lager-inventory {
+#lager-inventory,
+#truhe-slots {
   grid-template-columns: repeat(5, 60px);
 }
 
@@ -1460,6 +1462,172 @@ body[data-vitals^='bottom'] #loot {
 
 #lager-summary .line.empty {
   color: var(--text-dim);
+}
+
+/* Lager: Ansicht wählen (Ausrüstung oder Truhe). */
+#lager-modes {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mode {
+  padding: 5px 22px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.mode.selected {
+  border-color: var(--ember);
+  color: var(--text);
+}
+
+/* Ein Gegenstand in der Hand: sein Platz bleibt markiert, bis er abgelegt oder zurückgelegt ist. */
+.slot.held {
+  border-style: dashed;
+  border-color: var(--ember);
+  opacity: 0.55;
+}
+
+/* Wer einen Gegenstand mit dem Finger zieht, soll nicht die Seite verschieben. */
+.slot,
+.rtab {
+  touch-action: none;
+}
+
+/* Der Gegenstand, der beim Ziehen am Zeiger hängt. */
+.ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  color: var(--rarity);
+  background: linear-gradient(var(--rarity-fill), rgba(8, 7, 6, 0.9));
+  border: 1px solid var(--rarity-line);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  opacity: 0.92;
+  pointer-events: none;
+}
+
+/* Truhe: die Leiste der Reiter und Befehle über dem Raster. */
+#lager-truhe {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 324px;
+}
+
+#truhe-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rtab,
+.rcmd {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 4px 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.rtab .dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--tab, var(--dust));
+}
+
+.rtab .name {
+  max-width: 62px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rtab .count {
+  font-size: 10.5px;
+  opacity: 0.7;
+}
+
+.rtab.current {
+  color: var(--text);
+  border-color: var(--tab, var(--line));
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.rcmd {
+  color: var(--text);
+}
+
+.rtab.selected,
+.rcmd.selected {
+  border-color: var(--ember);
+  box-shadow: 0 0 14px rgba(255, 180, 94, 0.25);
+}
+
+#truhe-rename {
+  display: flex;
+  gap: 4px;
+}
+
+#truhe-name {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid var(--ember);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  user-select: text;
+}
+
+#truhe-ask {
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--blood);
+  font-size: 13px;
+}
+
+#truhe-ask p {
+  margin: 0 0 6px;
+}
+
+#truhe-ask .buttons {
+  gap: 6px;
+}
+
+#lager-hand {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--ember);
+}
+
+#lager-note {
+  min-height: 1.3em;
+  margin: 0;
+  font-size: 13px;
+  color: #d4604f;
 }
 
 @media (max-width: 760px) {
