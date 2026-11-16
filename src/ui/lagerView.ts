@@ -17,12 +17,20 @@ export interface ItemView {
   bound: string | null;
 }
 
+/** Ein Preis in Gold, wie ihn der Händler an einen Gegenstand schreibt; `poor`: Das Gold in der Börse reicht dafür nicht. */
+export interface PriceView {
+  text: string;
+  poor: boolean;
+}
+
 export interface SlotView {
   /** Name des Platzes, bei Plätzen der Ausrüstung unter dem Zeichen. */
   label: string;
   /** Das Zeichen eines leeren Platzes der Ausrüstung; leere Plätze im Inventar haben keins. */
   icon: ItemIconId | null;
   item: ItemView | null;
+  /** Nur beim Händler: Was der Gegenstand dort kostet. */
+  price?: PriceView | null;
 }
 
 /** Ein Reiter der Truhe in der Leiste. */
@@ -43,11 +51,21 @@ export interface TruheModel {
   commands: readonly { label: string; title: string }[];
 }
 
-/** Wo der Zeiger steht: auf den angelegten Gegenständen, im Inventar, in der Truhe oder in der Leiste ihrer Reiter und Befehle. */
-export type LagerZone = 'ausruestung' | 'inventar' | 'truhe' | 'reiter';
+/** Der Händler: sein Angebot, der Rückkauf und die Befehle dazwischen (Angebot erneuern, Normale verkaufen). */
+export interface HaendlerModel {
+  stock: readonly SlotView[];
+  buyback: readonly SlotView[];
+  commands: readonly { label: string; title: string; poor: boolean }[];
+}
 
-/** Die zwei Ansichten des Lagers: Ausrüstung mit Inventar, oder Inventar mit Truhe. */
-export type LagerMode = 'ausruestung' | 'truhe';
+/**
+ * Wo der Zeiger steht: auf den angelegten Gegenständen, im Inventar, in der Truhe oder in der Leiste ihrer Reiter und Befehle,
+ * beim Händler im Angebot, in den Befehlen oder im Rückkauf. Beim Händler zeigt `truhe` den eigenen Besitz (Inventar oder Reiter).
+ */
+export type LagerZone = 'ausruestung' | 'inventar' | 'truhe' | 'reiter' | 'angebot' | 'befehle' | 'rueckkauf';
+
+/** Die drei Ansichten des Lagers: Ausrüstung mit Inventar, Inventar mit Truhe, und der Händler mit dem eigenen Besitz. */
+export type LagerMode = 'ausruestung' | 'truhe' | 'haendler';
 
 /** Ein Platz auf dem Bildschirm. In der Zone `reiter` zählen erst die Reiter, dann die Befehle. */
 export interface Mark {
@@ -65,12 +83,14 @@ export interface LagerModel {
   /** Die Summe der Eigenschaften der angelegten Gegenstände; `capped`: der Höchstwert ist erreicht. */
   summary: readonly { text: string; capped: boolean }[];
   truhe: TruheModel;
+  haendler: HaendlerModel;
   /** Der Platz des Gegenstands, den die Figur in der Hand hält, wenn er gerade zu sehen ist. */
   held: Mark | null;
   /** Zeile über den Tasten: was in der Hand liegt und was man damit tun kann. */
   hand: string;
-  /** Rückmeldung zur letzten Handlung, etwa warum etwas nicht ging. */
+  /** Rückmeldung zur letzten Handlung, etwa warum etwas nicht ging (`noteBad`: dann rot, sonst golden). */
   note: string;
+  noteBad: boolean;
   keys: string;
 }
 
@@ -81,19 +101,22 @@ export interface DetailView {
   /** Unterschied zum angelegten Gegenstand desselben Platzes; `null`, wenn es nichts zu vergleichen gibt. */
   compare: readonly { text: string; better: boolean }[] | null;
   compareTitle: string;
+  /** Beim Händler: Was der Gegenstand kostet oder einbringt. */
+  price?: PriceView | null;
 }
 
 export const EQUIPMENT_COLUMNS = 3;
 export const INVENTORY_COLUMNS = 5;
 export const TRUHE_COLUMNS = 5;
+export const HAENDLER_COLUMNS = 5;
 
 /** So weit (in Pixeln) muss der Zeiger bei gedrückter Taste wandern, bis aus einem Klick ein Ziehen wird. */
 const DRAG_DISTANCE = 8;
 
-const MODE_LABELS: Readonly<Record<LagerMode, string>> = { ausruestung: 'Ausrüstung', truhe: 'Truhe' };
+const MODE_LABELS: Readonly<Record<LagerMode, string>> = { ausruestung: 'Ausrüstung', truhe: 'Truhe', haendler: 'Händler' };
 
 /**
- * Die Oberfläche des Lagers: die Ansichten Ausrüstung und Truhe, die Karte des markierten Gegenstands und die Übersicht.
+ * Die Oberfläche des Lagers: die Ansichten Ausrüstung, Truhe und Händler, die Karte des markierten Gegenstands und die Übersicht.
  * Hält keinen Spielzustand; Klicks, Ziehen und Eingaben gehen als Rückrufe an `game/lager.ts`.
  */
 export class LagerView {
@@ -117,6 +140,10 @@ export class LagerView {
   private readonly equipment = element('lager-equipment');
   private readonly inventory = element('lager-inventory');
   private readonly truhe = element('lager-truhe');
+  private readonly haendler = element('lager-haendler');
+  private readonly stock = element('haendler-stock');
+  private readonly buyback = element('haendler-buyback');
+  private readonly haendlerCommands = element('haendler-commands');
   private readonly reiter = element('truhe-tabs');
   private readonly truheSlots = element('truhe-slots');
   private readonly rename = element('truhe-rename');
@@ -130,7 +157,15 @@ export class LagerView {
   private readonly hand = element('lager-hand');
   private readonly note = element('lager-note');
   private readonly keys = element('lager-keys');
-  private cells: Record<LagerZone, HTMLButtonElement[]> = { ausruestung: [], inventar: [], truhe: [], reiter: [] };
+  private cells: Record<LagerZone, HTMLButtonElement[]> = {
+    ausruestung: [],
+    inventar: [],
+    truhe: [],
+    reiter: [],
+    angebot: [],
+    befehle: [],
+    rueckkauf: [],
+  };
   private pressed: { from: Mark; item: ItemView; x: number; y: number } | null = null;
   private dragging = false;
   private ghost: HTMLElement | null = null;
@@ -202,13 +237,22 @@ export class LagerView {
         ...model.truhe.tabs.map((tab, index) => this.reiterTab(index, tab, index === model.truhe.active)),
         ...model.truhe.commands.map((command, index) => this.reiterCommand(model.truhe.tabs.length + index, command)),
       ],
+      angebot: model.haendler.stock.map((slot, index) => this.cell('angebot', index, slot)),
+      befehle: model.haendler.commands.map((command, index) => this.haendlerCommand(index, command)),
+      rueckkauf: model.haendler.buyback.map((slot, index) => this.cell('rueckkauf', index, slot)),
     };
     this.equipment.replaceChildren(...this.cells.ausruestung);
     this.inventory.replaceChildren(...this.cells.inventar);
     this.truheSlots.replaceChildren(...this.cells.truhe);
     this.reiter.replaceChildren(...this.cells.reiter);
+    this.stock.replaceChildren(...this.cells.angebot);
+    this.haendlerCommands.replaceChildren(...this.cells.befehle);
+    this.buyback.replaceChildren(...this.cells.rueckkauf);
+    // Ausrüstung und Inventar zeigen nur die Ansicht Ausrüstung; Inventar gibt es in der Truhe links, beim Händler in der Leiste.
     this.equipment.hidden = model.mode !== 'ausruestung';
-    this.truhe.hidden = model.mode !== 'truhe';
+    this.inventory.hidden = model.mode === 'haendler';
+    this.truhe.hidden = model.mode === 'ausruestung';
+    this.haendler.hidden = model.mode !== 'haendler';
     if (model.held) this.cells[model.held.zone][model.held.index]?.classList.add('held');
     this.summary.replaceChildren(
       span('title', 'Ausrüstung gesamt'),
@@ -218,7 +262,7 @@ export class LagerView {
     );
     this.hand.textContent = model.hand;
     this.hand.hidden = model.hand === '';
-    this.note.textContent = model.note;
+    this.setNote(model.note, model.noteBad);
     this.keys.textContent = model.keys;
     this.root.hidden = false;
   }
@@ -261,6 +305,7 @@ export class LagerView {
     }
     card.append(head, props);
     if (item.bound) card.append(span('bound', item.bound));
+    if (view.price) card.append(span(view.price.poor ? 'price poor' : 'price', view.price.text));
     if (view.compare) {
       const compare = document.createElement('div');
       compare.className = 'compare';
@@ -272,9 +317,10 @@ export class LagerView {
     this.detail.replaceChildren(card);
   }
 
-  /** Setzt die Rückmeldung unter den Plätzen, ohne das Lager neu aufzubauen. */
-  setNote(text: string): void {
+  /** Setzt die Rückmeldung unter den Plätzen, ohne das Lager neu aufzubauen; `bad`: Die Handlung ging nicht. */
+  setNote(text: string, bad = false): void {
     this.note.textContent = text;
+    this.note.classList.toggle('bad', bad);
   }
 
   /** Lässt die Geldbörse kurz aufleuchten; für Handlungen, die nicht gehen. */
@@ -341,6 +387,10 @@ export class LagerView {
     if (slot.item) button.append(itemImageElement(slot.item.image, slot.item.icon));
     else if (slot.icon) button.append(iconElement(slot.icon));
     if (zone === 'ausruestung') button.append(span('label', slot.label));
+    if (slot.item && slot.price) {
+      button.append(span(slot.price.poor ? 'price poor' : 'price', slot.price.text));
+      button.title = `${slot.item.name}: ${slot.price.text}`;
+    }
     this.wire(button, { zone, index }, slot.item);
     return button;
   }
@@ -365,6 +415,16 @@ export class LagerView {
     button.textContent = command.label;
     button.title = command.title;
     this.wire(button, { zone: 'reiter', index }, null);
+    return button;
+  }
+
+  private haendlerCommand(index: number, command: { label: string; title: string; poor: boolean }): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = command.poor ? 'rcmd poor' : 'rcmd';
+    button.textContent = command.label;
+    button.title = command.title;
+    this.wire(button, { zone: 'befehle', index }, null);
     return button;
   }
 

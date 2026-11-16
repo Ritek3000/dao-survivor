@@ -1641,6 +1641,60 @@ body[data-vitals^='bottom'] #loot {
   gap: 6px;
 }
 
+/* Händler: Angebot und Rückkauf als Raster mit Preisen, dazwischen die Befehle. Rechts daneben steht der eigene Besitz (die Truhe). */
+#lager-haendler {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 324px;
+}
+
+#lager-haendler h2 {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: normal;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-align: left;
+}
+
+#haendler-stock,
+#haendler-buyback {
+  grid-template-columns: repeat(5, 60px);
+}
+
+#haendler-commands {
+  display: flex;
+  gap: 6px;
+}
+
+#haendler-commands .rcmd {
+  flex: 1;
+  justify-content: center;
+  padding: 6px 8px;
+}
+
+/* Der Preis in Gold: Bräunlich-golden, rot, wenn das Gold nicht reicht. */
+.slot .price {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--ember);
+}
+
+.item-card .price {
+  display: block;
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--ember);
+}
+
+.slot .price.poor,
+.item-card .price.poor,
+.rcmd.poor {
+  color: #d4604f;
+}
+
 #lager-hand {
   margin: 4px 0 0;
   font-size: 14px;
@@ -1651,6 +1705,10 @@ body[data-vitals^='bottom'] #loot {
   min-height: 1.3em;
   margin: 0;
   font-size: 13px;
+  color: var(--ember);
+}
+
+#lager-note.bad {
   color: #d4604f;
 }
 
