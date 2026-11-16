@@ -81,6 +81,7 @@ finsternis.md         Lore-Quelle: Staub und Finsternis
 magie_mystik/         Lore-Quelle: Katalog von Magie und Mystik, geordnet nach Domänen und Mächten
 public/models/        Spielfertige GLB-Modelle (Figuren, Gegner, Kulisse unter welt/, Ausrüstung wie der Schild unter ausruestung/)
 public/audio/         Klänge und Musik (sfx/, schleifen/, musik/) und audio.json, die Zuordnung Ereignis → Datei
+public/icons/items/   Bilder der Gegenstände im Lager: 27 WebP-Dateien, neun Plätze mal drei Klassen (`<platz>-<klasse>.webp`)
 src/
   main.ts             Einstieg: baut das Spiel und hängt Entwicklungswerkzeuge nur im Dev-Modus an
   config.ts           Zentrale Stellschrauben: Nachtdauer, Welt, Gegnerarten, Kulisse
@@ -89,7 +90,7 @@ src/
   game/               Spiellogik und Darstellung (siehe unten)
   ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Anleitung, Rückfragen; lagerView.ts: Lager (Ausrüstung und Truhe)
   tools/              Entwicklungswerkzeuge: Messlauf und Modell-Prüfer
-tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten)
+tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten, Gegenstandsbilder freistellen)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
 ```
 
@@ -338,6 +339,10 @@ Dateien mit gleichem Namen. Neu erzeugte OGG-Dateien nur einchecken, wenn sich d
   `tools/symbol-erzeugen.py` schneidet es zu und erzeugt daraus `public/favicon.ico` (16, 32 und 48 Pixel); es braucht Python mit Pillow
   (`python tools/symbol-erzeugen.py`, oder mit dem Pfad eines neuen Quellbilds als Argument).
   `public/apple-touch-icon.png` (Home-Bildschirm von Apple-Geräten, 180 × 180 auf dunklem Grund) ist von Hand gemacht; das Skript erzeugt es nicht.
+- **Gegenstandsbilder**: Die Bilder im Lager (`public/icons/items`) stammen von einem Bildmodell; ihre Herkunft steht in
+  `public/icons/items/HERKUNFT.md`. Die Prompts und die Schritte zum Freistellen und Verkleinern liegen in `tools/item-icons/`
+  (`prompts.py`, `freistellen.py`, `webp-erzeugen.py`; Python mit Pillow, numpy und scipy). Ein Bild lässt sich ersetzen, indem man eine
+  Datei mit demselben Namen hineinlegt (256 × 256, durchsichtiger Grund). Fehlt eine Datei, zeigt das Lager das Umrisszeichen aus `src/ui/itemIcons.ts`.
 - **Priester animieren**: Die Datei des Priesters kam ohne Animationen aus Meshy. `tools/priester-animieren.py` legt in Blender
   „Schweben“ (Schleife) und „Zaubern“ (einmalig) an seinem Skelett an und schreibt `public/models/priester.glb`
   (`blender --background --factory-startup --python tools/priester-animieren.py -- modelle-original/priester.glb public/models/priester.glb`).

@@ -1328,6 +1328,30 @@ body[data-vitals^='bottom'] #loot {
   height: 28px;
 }
 
+/*
+ * Gegenstandsbilder (public/icons/items, 256 px, durchsichtiger Grund). Sie tragen ihre Farben selbst; die Seltenheit zeigen
+ * Rand und Hintergrund des Feldes. Der Schatten löst das Bild vom Grund, wenn es klein steht.
+ */
+.icon.picture img {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
+  pointer-events: none;
+  user-select: none;
+}
+
+#lager-equipment .slot .icon.picture img {
+  width: 54px;
+  height: 54px;
+}
+
+.item-card .head .icon.picture img {
+  width: 56px;
+  height: 56px;
+}
+
 #lager-side {
   display: flex;
   flex-direction: column;
