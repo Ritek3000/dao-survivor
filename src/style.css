@@ -1171,8 +1171,26 @@ body[data-vitals^='bottom'] #loot {
   display: flex;
   flex-direction: column;
   align-items: center;
+  align-self: stretch;
   gap: 10px;
   margin-top: auto;
+  /*
+   * Ist das Fenster niedriger als die Seite, bleibt der Fuß am unteren Rand des Fensters stehen, statt mit dem Inhalt zu
+   * wandern; der Inhalt läuft darunter weg und blendet aus. Die 24 px Rand des Lagers gehören dazu, damit nichts darunter hervorschaut.
+   */
+  position: sticky;
+  bottom: -24px;
+  z-index: 1;
+  padding: 20px 0 24px;
+  margin-bottom: -24px;
+  background: linear-gradient(transparent, rgb(3, 3, 4) 20px);
+}
+
+/* `scrollIntoView` (siehe `LagerView.setCursor`) soll den markierten Platz nicht unter den klebenden Fuß schieben. */
+#lager .slot,
+#lager .rtab,
+#lager .rcmd {
+  scroll-margin-bottom: 160px;
 }
 
 /*
