@@ -45,6 +45,8 @@ export interface Stats {
   gold: number;
   /** Faktor auf den Schaden, den die Figur erleidet; die Besonderheit der Klasse kommt als `Player.takenFactor` dazu. */
   taken: number;
+  /** Faktor auf den Schaden aus Fernangriffen (dem Schwarzen Sog); neben `taken` (Schleier der Köderpuppe). */
+  rangedTaken: number;
 }
 
 /** Ein Segen einer Höheren Macht: stärker als eine Stärkung, je Nacht nur einmal zu haben. */
@@ -218,6 +220,7 @@ function baseStats(): Stats {
     heldDamage: 1,
     gold: 1,
     taken: 1,
+    rangedTaken: 1,
   };
 }
 

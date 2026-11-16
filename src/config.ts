@@ -613,6 +613,46 @@ export const CONFIG = {
       splitterSpeed: 20,
       splitterReach: 6,
     },
+    /** Fertigkeiten des Wildnisläufers. Die Zahlen je Rang stehen in `weapons.ts`; hier stehen die, die über mehrere Ränge gleich bleiben. */
+    laeufer: {
+      /** Bogenschuss, Rang 2: Wer als Zweiter vom Pfeil (oder Messer) getroffen wird, erleidet nur diesen Anteil des Schadens. */
+      pierceFalloff: 0.6,
+      /** Bogenschuss und Wurfmesser, Rang 4: Gegen Gegner im Nachteil, verlangsamt oder blutend kommt so viel Kritchance dazu (Vorteil). */
+      advantageCrit: 0.3,
+      /** Bogenschuss, Rang 5: Der erste Getroffene erleidet so lange (Sekunden) diesen Faktor mehr Schaden (Nachteil, „Rüstungsverlust“). */
+      armorSeconds: 3,
+      armorFactor: 1.15,
+      /** Pfeilhagel, Rang 5: Die Salve rückt höchstens so viele Meter zur Mitte der Gruppe vor; wer näher als dieser Anteil des Radius an der Mitte steht, erleidet mehr Schaden. */
+      hailFollow: 1.4,
+      hailCenter: 0.4,
+      hailCenterFactor: 1.25,
+      /** Fangeisen, Rang 2: Die beiden Eisen liegen so weit auseinander (Meter). Rang 5: Splitter im Umkreis, Anteil am Schaden des Eisens. */
+      trapSpacing: 1.8,
+      trapSplinterRadius: 2.4,
+      trapSplinterDamage: 0.7,
+      /** Sporenfalle: Die Kapsel platzt, wenn ein Gegner so nah kommt (Meter); höchstens so viele liegen zugleich. */
+      sporeTrigger: 1,
+      sporeMax: 4,
+      /** Sporenfalle, Rang 4: Die zwei Kapseln liegen so weit auseinander. Rang 5: Die Wolke eines Gestorbenen hat diesen Radius und hält so lange (Sekunden). */
+      sporeSpacing: 1.6,
+      sporeAgainRadius: 1.3,
+      sporeAgainSeconds: 2,
+      /** Sporenfalle, Rang 5: Solange weniger Felder liegen als dieser Wert, hinterlässt ein Gestorbener eine Wolke (der Vorrat ist begrenzt). */
+      sporeAgainLimit: 14,
+      /** Köderpuppe, Rang 3: Wer so lange (Sekunden) im Schatten der Puppe steht, gerät in Furcht, sofern er nicht groß ist; die Furcht hält so lange. */
+      decoyFearAfter: 1.5,
+      decoyFearSeconds: 1.2,
+      /** Köderpuppe, Rang 4: Solange die Figur in der Nähe der Puppe steht, erleidet sie diesen Faktor des Schadens aus Fernangriffen (Ausweichen, als Mittelwert). */
+      decoyShelter: 0.6,
+      /** Köderpuppe, Rang 5: Beim Auflösen schleudert die Welle Gegner im Umkreis (Faktor auf den Radius der Puppe). */
+      decoyBlast: 1.5,
+      /** Netz, Rang 3: Das Netz zieht Getroffene um höchstens so viele Meter, höchstens diesen Anteil ihres Abstands zur Mitte, zusammen. */
+      netPull: 1.4,
+      netPullShare: 0.55,
+      /** Netz, Rang 5: Kleine Gegner im Netz sind so lange (Sekunden) bewegungsunfähig; der Zauber der Fernkämpfer ist so lange gestört. */
+      netHold: 1.5,
+      netSilence: 1.5,
+    },
   },
   xp: {
     /** Bedarf für die nächste Stufe: base + linear * Stufe + quadratic * Stufe². */
