@@ -30,6 +30,8 @@
     "angriff.wirbelschlag": {"beschreibung": "Kämpfer: Wirbelschlag", "datei": "sfx/angriff-wirbelschlag.ogg", "lautstaerke": 0.9, "prioritaet": 1},
     "angriff.kriegsschrei": {"beschreibung": "Kämpfer: Kriegsschrei", "datei": "sfx/angriff-kriegsschrei.ogg", "lautstaerke": 0.9, "prioritaet": 1},
     "angriff.wurfaxt": {"beschreibung": "Kämpfer: Wurfaxt", "datei": "sfx/angriff-wurfaxt.ogg", "lautstaerke": 0.7, "streuung": 80, "prioritaet": 1},
+    "angriff.banner": {"beschreibung": "Kämpfer: Banner wird gepflanzt", "datei": "sfx/angriff-banner.ogg", "lautstaerke": 0.9, "prioritaet": 1},
+    "angriff.dornenschild": {"beschreibung": "Kämpfer: Dornenschild sticht zurück", "datei": "sfx/angriff-dornenschild.ogg", "lautstaerke": 0.6, "streuung": 150, "abstand": 0.12, "reichweite": 20, "prioritaet": 0},
     "angriff.bogenschuss": {"beschreibung": "Wildnisläufer: Bogenschuss", "datei": "sfx/angriff-bogenschuss.ogg", "lautstaerke": 0.7, "streuung": 120, "prioritaet": 1},
     "angriff.pfeilhagel": {"beschreibung": "Wildnisläufer: Pfeilhagel wird abgeschossen", "datei": "sfx/angriff-pfeilhagel.ogg", "lautstaerke": 0.7, "prioritaet": 1},
     "einschlag.pfeilhagel": {"beschreibung": "Wildnisläufer: Die Pfeile des Hagels schlagen ein", "datei": "sfx/einschlag-pfeilhagel.ogg", "lautstaerke": 0.7, "prioritaet": 1},

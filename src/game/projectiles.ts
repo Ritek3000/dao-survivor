@@ -2,6 +2,25 @@ import * as THREE from 'three';
 import type { Enemies, Enemy } from './enemies';
 import { arrowGeometry, knifeGeometry, propMaterial, throwingAxeGeometry } from './props';
 import type { ProjectileShape } from './weapons';
+import type { Site } from './zones';
+
+/** Was ein Geschoss über das Geradeausfliegen hinaus kann. Der Aufrufer hält eine Vorlage je Angriff; es entsteht nichts im Kampf. */
+export interface ProjectileOptions {
+  /** Sekunden, die es nach dem letzten Treffer oder am Ende der Flugbahn stecken bleibt (im Ziel, solange es lebt). */
+  stick?: number;
+  /** Am Ende der Flugbahn kehrt es zur Figur zurück und trifft auf dem Rückweg alle noch einmal. */
+  boomerang?: boolean;
+  /** Es meldet sich in jedem Bild (`onFly`), etwa um eine Spur zu ziehen. */
+  fly?: boolean;
+  /** Tempo auf dem Rückweg als Faktor. */
+  returnSpeed?: number;
+}
+
+const NO_OPTIONS: ProjectileOptions = {};
+/** So weit fliegt ein zurückkehrendes Geschoss höchstens, bis es die Figur erreicht (Meter). */
+const RETURN_REACH = 40;
+/** Näher als so viel an der Figur gilt ein zurückkehrendes Geschoss als gefangen. */
+const CATCH_DISTANCE = 0.7;
 
 export interface Projectile<T> {
   x: number;
@@ -19,6 +38,13 @@ export interface Projectile<T> {
   age: number;
   /** Bereits getroffene Gegner, damit keiner zweimal getroffen wird. */
   struck: Enemy[];
+  options: ProjectileOptions;
+  /** Auf dem Rückweg zur Figur (Bumerang). */
+  returning: boolean;
+  /** Sekunden, die es noch steckt; 0, solange es fliegt. */
+  rest: number;
+  /** Der Gegner, in dem es steckt; es bleibt bei ihm, solange er lebt. */
+  host: Enemy | null;
   /** Vom Aufrufer mitgegeben, etwa der Angriff, der das Geschoss abgefeuert hat. */
   payload: T;
 }
@@ -133,6 +159,7 @@ export class Projectiles<T> {
     pierce: number,
     shape: ProjectileShape,
     payload: T,
+    options: ProjectileOptions = NO_OPTIONS,
   ): void {
     if (this.flying.length >= TRAIL_CAPACITY) return;
     this.flying.push({
@@ -147,30 +174,87 @@ export class Projectiles<T> {
       angle,
       age: 0,
       struck: [],
+      options,
+      returning: false,
+      rest: 0,
+      host: null,
       payload,
     });
   }
 
-  update(dt: number, enemies: Enemies, onHit: (enemy: Enemy, projectile: Projectile<T>) => void): void {
+  /**
+   * `home` ist der Ort, zu dem Bumerangs zurückkehren (die Figur); `onFly` erfährt von jedem Geschoss mit der Option `fly`,
+   * das gerade fliegt.
+   */
+  update(
+    dt: number,
+    enemies: Enemies,
+    onHit: (enemy: Enemy, projectile: Projectile<T>) => void,
+    home: Site,
+    onFly?: (projectile: Projectile<T>) => void,
+  ): void {
     this.onHit = onHit;
     for (let i = this.flying.length - 1; i >= 0; i--) {
       const projectile = this.flying[i];
       if (!projectile) continue;
+      projectile.age += dt;
+
+      if (projectile.rest > 0) {
+        // Es steckt: Im Gegner wandert es mit ihm.
+        const host = projectile.host;
+        if (host && host.hp > 0) {
+          projectile.x = host.x;
+          projectile.z = host.z;
+        }
+        projectile.rest -= dt;
+        if (projectile.rest <= 0) this.remove(i, projectile);
+        continue;
+      }
+
+      if (projectile.returning) {
+        // Der Rückweg führt zur Figur, wo sie jetzt steht.
+        const dx = home.x - projectile.x;
+        const dz = home.z - projectile.z;
+        const distance = Math.hypot(dx, dz);
+        if (distance < CATCH_DISTANCE) {
+          this.remove(i, projectile);
+          continue;
+        }
+        projectile.directionX = dx / distance;
+        projectile.directionZ = dz / distance;
+        projectile.angle = Math.atan2(dx, dz);
+      }
       const step = projectile.speed * dt;
       projectile.x += projectile.directionX * step;
       projectile.z += projectile.directionZ * step;
       projectile.reach -= step;
-      projectile.age += dt;
 
       this.current = projectile;
       enemies.queryRadius(projectile.x, projectile.z, SHAPES[projectile.shape].radius, this.strike);
+      if (projectile.options.fly) onFly?.(projectile);
 
-      if (projectile.reach <= 0 || projectile.pierce < 0) {
-        const last = this.flying.pop();
-        if (last && last !== projectile) this.flying[i] = last;
+      if (projectile.reach > 0 && projectile.pierce >= 0) continue;
+      const { options } = projectile;
+      if (options.boomerang && !projectile.returning) {
+        // Am Ende der Flugbahn kehrt die Axt um und trifft auf dem Rückweg jeden noch einmal.
+        projectile.returning = true;
+        projectile.struck.length = 0;
+        projectile.pierce = 99;
+        projectile.reach = RETURN_REACH;
+        projectile.speed *= options.returnSpeed ?? 1;
+      } else if (options.stick && !projectile.returning) {
+        projectile.rest = options.stick;
+        projectile.speed = 0;
+      } else {
+        this.remove(i, projectile);
       }
     }
     this.write();
+  }
+
+  private remove(index: number, projectile: Projectile<T>): void {
+    const last = this.flying.pop();
+    if (last && last !== projectile) this.flying[index] = last;
   }
 
   private write(): void {
@@ -182,7 +266,8 @@ export class Projectiles<T> {
       if (counts[projectile.shape] >= shape.capacity) continue;
 
       pose.position.set(projectile.x, HEIGHT, projectile.z);
-      pose.rotation.set(shape.tumble * projectile.age, projectile.angle, 0);
+      // Eine steckende Axt liegt schräg im Ziel und dreht sich nicht mehr.
+      pose.rotation.set(projectile.rest > 0 ? 0.9 : shape.tumble * projectile.age, projectile.angle, 0);
       pose.scale.setScalar(shape.scale);
       pose.updateMatrix();
       mesh.setMatrixAt(counts[projectile.shape]++, pose.matrix);
@@ -211,6 +296,7 @@ export class Projectiles<T> {
     if (Math.hypot(enemy.x - projectile.x, enemy.z - projectile.z) > reach) return;
     projectile.struck.push(enemy);
     projectile.pierce--;
+    projectile.host = enemy;
     this.onHit?.(enemy, projectile);
   };
 }

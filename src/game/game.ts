@@ -151,8 +151,12 @@ export class Game {
 
     this.player = new Player(this.progression.stats, this.events);
     this.zones = new Zones(this.world.islandSites);
-    this.arsenal = new Arsenal(this.progression.stats, this.random, this.enemies, this.zones, this.player);
     this.fields = new Fields(this.enemies, this.player, this.progression);
+    this.arsenal = new Arsenal(this.progression.stats, this.random, this.enemies, this.zones, this.player, {
+      fields: this.fields,
+      progression: this.progression,
+      pickups: this.pickups,
+    });
 
     this.scene.background = this.background;
     // Blendet den fernen Boden in den Hintergrund aus, damit keine Kante sichtbar wird.
@@ -304,6 +308,11 @@ export class Game {
     }
     const pickupRadius = CONFIG.player.pickupRadius * stats.pickup;
     const gained = this.pickups.update(dt, this.time, position, pickupRadius);
+    const healed = this.pickups.takeHealing();
+    if (healed > 0) {
+      this.player.grantHp(healed);
+      audio.play('eingesammelt', position.x, position.z);
+    }
     if (gained > 0) {
       this.pendingLevels += this.progression.addXp(gained * stats.xp);
       audio.play('eingesammelt', position.x, position.z);
@@ -655,6 +664,7 @@ export class Game {
     this.events.clear();
     this.fields.reset();
     this.events.add(this.fields);
+    this.events.add(this.arsenal.listener);
     this.enemies.reset();
     this.pickups.reset();
     this.coins.reset();
@@ -726,7 +736,8 @@ export class Game {
     const candidates: Offer[] = [
       ...this.arsenal.open().map(({ def, rank }) => ({
         name: def.name,
-        text: def.text,
+        // Was der nächste Rang bringt, steht auf der Karte; ohne Angabe die Kurzbeschreibung.
+        text: def.rankText?.[rank] ?? def.text,
         note: rank === 0 ? 'Neuer Angriff' : `Rang ${rank + 1} von ${MAX_RANK}`,
         take: () => this.arsenal.take(def),
       })),

@@ -25,7 +25,11 @@ export type WeaponKind =
   | 'trap'
   /** Sofortige Wirkung auf einer Fläche um den nächsten Gegner. */
   | 'root'
-  | 'shield';
+  | 'shield'
+  /** Ein Bodenfeld an der Figur (Banner); es wirkt, solange es liegt (siehe `fields.ts`). */
+  | 'field'
+  /** Wirkt nicht von selbst, sondern wenn ein Gegner die Figur trifft (Dornenschild). */
+  | 'thorns';
 
 export type ProjectileShape = 'arrow' | 'knife' | 'axe';
 
@@ -84,6 +88,8 @@ export interface WeaponDef {
    * Ohne Tabelle gelten die Einheitsregeln und die Felder `arc`, `count` und `pierce`.
    */
   ranks?: readonly RankRule[];
+  /** Was ein Rang bringt, in einem Satz für die Auswahlkarte; der Eintrag an Stelle 0 gehört zu Rang 1. */
+  rankText?: readonly string[];
 }
 
 /**
@@ -108,6 +114,8 @@ export interface RankRule {
   pierce?: number;
   /** Faktor auf den Rückstoß. */
   knockback?: number;
+  /** Faktor auf die Zeit, die die Figur für diesen Angriff ausholt (kleiner ist kürzer). */
+  lead?: number;
   /** Die Zustände, die ein Treffer anbringt; die Liste ersetzt die des vorigen Rangs ganz (leer: keine). */
   statuses?: readonly StatusApply[];
   /** Schalter für Besonderheiten dieses Rangs, die der Angriff mit `hasFlag` liest (etwa ein zweiter Hieb); ersetzt die des vorigen Rangs ganz. */
@@ -127,6 +135,7 @@ export interface ResolvedRank {
   count: number;
   pierce: number;
   knockback: number;
+  lead: number;
   statuses: readonly StatusApply[];
   flags: readonly string[];
 }
@@ -140,7 +149,8 @@ export const COOLDOWN_PER_RANK = 0.94;
 export const AURA_RADIUS_PER_RANK = 0.1;
 
 const DEFS: readonly WeaponDef[] = [
-  // Kämpfer
+  // Kämpfer. Die Tabellen `ranks` und die Sätze `rankText` folgen der Vorlage „Klassen, Fertigkeiten & Evolutionen“; was ein Text
+  // verlangt, das es im Spiel nicht gibt, ist umgedeutet (Nachteil heißt mehr erlittener Schaden, keine Rüstung der Gegner).
   {
     id: 'axthieb',
     name: 'Axthieb',
@@ -152,6 +162,85 @@ const DEFS: readonly WeaponDef[] = [
     range: 2.9,
     arc: () => 2.5,
     knockback: 6,
+    ranks: [
+      {},
+      { range: 1.25, flags: ['zulaufen'] },
+      {
+        statuses: [
+          { kind: 'bleed', seconds: 3, power: 4 },
+          { kind: 'slow', seconds: 3, power: 0.15 },
+        ],
+      },
+      { cooldown: 0.72, flags: ['zulaufen', 'rueckhand'] },
+      {
+        cooldown: 0.7,
+        statuses: [
+          { kind: 'bleed', seconds: 3, power: 4 },
+          { kind: 'slow', seconds: 3, power: 0.15 },
+          { kind: 'weak', seconds: 4, power: 1.2 },
+          { kind: 'mark', seconds: 4, power: 0.3 },
+        ],
+      },
+    ],
+    rankText: [
+      'Weiter Hieb im Halbkreis auf den nächsten Gegner, stößt leicht zurück',
+      'Reichweite +25 %; mehr Schaden gegen Gegner, auf die du zuläufst',
+      'Getroffene bluten und werden etwas langsamer',
+      'Kürzere Abklingzeit; ein schneller Rückhand-Hieb folgt',
+      'Spaltet Deckungen: Getroffene erleiden Nachteil und werden leichter kritisch getroffen',
+    ],
+  },
+  {
+    id: 'banner',
+    name: 'Banner',
+    text: 'Ein zerfetztes Banner entzieht Gegnern darin Lebenskraft',
+    kind: 'field',
+    cooldown: 11,
+    // Schaden je Takt (alle 0,5 s); `range` ist die Entfernung, ab der ein Gegner das Setzen auslöst, `radius` der Kreis des Banners.
+    damage: 5,
+    range: 7,
+    radius: 3.2,
+    ranks: [
+      { damage: 1 },
+      { damage: 1.5, radius: 1.3 },
+      { damage: 1.6, flags: ['splitter'] },
+      { damage: 1.7, flags: ['splitter', 'lang'], statuses: [{ kind: 'feeble', seconds: 0.8, power: 0.2 }] },
+      { damage: 1.9, flags: ['splitter', 'lang', 'magnet'] },
+    ],
+    rankText: [
+      'Ein Banner für 6 Sekunden: Gegner im Kreis erleiden fortwährend Schaden',
+      'Radius +30 %, mehr Schaden',
+      'Jeder zehnte Gegner, der im Banner stirbt, lässt einen Lebenssplitter fallen, der dich heilt',
+      'Gegner im Banner richten 20 % weniger Schaden an; es hält 8 Sekunden',
+      'Das Banner pulsiert alle 2 Sekunden und zieht Edelsteine in der Nähe heran',
+    ],
+  },
+  {
+    id: 'wurfaxt',
+    name: 'Wurfaxt',
+    text: 'Schwerer Wurf auf den nächsten Gegner',
+    kind: 'projectile',
+    cooldown: 2.8,
+    damage: 14,
+    range: 11,
+    speed: 11,
+    shape: 'axe',
+    spread: 0.2,
+    knockback: 3,
+    ranks: [
+      { damage: 1.5, pierce: 0, count: 1 },
+      { damage: 1.75, pierce: 1 },
+      { damage: 2, count: 2 },
+      { damage: 2.25, flags: ['staubspur'] },
+      { damage: 2.5, flags: ['staubspur', 'kehrtwende'] },
+    ],
+    rankText: [
+      'Schwerer Wurf auf den nächsten Gegner; die Axt bleibt kurz im Ziel stecken',
+      'Die Axt durchschlägt bis zu zwei Gegner hintereinander',
+      'Zwei Äxte zugleich, im leichten Winkel zueinander',
+      'Die Äxte ziehen eine Staubspur, die Gegner verlangsamt',
+      'Am Ende der Flugbahn kehren die Äxte zurück und treffen alle auf dem Rückweg erneut',
+    ],
   },
   {
     id: 'wirbelschlag',
@@ -163,6 +252,20 @@ const DEFS: readonly WeaponDef[] = [
     damage: 14,
     range: 3.2,
     knockback: 4,
+    ranks: [
+      {},
+      { radius: 1.3 },
+      { flags: ['doppelt'] },
+      { flags: ['doppelt', 'abkuehlung'], knockback: 2.5 },
+      { flags: ['doppelt', 'abkuehlung', 'schutz', 'umzingelt'] },
+    ],
+    rankText: [
+      'Sprung mit Drehung, trifft alle Gegner rundum',
+      'Radius +30 %',
+      'Zwei Wirbel hintereinander; dabei bist du etwas schneller',
+      'Jeder getroffene Gegner verkürzt die Abklingzeit; Gegner fliegen weit zurück',
+      'Im Wirbel nimmst du weniger Schaden; Umzingelte erleiden doppelten Schaden',
+    ],
   },
   {
     // Der Kämpfer trägt keinen Schild; an die Stelle des Schildstoßes tritt der aufgeladene Hieb.
@@ -177,31 +280,86 @@ const DEFS: readonly WeaponDef[] = [
     arc: () => 2.2,
     knockback: 16,
     hold: 0.5,
+    ranks: [
+      {},
+      { cooldown: 0.8, lead: 0.6, flags: ['schutz'] },
+      {
+        statuses: [
+          { kind: 'hold', seconds: 0.5 },
+          { kind: 'blind', seconds: 2.5 },
+        ],
+      },
+      { range: 1.4, knockback: 1.8 },
+      { flags: ['schutz', 'kette'] },
+    ],
+    rankText: [
+      'Weit ausgeholter Hieb, schleudert Gegner vor dir zurück',
+      'Kürzeres Ausholen, dabei erleidest du 30 % weniger Schaden',
+      'Der Aufprall wirbelt Staub auf: Gegner werden geblendet und betäubt',
+      'Radius +40 %, Gegner fliegen weit zurück',
+      'Trifft er fünf Gegner, lädt der nächste Schlag fast sofort und ist sicher kritisch',
+    ],
   },
   {
     id: 'kriegsschrei',
     name: 'Kriegsschrei',
-    text: 'Umstehende werden langsam und erleiden mehr Schaden',
+    text: 'Druckwelle rundum: Gegner weichen zurück und geraten in Furcht',
     kind: 'nova',
     look: 'schrei',
     cooldown: 7,
-    damage: 0,
+    damage: 6,
     range: 6,
-    slow: 4,
-    weak: 4,
+    knockback: 6,
+    ranks: [
+      { damage: 0, statuses: [{ kind: 'fear', seconds: 1.5 }] },
+      { damage: 1, radius: 1.35, flags: ['schwache'] },
+      { damage: 1, flags: ['schwache', 'vorteil'] },
+      {
+        damage: 1.25,
+        statuses: [
+          { kind: 'fear', seconds: 1.5 },
+          { kind: 'weak', seconds: 4, power: 1.2 },
+        ],
+      },
+      { damage: 1.5, cooldown: 0.7, flags: ['schwache', 'vorteil', 'echo'] },
+    ],
+    rankText: [
+      'Druckwelle rundum: Gegner weichen zurück und geraten in Furcht',
+      'Radius +35 %, leichter Schaden an schwachen Gegnern',
+      'Danach 4 Sekunden Vorteil: schnellere Hiebe und mehr Kritchance',
+      'Getroffene erleiden Nachteil: 20 % mehr Schaden aus allen Quellen',
+      'Kürzere Abklingzeit; nach 1,5 Sekunden folgt ein schwächeres Echo',
+    ],
   },
   {
-    id: 'wurfaxt',
-    name: 'Wurfaxt',
-    text: 'Fliegt durch alle Gegner auf ihrem Weg',
-    kind: 'projectile',
-    cooldown: 2.8,
-    damage: 14,
-    range: 11,
-    speed: 11,
-    shape: 'axe',
-    pierce: () => 99,
-    knockback: 3,
+    id: 'dornenschild',
+    name: 'Dornenschild',
+    text: 'Wer dich im Nahkampf trifft, wird von den Dornen gestochen',
+    kind: 'thorns',
+    // Wirkt nur, wenn die Figur getroffen wird: Abklingzeit und Reichweite bleiben ungenutzt.
+    cooldown: 1,
+    damage: 6,
+    range: 0,
+    ranks: [
+      { damage: 1 },
+      { damage: 1.3, statuses: [{ kind: 'bleed', seconds: 2, power: 3 }] },
+      { damage: 1.45, flags: ['ramm'] },
+      { damage: 1.6, flags: ['ramm', 'splitter'] },
+      {
+        damage: 1.75,
+        statuses: [
+          { kind: 'bleed', seconds: 2, power: 3 },
+          { kind: 'slow', seconds: 1, power: 0.2 },
+        ],
+      },
+    ],
+    rankText: [
+      'Wer dich im Nahkampf trifft, erleidet sofort leichten Stichschaden',
+      'Dornenschaden +30 %; Angreifer bluten kurz',
+      'Rammbock: Gegen frontale Angreifer verdoppelt sich der Dornenschaden, solange du stehst oder auf sie zuläufst',
+      'Alle 3 Treffer schleudert der Schild drei Eisensplitter auf den Angreifer',
+      'Gegner an den Dornen werden 1 Sekunde um 20 % verlangsamt',
+    ],
   },
 
   // Wildnisläufer
@@ -357,6 +515,7 @@ function ruleRank(def: WeaponDef, rank: number): ResolvedRank {
     count: def.count?.(rank) ?? 1,
     pierce: def.pierce?.(rank) ?? 0,
     knockback: 1,
+    lead: 1,
     statuses: legacyStatuses(def),
     flags: NO_FLAGS,
   };
@@ -381,6 +540,7 @@ function resolveAll(def: WeaponDef): readonly ResolvedRank[] {
       count: named.count ?? resolved.count,
       pierce: named.pierce ?? resolved.pierce,
       knockback: named.knockback ?? resolved.knockback,
+      lead: named.lead ?? resolved.lead,
       statuses: named.statuses ?? resolved.statuses,
       flags: named.flags ?? resolved.flags,
     });

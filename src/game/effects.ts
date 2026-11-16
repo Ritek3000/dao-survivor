@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { createRandom } from '../core/random';
 import { ShieldDome } from './dome';
 import { Particles, type Particle } from './particles';
-import { arrowGeometry, propMaterial, rockGeometry, rootsGeometry, shardGeometry, trapGeometry } from './props';
+import { arrowGeometry, bannerGeometry, propMaterial, rockGeometry, rootsGeometry, shardGeometry, trapGeometry } from './props';
 import { Strips, type Strip } from './strips';
 import type { Site } from './zones';
 
@@ -36,6 +36,8 @@ const HEAT_GRAINS = 70;
 const SHARDS = 64;
 const QUAKE_SHARDS = 34;
 const HAIL_ARROWS = 14;
+/** So viele Banner werden höchstens zugleich gezeichnet. */
+export const BANNER_CAPACITY = 6;
 /** Sekunden, die ein Pfeil des Hagels sichtbar herabfliegt, und sein Tempo dabei. */
 const HAIL_FLIGHT = 0.3;
 const HAIL_SPEED = 34;
@@ -135,6 +137,9 @@ export class Effects {
   private readonly shutTraps: THREE.InstancedMesh;
   private readonly snapped: Snapped[] = [];
   private readonly later: Later[] = [];
+  private readonly bannerMesh: THREE.InstancedMesh;
+  /** Läuft mit; das Tuch der Banner wiegt sich danach. */
+  private swayTime = 0;
   private readonly lightTint = new THREE.Color();
 
   private fireRing: Strip | null = null;
@@ -182,6 +187,7 @@ export class Effects {
     this.rootMesh = instanced(rootsGeometry(this.random), propMaterial(0.9), 40, true);
     this.openTraps = instanced(trapGeometry(false), iron, 12, false);
     this.shutTraps = instanced(trapGeometry(true), iron, 16, true);
+    this.bannerMesh = instanced(bannerGeometry(), propMaterial(0.85), BANNER_CAPACITY, true);
 
     this.group.add(
       this.strips.group,
@@ -196,6 +202,7 @@ export class Effects {
       this.rootMesh,
       this.openTraps,
       this.shutTraps,
+      this.bannerMesh,
     );
   }
 
@@ -215,7 +222,7 @@ export class Effects {
     this.fireRing = this.fireCoals = this.fireGlow = this.fireBed = this.shieldRing = this.shieldGlow = null;
     this.fireSurge = 0;
     this.dome.reset();
-    for (const mesh of [this.hailMesh, this.rockMesh, this.shardMesh, this.rootMesh, this.openTraps, this.shutTraps]) mesh.count = 0;
+    for (const mesh of [this.hailMesh, this.rockMesh, this.shardMesh, this.rootMesh, this.openTraps, this.shutTraps, this.bannerMesh]) mesh.count = 0;
   }
 
   /** Hält die Teilchen unabhängig von Auflösung und Blickwinkel gleich groß. */
@@ -228,6 +235,7 @@ export class Effects {
   update(dt: number, lightRadius: number, lightColor: THREE.Color): void {
     // Etwas zum Weiß hin: Staub im Fackelschein ist warm, aber nicht orange.
     const tint = this.lightTint.copy(lightColor).lerp(WHITE, 0.45);
+    this.swayTime += dt;
     for (let i = this.later.length - 1; i >= 0; i--) {
       const entry = this.later[i];
       if (!entry) continue;
@@ -346,6 +354,44 @@ export class Effects {
     };
     wave();
     this.after(0.16, wave);
+  }
+
+  /**
+   * Das Banner: Ein blutroter Ring und ein dunkler Hof auf dem Boden, solange es steht; der Staub, den es beim Einrammen
+   * aufwirbelt. Die Stange selbst zeichnet `showBanners`.
+   */
+  banner(x: number, z: number, radius: number, seconds: number): void {
+    this.strips.spawn({ look: 'ring', x, z, inner: radius * 0.94, outer: radius * 1.02, y: 0.05, color: 0xb23a30, opacity: 0.55, life: seconds });
+    this.strips.spawn({ look: 'glow', x, z, inner: 0, outer: radius * 1.15, y: 0.04, color: 0x8f1d18, opacity: 0.1, life: seconds });
+    this.groundWave(x, z, radius * 0.6, DUST, 0.5);
+    for (let i = 0; i < 6; i++) this.puff(x, z, this.random() * TAU, 1.8, DUST);
+  }
+
+  /** Die Banner, die gerade stehen: `count` Orte aus `sites`. Das Tuch wiegt sich im Wind der Schlacht. */
+  showBanners(sites: readonly Site[], count: number): void {
+    const shown = Math.min(count, BANNER_CAPACITY);
+    for (let i = 0; i < shown; i++) {
+      const site = sites[i];
+      if (!site) continue;
+      pose.position.set(site.x, 0, site.z);
+      // Jedes steht etwas anders, aber von Bild zu Bild gleich.
+      pose.rotation.set(0.03 * Math.sin(this.swayTime * 1.9 + site.x), site.x * 12.9898 + site.z * 78.233, 0.05 * Math.sin(this.swayTime * 1.3 + site.z));
+      pose.scale.setScalar(1);
+      pose.updateMatrix();
+      this.bannerMesh.setMatrixAt(i, pose.matrix);
+    }
+    this.bannerMesh.count = shown;
+    this.bannerMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Staubwolke des Wuchthiebs: Sie wirbelt auf, wo die Axt einschlägt, und blendet, wer darin steht. */
+  cloud(x: number, z: number, radius: number): void {
+    this.groundWave(x, z, radius, DUST, 0.5);
+    for (let i = 0; i < 10; i++) {
+      const a = this.random() * TAU;
+      const r = Math.sqrt(this.random()) * radius;
+      this.puff(x + Math.sin(a) * r, z + Math.cos(a) * r, a, 1.6, DUST, 0.7);
+    }
   }
 
   // ---------------------------------------------------------- Wildnisläufer

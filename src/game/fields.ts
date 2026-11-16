@@ -9,7 +9,8 @@
  * Was ein Feld bewirkt:
  * - Jeden Takt (`every`): Schaden und Zustände bei jedem Gegner darin; Leben und zeitweilige Werte für die Figur, solange sie darin steht.
  * - In jedem Bild: Zug zur Mitte (`pull`).
- * - Wenn ein Gegner darin stirbt (`onKill`) und wenn das Feld endet (`onEnd`): was die Fertigkeit daraus macht, steht in ihrer Funktion.
+ * - Nach jedem Takt (`onTick`), wenn ein Gegner darin stirbt (`onKill`) und wenn das Feld endet (`onEnd`): was die Fertigkeit daraus macht,
+ *   steht in ihrer Funktion.
  */
 
 import { CONFIG } from '../config';
@@ -45,6 +46,8 @@ export interface FieldDef {
   heal?: number;
   /** Zeitweilige Werte für die Figur im Feld; sie werden jeden Takt erneuert, ihre Dauer sollte also etwas über `every` liegen. */
   buffs?: readonly BuffSpec[];
+  /** Nach jedem Takt, wenn die Fertigkeit noch etwas dazu tut (das Banner zieht auf Rang 5 Edelsteine heran). */
+  onTick?(field: Field, fields: Fields): void;
   /** Ein Gegner ist im Feld gestorben; `field.kills` hat ihn schon mitgezählt. */
   onKill?(field: Field, enemy: Enemy, fields: Fields): void;
   /** Die Dauer ist um; das Feld verschwindet danach. */
@@ -256,6 +259,7 @@ export class Fields implements CombatListener {
       if (def.heal) player.grantHp(def.heal * field.scale);
       if (def.buffs) for (const buff of def.buffs) this.progression.addBuff(buff);
     }
+    def.onTick?.(field, this);
   }
 
   private readonly hitEnemy = (enemy: Enemy): void => {

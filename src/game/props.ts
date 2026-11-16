@@ -95,6 +95,25 @@ export function throwingAxeGeometry(): THREE.BufferGeometry {
   return joined([painted(handle, DARK_WOOD), painted(head, STEEL)]).translate(0, 0, -0.1);
 }
 
+/**
+ * Das Banner des Kämpfers: eine Stange mit Eisenspitze und Querholz, daran ein zerfetztes Tuch aus fünf Streifen verschiedener
+ * Länge. Das Tuch hängt zur +X-Seite; das Ganze ist rund 2,5 m hoch.
+ */
+export function bannerGeometry(): THREE.BufferGeometry {
+  const parts = [
+    painted(new THREE.CylinderGeometry(0.045, 0.065, 2.35, 6).translate(0, 1.175, 0), DARK_WOOD),
+    painted(new THREE.ConeGeometry(0.1, 0.26, 6).translate(0, 2.48, 0), IRON),
+    painted(new THREE.BoxGeometry(1, 0.06, 0.06).translate(0.5, 2.1, 0), DARK_WOOD),
+    painted(new THREE.CylinderGeometry(0.14, 0.17, 0.08, 7).translate(0, 0.04, 0), IRON),
+  ];
+  const lengths = [0.95, 0.62, 1.15, 0.7, 0.85];
+  lengths.forEach((length, i) => {
+    const strip = new THREE.BoxGeometry(0.17, length, 0.02).translate(0.11 + i * 0.19, 2.07 - length / 2, 0);
+    parts.push(painted(strip, i % 2 === 0 ? 0x8f2a24 : 0x6d1f1b));
+  });
+  return joined(parts);
+}
+
 const TRAP_RADIUS = 0.42;
 
 /** Ein Bügel des Fangeisens: ein halber Ring in der Bodenebene, die Zähne nach oben. */

@@ -20,6 +20,7 @@ import { CONFIG } from '../config';
 import type { MoveVector } from '../core/input';
 import { createRandom, type Random } from '../core/random';
 import type { OwnedWeapon } from '../game/arsenal';
+import type { CombatListener } from '../game/events';
 import { CLASSES, type ClassId } from '../game/classes';
 import type { Enemy } from '../game/enemies';
 import type { Game } from '../game/game';
@@ -58,6 +59,7 @@ interface Internals {
     owned: OwnedWeapon[];
     hit(enemy: Enemy, weapon: OwnedWeapon, fromX: number, fromZ: number): void;
   };
+  events: { add(listener: CombatListener): void };
   progression: { level: number; stats: Stats; blessed: { name: string }[] };
   boerse: Boerse;
   ausruestung: Ausruestung;
@@ -285,6 +287,14 @@ async function playNight(game: Game, classIndex: number, random: Random, maxSeco
     const dealt = Math.min(before, before - enemy.hp);
     if (dealt > 0) result.schaden[weapon.def.name] = (result.schaden[weapon.def.name] ?? 0) + dealt;
   };
+  // Schaden über Zeit (Banner, Blutung, Brennen) läuft nicht über `Arsenal.hit`, sondern kommt als Ereignis mit Urheber.
+  g.events.add({
+    hit(_enemy, amount, source, dot) {
+      if (!dot || !source) return;
+      const owner = arsenal.owned.find((weapon) => weapon.def.id === source.id);
+      if (owner) result.schaden[owner.def.name] = (result.schaden[owner.def.name] ?? 0) + amount;
+    },
+  });
   const player = g.player;
   const hurt = player.hurt;
   player.hurt = function (amount, verstaubt, announced, attacker) {

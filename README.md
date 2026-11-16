@@ -96,7 +96,7 @@ Wichtige Teile von `src/game/`:
 | ------------------------------ | ----------------------------------------------------------------------- |
 | `game.ts`                      | Hauptschleife und Phasen (Laden, Startbildschirm, Klassenwahl, Spiel, Pause, Ende) |
 | `classes.ts`, `gear.ts`        | Die drei Klassen mit Werten, Modell und Ausrüstung; die Ausrüstung in den Händen (Axt, Bogen, Buch, Schild des Kämpfers) |
-| `weapons.ts`, `arsenal.ts`     | Alle Angriffe als Daten (mit Rangregeln) und ihre Ausführung            |
+| `weapons.ts`, `arsenal.ts`     | Alle Angriffe als Daten (mit Rangregeln) und ihre Ausführung; die sieben Fertigkeiten des Kämpfers (siehe [Kämpfer](#fertigkeiten-des-kämpfers)) |
 | `status.ts`, `events.ts`, `fields.ts`, `buffs.ts` | Unterbau der Fertigkeiten: Zustände der Gegner, Ereignisse mit Urheber, Bodenfelder, zeitweilige Werte (siehe [Fertigkeiten](#fertigkeiten-der-unterbau)) |
 | `effects.ts`, `strips.ts`, `particles.ts`, `props.ts` | Wie die Angriffe aussehen                        |
 | `enemies.ts`, `boss.ts`, `threats.ts` | Horde, Verschlinger und die Zauber der Gegner                    |
@@ -297,6 +297,43 @@ sichtbare Wirkung** im Spiel, außer dass festgehaltene Gegner wie bisher fahl d
 **Ausprobieren.** Im Dev-Modus steht `__skills` in der Konsole (Beschreibung in `src/tools/skills.ts`), mitten in einer Nacht: `__skills.zustand('bleed', 4, 6)` bringt allen Gegnern im Umkreis einen Zustand an,
 `__skills.feld({ shape: 'circle', radius: 4, damage: 5, pull: 2 })` stellt ein Bodenfeld auf, `__skills.wert('speed', 'mul', 1.5, 6)` setzt einen zeitweiligen Wert, `__skills.hoeren()` und
 `__skills.ereignisse()` zählen Treffer, Tode und Verletzungen mit Urheber, `__skills.raenge('wirbelschlag')` zeigt die aufgelösten Ränge und `__skills.stand()` das, was gerade wirkt.
+
+## Fertigkeiten des Kämpfers
+
+Der Kämpfer hat sieben Fertigkeiten (Vorlage: „Klassen, Fertigkeiten & Evolutionen“, Abschnitt Kämpfer), je fünf Ränge. Alle sind **Daten** in `weapons.ts`; die Zahlen, die man beim Balancing anfasst,
+stehen in `CONFIG.skills.kaempfer`. Jeder Rang bringt auf der Auswahlkarte einen eigenen Satz (`WeaponDef.rankText`), der sagt, was der **nächste** Rang tut. Was die Tabelle eines Rangs nicht nennt,
+folgt den alten Regeln (+25 % Schaden je Rang). Die **Evolutionen** (Rang 6) sind ein eigenes Paket und noch nicht dabei.
+
+| Fertigkeit    | Art                    | Was die Ränge bringen                                                                                                                  |
+| ------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Axthieb       | Hieb im Bogen          | 2: +25 % Reichweite, +30 % gegen Gegner, auf die man zuläuft · 3: Blutung und Verlangsamung · 4: kürzere Abklingzeit, Rückhand-Hieb · 5: Nachteil und Markierung |
+| Banner        | Bodenfeld, 11 s Pause  | 1: 6 s Schaden im Kreis · 2: +30 % Radius · 3: jeder zehnte Tote im Banner lässt einen Lebenssplitter fallen · 4: 8 s, Gegner richten 20 % weniger Schaden an · 5: zieht Edelsteine heran |
+| Wurfaxt       | Geschoss               | 1: bleibt kurz im Ziel stecken · 2: durchschlägt zwei · 3: zwei Äxte · 4: Staubspur verlangsamt · 5: Äxte kehren zurück                  |
+| Wirbelschlag  | Rundumschlag           | 2: +30 % Radius · 3: zweiter Wirbel, mehr Tempo · 4: Treffer verkürzen die Abklingzeit, weiter Rückstoß · 5: 30 % weniger erlittener Schaden im Wirbel, doppelter Schaden gegen Umzingelnde |
+| Wuchthieb     | Hieb mit Ausholen      | 2: kürzeres Ausholen, dabei 30 % weniger erlittener Schaden · 3: Blendung und Betäubung · 4: +40 % Radius, Rückstoß · 5: fünf Treffer laden den nächsten Schlag (sicherer Krit) fast sofort |
+| Kriegsschrei  | Druckwelle             | 1: Furcht, kein Schaden · 2: +35 % Radius, Schaden an Schwachen · 3: 4 s Vorteil (Tempo der Hiebe, Kritchance) · 4: Nachteil 20 % · 5: kürzere Pause, Echo nach 1,5 s |
+| Dornenschild  | Passiv (`kind: 'thorns'`) | Wer die Figur im Nahkampf trifft, wird gestochen (auch bei einem abgefangenen Treffer) · 2: +30 %, Blutung · 3: Rammbock, ×2 gegen frontale Angreifer · 4: jeder dritte Treffer schleudert drei Eisensplitter · 5: Verlangsamung |
+
+Wie das gebaut ist:
+
+- **Rangregeln mit Schaltern.** Zahlen je Rang (Schaden, Abklingzeit, Reichweite, Fläche, Zustände) stehen in `WeaponDef.ranks`; Besonderheiten sind benannte Schalter (`flags`, etwa `zulaufen`, `rueckhand`, `splitter`,
+  `schutz`, `umzingelt`, `kette`, `echo`, `ramm`), die `arsenal.ts` mit `hasFlag` abfragt. `RankRule.lead` verkürzt das Ausholen (Wuchthieb, Rang 2).
+- **Der Banner ist ein Bodenfeld** (`fields.ts`): Es wird dort gesetzt, wo die Figur steht, sobald ein Gegner innerhalb von 7 m ist. Jeder Takt (0,5 s) schadet und schwächt (`feeble`); der Haken `onKill` lässt die
+  Lebenssplitter fallen, der neue Haken `onTick` zieht die Edelsteine heran. Lebenssplitter sind eine zweite, kleine Liste in `pickups.ts` (feste Plätze, wie die Edelsteine); ihr Heilwert wird einmal je Frame an die Figur gegeben.
+- **Das Dornenschild hört zu**: Es ist ein `CombatListener` (`Arsenal.listener`) auf das Ereignis `hurt`, das jetzt den Angreifer mitliefert; das Spiel meldet ihn zu Beginn jeder Nacht an. Der Stich läuft wie jeder
+  andere Treffer über `Arsenal.hit` und trägt den Urheber `dornenschild`.
+- **Äxte der Wurfaxt** können stecken bleiben, eine Staubspur ziehen und zurückkehren (`Projectiles`, Optionen je Rang, einmal angelegt); nichts davon erzeugt Objekte im Kampf.
+- **Folgeschläge** (Rückhand, zweiter Wirbel, Echo des Kriegsschreis) liegen in einem kleinen festen Pool (`FollowUp`) und laufen über denselben Weg wie der Hauptschlag.
+- Klänge: `angriff.banner` und `angriff.dornenschild` sind neu in `audio.json` (erzeugt von `tools/audio-erzeugen.py`).
+
+**Abweichungen von der Vorlage** (die Vorlage ist ein Leitfaden, siehe [Lore](#lore)):
+
+- „Rüstungsverlust“ ist im Spiel ein **Nachteil** (`weak`): Der Gegner erleidet mehr Schaden. Das Spiel hat keine Rüstung der Gegner.
+- Wirbelschlag, Rang 5: „immun gegen Verlangsamung“ wird zu **30 % weniger erlittenem Schaden** während des Wirbels; die Figur wird ohnehin nicht verlangsamt, ein Schutz davor wäre ohne Wirkung.
+- Dornenschild, Rang 4: Die Eisensplitter fliegen auf den **Angreifer** statt „nach vorn“, sonst träfen sie kaum je.
+- Kriegsschrei: Der Schaden aus Rang 2 trifft nur kleine Gegner (nicht den Troll und den Verschlinger, also kein Großwild; Schalter `schwache`), damit der Schrei kein zweiter Flächenangriff wird. Wurfaxt, Rang 1: Die Axt trifft **einen** Gegner und bleibt stecken (vorher
+  durchschlug sie alle); das Durchschlagen kommt mit Rang 2.
+- Banner, Rang 5: Das Banner holt **Edelsteine** heran (nicht die Beute der Gegner); sie fliegen von allein zur Figur.
 
 ## Ton und Musik
 

@@ -157,7 +157,7 @@ export const CLASSES: readonly ClassDef[] = [
         leash: { bone: 'spine', rest: [0.4, -0.152, -0.027], near: 0.15, soft: 0.35, inward: 0.03 },
       },
     },
-    weapons: ['axthieb', 'wirbelschlag', 'wuchthieb', 'kriegsschrei', 'wurfaxt'],
+    weapons: ['axthieb', 'banner', 'wurfaxt', 'wirbelschlag', 'wuchthieb', 'kriegsschrei', 'dornenschild'],
     swings: {
       axthieb: AXE_SWING,
       // Dieselbe Bewegung, aber mit dem ganzen Anlauf: Er zieht die Axt erst weit nach links zurück.
