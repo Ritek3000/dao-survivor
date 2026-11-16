@@ -7,6 +7,9 @@
  *   __items.geben(0, 'ring', 'legendaer')    einen Gegenstand auf den ersten freien Platz im Inventar der Klasse legen
  *   __items.leeren()                         alle Gegenstände aller Klassen und die Truhe löschen
  *   __items.truhe(30, 'rar')                 30 Gegenstände (hier alle 'rar', ohne Angabe gemischt) in die Truhe legen, Reiter für Reiter
+ *   __items.gold(5000)                       schreibt der Geldbörse Gold gut (zum Ausprobieren des Händlers)
+ *   __items.haendler()                       der Stand des Händlers: Angebot, Rückkauf und wie oft er erneuert wurde
+ *   __items.angebote(10000)                  würfelt n Angebote (ohne den Spielstand zu berühren) und zählt die Seltenheiten je Angebot im Schnitt
  *
  * Beute (nur während einer Nacht):
  *   __items.fallen('rar')                    lässt neben der Figur einen Gegenstand der Seltenheit fallen (Platz gewürfelt)
@@ -25,10 +28,13 @@ import { rollChestRarities, rollRarity, type Beute, type LootSource } from '../g
 import { CLASSES } from '../game/classes';
 import type { Chest } from '../game/drops';
 import type { Game } from '../game/game';
+import { rollStock } from '../game/haendler';
 import { isPossible, ITEM_SLOTS, rollItem, type Item, type ItemSlot, type Rarity } from '../game/items';
+import type { Steigerungen } from '../game/steigerung';
 
 interface Internals {
   ausruestung: Ausruestung;
+  steigerungen: Steigerungen;
   beute: Beute;
   chest: Chest;
   phase: string;
@@ -85,6 +91,34 @@ export function installItemTools(game: Game): void {
     },
     leeren(): void {
       internals.ausruestung.reset();
+    },
+    /** Schreibt der Geldbörse Gold gut und gibt, was darin liegt, zurück. */
+    gold(amount = 1000): number {
+      internals.steigerungen.credit(amount);
+      internals.ausruestung.reload();
+      return internals.steigerungen.gold;
+    },
+    haendler(): { stocked: boolean; stock: (Item | null)[]; buyback: Item[]; rerolls: number; nextReroll: number } {
+      const { stocked, stock, buyback, rerolls } = internals.ausruestung.haendler();
+      return { stocked, stock: [...stock], buyback: [...buyback], rerolls, nextReroll: internals.ausruestung.nextRerollPrice() };
+    },
+    /** Würfelt `count` Angebote und zählt, wie viele Gegenstände jeder Seltenheit ein Angebot im Schnitt hat und wie oft ein Rarer fällt. */
+    angebote(count = 10000): Record<Rarity, number> & { mitRar: number } {
+      const sums: Record<Rarity, number> = { normal: 0, selten: 0, rar: 0, legendaer: 0 };
+      let withRare = 0;
+      for (let i = 0; i < count; i++) {
+        const stock = rollStock(random);
+        for (const item of stock) sums[item.rarity]++;
+        if (stock.some((item) => item.rarity === 'rar')) withRare++;
+      }
+      const mean = (value: number): number => Math.round((value / count) * 1000) / 1000;
+      return {
+        normal: mean(sums.normal),
+        selten: mean(sums.selten),
+        rar: mean(sums.rar),
+        legendaer: mean(sums.legendaer),
+        mitRar: Math.round((withRare / count) * 10000) / 100,
+      };
     },
     /** Lässt neben der Figur einen Gegenstand fallen; er fliegt nach einem Augenblick zu ihr, wie bei einem echten Fund. */
     fallen(rarity: Rarity = 'normal', slot?: ItemSlot): Item {

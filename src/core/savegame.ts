@@ -1,5 +1,6 @@
 /**
- * Der Spielstand, der den Neustart überdauern soll: das Gold, die Ränge der Steigerungen, die Gegenstände jeder Klasse und die Truhe.
+ * Der Spielstand, der den Neustart überdauern soll: das Gold, die Ränge der Steigerungen, die Gegenstände jeder Klasse, die Truhe
+ * und der Stand des Händlers.
  *
  * Wo er liegt, versteckt `TextStore` (siehe `storage.ts`): im Browser in `localStorage`, in einer Desktop-Hülle
  * später etwa in einer Datei; dafür gibt es `useSavegameStore`. Gespeichert wird als JSON mit Versionsnummer.
@@ -13,7 +14,7 @@
 import { browserTextStore, type TextStore } from './storage';
 
 /** Die Fassung des Formats, die dieser Code schreibt. */
-export const SAVEGAME_VERSION = 4;
+export const SAVEGAME_VERSION = 5;
 
 /** Obergrenze für einen Rang beim Lesen; schützt vor Unsinn in einer von Hand bearbeiteten Datei. */
 const MAX_STORED_RANK = 99;
@@ -25,6 +26,10 @@ const MAX_STORED_PITY = 99;
 const MAX_STORED_TABS = 64;
 const MAX_STORED_NAME = 40;
 const MAX_STORED_COLOR = 99;
+/** Obergrenze für die Plätze des Angebots und des Rückkaufs beim Lesen; das Spiel selbst kennt weniger (`CONFIG.items.shop`). */
+const MAX_STORED_SHOP = 40;
+/** Obergrenze für die Zahl der Erneuerungen des Angebots; der Preis wächst ohnehin ins Unbezahlbare. */
+const MAX_STORED_REROLLS = 99;
 
 /**
  * Die Gegenstände der Klassen, so wie sie im Spielstand liegen. Was ein Gegenstand ist, kennt `game/items.ts`; dieser Teil
@@ -33,6 +38,17 @@ const MAX_STORED_COLOR = 99;
 export interface StoredChest {
   /** Die Reiter in ihrer Reihenfolge; jeder hat einen Namen, eine Farbe (Nummer) und seine Plätze (leere als `null`). */
   tabs: { name: string; color: number; slots: unknown[] }[];
+}
+
+/** Der Stand des Händlers: sein Angebot (gekaufte Plätze als `null`), die verkauften Gegenstände und wie oft er erneuert wurde. */
+export interface StoredShop {
+  /** Ist das Angebot gewürfelt? Nach jeder gespielten Nacht nicht mehr; dann wird neu gewürfelt, wenn man den Händler ansieht. */
+  stocked: boolean;
+  stock: unknown[];
+  /** Die zuletzt verkauften Gegenstände, der jüngste vorn. */
+  buyback: unknown[];
+  /** Wie oft das Angebot in dieser Nacht schon erneuert wurde. */
+  rerolls: number;
 }
 
 export interface StoredItems {
@@ -44,6 +60,8 @@ export interface StoredItems {
   pity: number;
   /** Seit Fassung 4: die Truhe für alle Klassen. Ohne Reiter beginnt das Spiel mit einem leeren. */
   chest: StoredChest;
+  /** Seit Fassung 5: der Händler. */
+  shop: StoredShop;
 }
 
 export interface Savegame {
@@ -72,7 +90,11 @@ export function emptySavegame(): Savegame {
 }
 
 function emptyItems(): StoredItems {
-  return { next: 1, classes: {}, pity: 0, chest: { tabs: [] } };
+  return { next: 1, classes: {}, pity: 0, chest: { tabs: [] }, shop: emptyShop() };
+}
+
+function emptyShop(): StoredShop {
+  return { stocked: false, stock: [], buyback: [], rerolls: 0 };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -101,6 +123,7 @@ export function parseSavegame(text: string | null): Savegame {
   if (version < 2) raw = von1auf2(raw);
   if (version < 3) raw = von2auf3(raw);
   if (version < 4) raw = von3auf4(raw);
+  if (version < 5) raw = von4auf5(raw);
 
   if (typeof raw.version === 'number' && Number.isFinite(raw.version)) {
     // Ein Stand aus einer neueren Fassung wird so gut gelesen wie möglich, seine Nummer aber nicht zurückgesetzt.
@@ -139,6 +162,22 @@ function von3auf4(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, version: 4, items: { ...items, chest: { tabs: [] } } };
 }
 
+/** Fassung 4 kannte keinen Händler; sein Angebot wird gewürfelt, wenn man ihn zum ersten Mal ansieht. */
+function von4auf5(raw: Record<string, unknown>): Record<string, unknown> {
+  const items = isRecord(raw.items) ? raw.items : emptyItems();
+  return { ...raw, version: 5, items: { ...items, shop: emptyShop() } };
+}
+
+function parseShop(raw: unknown): StoredShop {
+  const shop = emptyShop();
+  if (!isRecord(raw)) return shop;
+  shop.stocked = raw.stocked === true;
+  shop.stock = Array.isArray(raw.stock) ? raw.stock.slice(0, MAX_STORED_SHOP) : [];
+  shop.buyback = Array.isArray(raw.buyback) ? raw.buyback.slice(0, MAX_STORED_SHOP) : [];
+  shop.rerolls = wholeNumber(raw.rerolls, MAX_STORED_REROLLS);
+  return shop;
+}
+
 function parseChest(raw: unknown): StoredChest {
   const chest: StoredChest = { tabs: [] };
   if (!isRecord(raw) || !Array.isArray(raw.tabs)) return chest;
@@ -159,6 +198,7 @@ function parseItems(raw: unknown): StoredItems {
   items.next = Math.max(1, wholeNumber(raw.next, Number.MAX_SAFE_INTEGER));
   items.pity = wholeNumber(raw.pity, MAX_STORED_PITY);
   items.chest = parseChest(raw.chest);
+  items.shop = parseShop(raw.shop);
   if (!isRecord(raw.classes)) return items;
   for (const [classId, perClass] of Object.entries(raw.classes)) {
     if (!isRecord(perClass)) continue;

@@ -168,12 +168,7 @@ export class Game {
       this.dust.points,
     );
 
-    this.lager = new Lager(
-      new LagerView(),
-      this.ausruestung,
-      () => this.steigerungen.gold,
-      (gold) => this.steigerungen.spend(gold),
-    );
+    this.lager = new Lager(new LagerView(), this.ausruestung);
     this.lager.onClose = () => this.closeLager();
     this.hud.onLager = () => this.openLagerFromMenu();
     this.hud.onPick = (index) => this.pick(index);
@@ -833,6 +828,8 @@ export class Game {
     const loot = this.settleLoot();
     const gold = this.settle(won, survived, loot.gold);
     const lines = this.lootLines(loot);
+    // Eine gespielte Nacht lässt den Händler neu auswürfeln; ein Lauf, den man gleich wieder abbricht, zählt nicht.
+    if (outcome !== 'aborted' || survived >= CONFIG.items.shop.minNightSeconds) this.ausruestung.nightPlayed();
     this.updateLagerAccess();
     this.hud.setBoss(null);
     if (outcome === 'aborted') {
@@ -964,11 +961,11 @@ export class Game {
   }
 
   /**
-   * Schaltet das Lager frei: im Entwicklungsmodus immer, im fertigen Spiel erst, wenn es Gegenstände gibt.
-   * Bis die Beute (siehe unten) Gegenstände liefert, bliebe das Menü sonst ein leerer Bildschirm.
+   * Schaltet das Lager frei: im Entwicklungsmodus immer, im fertigen Spiel erst, wenn es Gegenstände gibt oder Gold für den Händler.
+   * Sonst bliebe das Menü ein leerer Bildschirm.
    */
   private updateLagerAccess(): void {
-    this.lagerEnabled = import.meta.env.DEV || this.ausruestung.hasAny();
+    this.lagerEnabled = import.meta.env.DEV || this.ausruestung.hasAny() || this.steigerungen.gold > 0;
     this.hud.setLagerEnabled(this.lagerEnabled);
   }
 
@@ -992,6 +989,8 @@ export class Game {
     if (this.phase !== 'lager') return;
     audio.play('auswahl');
     this.lager.close();
+    // Der Handel im Lager hat das Gold im Spielstand geändert; die Steigerungen und die Klassenwahl sollen es kennen.
+    this.steigerungen.reload();
     this.openSelect(this.lager.classIndex);
   }
 
