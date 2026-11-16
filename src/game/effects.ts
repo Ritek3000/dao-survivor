@@ -829,24 +829,26 @@ export class Effects {
   }
 
   /**
-   * Sturmböe: Der Wind zeigt sich nur im Staub. Eine Staubfront läuft nach außen, weiche Fahnen krümmen sich
-   * hinterher, Körner und Kiesel werden nach außen getrieben.
+   * Sturmböe: Der Wind zeigt sich nur im Staub. Eine Staubfront läuft als Schneise nach vorn, weiche Fahnen krümmen sich
+   * hinterher, Körner und Kiesel werden vor ihr hergetrieben.
    */
-  gust(x: number, z: number, radius: number): void {
+  gustLane(x: number, z: number, angle: number, range: number, width: number): void {
     for (const [y, opacity] of [
       [0.45, 0.22],
       [1.3, 0.1],
     ] as const) {
-      this.strips.spawn({ look: 'gust', x, z, inner: 0.6, outer: radius * 1.15, y, color: 0xd8d2c4, opacity, life: 0.6 });
+      this.strips.spawn({ look: 'gust', x, z, angle, width: width * 1.1, inner: 0.6, outer: range * 1.1, y, color: 0xd8d2c4, opacity, life: 0.6 });
     }
     this.strips.spawn({
       look: 'dustring',
       x,
       z,
-      inner: radius * 0.25,
-      outer: radius * 0.5,
-      innerTo: radius * 0.85,
-      outerTo: radius * 1.2,
+      angle,
+      width,
+      inner: range * 0.25,
+      outer: range * 0.5,
+      innerTo: range * 0.85,
+      outerTo: range * 1.2,
       color: DUST,
       opacity: 0.75,
       life: 0.6,
@@ -855,16 +857,18 @@ export class Effects {
       look: 'shock',
       x,
       z,
+      angle,
+      width,
       inner: 0.3,
       outer: 1.2,
-      innerTo: radius * 0.85,
-      outerTo: radius * 1.2,
+      innerTo: range * 0.85,
+      outerTo: range * 1.2,
       y: 0.9,
       life: 0.45,
     });
     const p = this.particle;
-    for (let i = 0; i < 64; i++) {
-      const a = this.random() * TAU;
+    for (let i = 0; i < 48; i++) {
+      const a = angle + (this.random() - 0.5) * width;
       const speed = 8 + this.random() * 7;
       p.x = x + Math.sin(a) * 0.8;
       p.y = 0.15 + this.random() * 0.9;
@@ -882,15 +886,15 @@ export class Effects {
       this.dust.spawn(p);
     }
     // Körner, die der Wind vor sich hertreibt.
-    for (let i = 0; i < 120; i++) {
-      const a = this.random() * TAU;
+    for (let i = 0; i < 90; i++) {
+      const a = angle + (this.random() - 0.5) * width;
       const speed = 9 + this.random() * 9;
       p.x = x + Math.sin(a) * (0.6 + this.random() * 2);
       p.y = 0.1 + this.random() * 1.4;
       p.z = z + Math.cos(a) * (0.6 + this.random() * 2);
-      p.vx = Math.sin(a + 0.25) * speed;
+      p.vx = Math.sin(a + 0.12) * speed;
       p.vy = this.random() * 0.5;
-      p.vz = Math.cos(a + 0.25) * speed;
+      p.vz = Math.cos(a + 0.12) * speed;
       p.life = 0.35 + this.random() * 0.45;
       p.size = 0.04 + this.random() * 0.05;
       p.grow = 0;
@@ -901,8 +905,8 @@ export class Effects {
       this.glow.spawn(p);
     }
     // Kiesel, die weit hinausfliegen.
-    for (let i = 0; i < 18 && this.rocks.length < this.rockMesh.instanceMatrix.count; i++) {
-      const a = this.random() * TAU;
+    for (let i = 0; i < 12 && this.rocks.length < this.rockMesh.instanceMatrix.count; i++) {
+      const a = angle + (this.random() - 0.5) * width;
       const speed = 7 + this.random() * 7;
       this.rocks.push({
         x: x + Math.sin(a) * 0.9,
@@ -916,6 +920,68 @@ export class Effects {
         rest: -1,
       });
     }
+  }
+
+  /**
+   * Eine glimmende Linie am Boden, die `seconds` lang steht: die Aschelinie der Hitze und die Glutspur der Sorlanze. `angle` ist die
+   * Richtung der Linie, sie beginnt bei (x, z) und läuft `length` Meter.
+   */
+  glowLine(x: number, z: number, angle: number, length: number, width: number, seconds: number, color: number): void {
+    this.strips.spawn({ look: 'glutlinie', x, z, angle, width: width * 1.6, inner: 0, outer: length, y: 0.05, color, opacity: 1, life: seconds });
+    const sin = Math.sin(angle);
+    const cos = Math.cos(angle);
+    for (let i = 0; i < 8; i++) {
+      const along = this.random() * length;
+      this.sparks(x + sin * along, 0.08, z + cos * along, 2, color, 1.6);
+    }
+  }
+
+  /** Erdstoß, Rang 5: Ein flacher Ring aus gebrochener Erde türmt sich am Rand der Welle auf und steht `seconds` lang. */
+  earthRing(x: number, z: number, radius: number, width: number, seconds: number): void {
+    // Ein Band aus aufgeworfenem Staub am Boden; die Zacken stehen darauf wie eine Palisade.
+    this.strips.spawn({ look: 'dustring', x, z, inner: radius - width * 0.6, outer: radius + width * 0.6, y: 0.05, color: EARTH, opacity: 0.85, life: seconds });
+    const count = Math.min(30, Math.round(radius * 5));
+    for (let i = 0; i < count && this.shards.length < SHARDS; i++) {
+      const a = (i / count) * TAU + (this.random() - 0.5) * 0.15;
+      const r = radius + (this.random() - 0.5) * width * 0.6;
+      const big = this.random() < 0.35;
+      this.shards.push({
+        x: x + Math.sin(a) * r,
+        z: z + Math.cos(a) * r,
+        yaw: a,
+        lean: 0.15 + this.random() * 0.25,
+        spin: this.random() * TAU,
+        width: big ? 0.34 + this.random() * 0.16 : 0.22 + this.random() * 0.12,
+        height: big ? 0.9 + this.random() * 0.5 : 0.5 + this.random() * 0.4,
+        tint: 0.75 + this.random() * 0.5,
+        age: -this.random() * 0.12,
+        life: seconds,
+      });
+    }
+  }
+
+  /** Sturmböe, Rang 5: Ein Feld Staub bleibt hinter der Figur liegen und wirbelt auf. */
+  dustTrail(x: number, z: number, radius: number): void {
+    this.strips.spawn({ look: 'dustring', x, z, inner: radius * 0.3, outer: radius * 0.6, innerTo: radius * 0.8, outerTo: radius * 1.15, color: DUST, opacity: 0.8, life: 0.7 });
+    for (let i = 0; i < 6; i++) this.puff(x, z, this.random() * TAU, 1.4, DUST, 0.5);
+  }
+
+  /** Der Glutkreis pulsiert (Rang 5): Eine Welle aus Hitze läuft bis zum Rand. */
+  emberBurst(x: number, z: number, radius: number): void {
+    this.groundWave(x, z, radius, EMBER, 0.8);
+    this.sparks(x, 0.3, z, 18, EMBER, 5);
+  }
+
+  /** Der Schild bricht (Rang 4): Ein Impuls aus gebundenem Staub schlägt nach außen. */
+  dustPulse(x: number, z: number, radius: number): void {
+    this.groundWave(x, z, radius, SHIELD, 0.7);
+    this.sparks(x, 0.5, z, 16, SHIELD, 5);
+    for (let i = 0; i < 8; i++) this.puff(x, z, this.random() * TAU, 2.5, DUST, 0.4);
+  }
+
+  /** Der Schild hat einen Treffer abgefangen und steht noch (Rang 3): Splitter stieben, die Kuppel bleibt. */
+  shieldHit(x: number, z: number, from: number): void {
+    this.shieldBurst(x, z, from);
   }
 
   /**

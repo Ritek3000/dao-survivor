@@ -96,7 +96,7 @@ Wichtige Teile von `src/game/`:
 | ------------------------------ | ----------------------------------------------------------------------- |
 | `game.ts`                      | Hauptschleife und Phasen (Laden, Startbildschirm, Klassenwahl, Spiel, Pause, Ende) |
 | `classes.ts`, `gear.ts`        | Die drei Klassen mit Werten, Modell und Ausrüstung; die Ausrüstung in den Händen (Axt, Bogen, Buch, Schild des Kämpfers) |
-| `weapons.ts`, `arsenal.ts`     | Alle Angriffe als Daten (mit Rangregeln) und ihre Ausführung; die Fertigkeiten des Kämpfers und des Wildnisläufers (siehe [Kämpfer](#fertigkeiten-des-kämpfers), [Wildnisläufer](#fertigkeiten-des-wildnisläufers)) |
+| `weapons.ts`, `arsenal.ts`     | Alle Angriffe als Daten (mit Rangregeln) und ihre Ausführung; die Fertigkeiten der drei Klassen (siehe [Kämpfer](#fertigkeiten-des-kämpfers), [Wildnisläufer](#fertigkeiten-des-wildnisläufers), [Magier](#fertigkeiten-des-magiers)) |
 | `status.ts`, `events.ts`, `fields.ts`, `buffs.ts` | Unterbau der Fertigkeiten: Zustände der Gegner, Ereignisse mit Urheber, Bodenfelder, zeitweilige Werte (siehe [Fertigkeiten](#fertigkeiten-der-unterbau)) |
 | `effects.ts`, `strips.ts`, `particles.ts`, `props.ts` | Wie die Angriffe aussehen                        |
 | `enemies.ts`, `boss.ts`, `threats.ts` | Horde, Verschlinger und die Zauber der Gegner                    |
@@ -283,7 +283,7 @@ sichtbare Wirkung** im Spiel, außer dass festgehaltene Gegner wie bisher fahl d
   (der Priester). Standardstärken stehen in `CONFIG.skills.status`.
 - **Ereignisse mit Urheber** (`events.ts`): Jeder Treffer, Tod und jede Verletzung der Figur wird mit seinem Urheber gemeldet (`Source`, etwa die Kennung des Angriffs). Fertigkeiten, die
   auf einen Treffer, einen Tod oder einen eingesteckten Schlag reagieren, hängen sich als `CombatListener` an. Schaden über Zeit (Blutung, Brennen, Felder) meldet sich getrennt (`dot`).
-- **Bodenfelder** (`fields.ts`): ein Ort, eine Form (Kreis oder Streifen), eine Dauer und eine Wirkung je Takt: Schaden und Zustände für Gegner, Leben und zeitweilige Werte für die Figur,
+- **Bodenfelder** (`fields.ts`): ein Ort, eine Form (Kreis, Streifen oder Ring), eine Dauer und eine Wirkung je Takt: Schaden und Zustände für Gegner, Leben und zeitweilige Werte für die Figur,
   Zug zur Mitte, ein Haken beim Tod eines Gegners darin (`onKill`) und beim Ende (`onEnd`). Banner, Sporenwolke, Köderpuppe, Netz, Glutlinie, Erdring und Dornen-Aura sind später alle
   ein solches Feld. Höchstens `CONFIG.skills.maxFields` liegen zugleich; ein neues ersetzt das älteste.
 - **Zeitweilige Werte** (`buffs.ts`): Tempo-Schübe, Vorteil im Nahkampf, weniger erlittener Schaden. Sie liegen als auslaufende Schicht über den dauerhaften Werten: `Progression.base` hält,
@@ -376,6 +376,58 @@ Wie das gebaut ist:
   „Köderpuppe zerschlagen“ gibt es nicht: Gegner greifen die Puppe nicht an, sie wirkt als Feld und löst sich nach ihrer Dauer auf.
   Das Gestell steht an der Figur (nicht beim Gegner), sobald ein Gegner innerhalb von 9 m ist; das Netz fällt auf die nächste Gruppe.
 - Sporenfalle, Rang 5: Die kleinen Wolken sind begrenzt (höchstens 14 Felder, keine Überlagerung), damit die Kette bei einer dichten Horde die Felder nicht aufbraucht.
+- Kein Savegame- und kein Plattform-Eingriff: `SAVEGAME_VERSION` bleibt, Pfade und Eingabe sind unverändert.
+
+## Fertigkeiten des Magiers
+
+Auch der Magier hat sieben Fertigkeiten mit je fünf Rängen (Vorlage: „Klassen, Fertigkeiten & Evolutionen“, Abschnitt Magier), und auch sie sind **Daten** in `weapons.ts`. Die Zahlen für das Balancing stehen in
+`CONFIG.skills.magier`. Die Auswahlkarte nennt wie bei den anderen Klassen, was der **nächste** Rang tut (`WeaponDef.rankText`). Die **Evolutionen** (Rang 6) kommen in einem eigenen Paket.
+
+| Fertigkeit    | Art                          | Was die Ränge bringen                                                                                                                                  |
+| ------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Hitze werfen  | Hitzestoß in einer Linie     | 1: durchdringt alle Gegner in der Linie, entzündet 2 s · 2: +25 % Reichweite und Breite, Entzündete im Nachteil · 3: kürzere Abklingzeit, Verlangsamung · 4: breiter Kegel · 5: glühende Aschelinie am Ende der Reichweite |
+| Sorlanze      | Lichtspeer (`kind: 'beam'`)  | 1: durchbohrt drei, jeder weitere schwächer · 2: alle auf der ganzen, längeren Bahn ohne Verlust · 3: kürzere Abklingzeit, Blendung · 4: Glutspur brennt und bremst · 5: zwei versetzte Lanzen, sicherer Krit gegen Brennende und Gegner im Nachteil |
+| Glut formen   | Aura                         | 1: Glutkreis um die Figur · 2: +30 % Radius, mehr Schaden · 3: Gegner im Kreis greifen 15 % langsamer an · 4: wer über 2 s im Kreis steht, brennt weiter · 5: alle 4 s ein Puls mit doppeltem Schaden, der kleine Nahkämpfer an den Rand stößt |
+| Erdstoß       | Druckwelle                   | 1: Schaden, Rückstoß · 2: +30 % Radius, stärkerer Rückstoß · 3: kürzere Abklingzeit, Verlangsamung · 4: zweite, engere Welle betäubt, wer standgehalten hat · 5: Ring aus Erde am Rand der Welle bremst 2,5 s |
+| Wurzelgriff   | Fläche (`kind: 'root'`)      | 1: hält bis zu fünf Gegner 1,8 s fest · 2: +30 % Radius, 2,2 s · 3: kürzere Abklingzeit, Gefesselte bluten · 4: Nachteil, 20 % mehr Schaden durch Feuer und Licht · 5: Stirbt ein Gefesselter, packt eine neue Wurzel den nächsten freien Gegner |
+| Sturmböe      | Windschneise (`kind: 'arc'`) | 1: Schnitt und Rückstoß nach vorn · 2: danach 2 s lang 30 % mehr Tempo · 3: kürzere Abklingzeit, stört Zauberer · 4: +30 % Breite und Reichweite, bremst · 5: Staubspur hinter der Figur bremst und schwächt Verfolger |
+| Schild        | Schutz (`kind: 'shield'`)    | 1: fängt einen Treffer ganz ab, 10 s Neubildung · 2: 1,5 s kürzer · 3: zwei Ladungen · 4: beim Bruch ein Impuls, der Angreifer blendet und bremst · 5: fünf Zaubertode oder zehn Treffer an einem Großen verkürzen die Neubildung |
+
+Wie das gebaut ist:
+
+- **Neue Schalter** (`flags`, mit `hasFlag` abgefragt): `asche`, `glutspur`, `doppel`, `treffsicher`, `entzuenden`, `puls`, `welle`, `ring`, `trocken`, `nachwuchs`, `schub`, `zerstreuen`, `spur`, `impuls`, `staub`. Neu ist auch die Rangzahl
+  `count` (Ladungen des Schilds). Alles übrige sind Tabellenwerte der Ränge wie bisher.
+- **Hitze werfen und Sorlanze:** Der Hitzestoß ist ein schmaler Bogen (`arc`), den Rang 4 zum Kegel weitet; die Aschelinie von Rang 5 steht senkrecht zur Blickrichtung am Ende der Reichweite (ein Streifenfeld, höchstens 7 m lang).
+  Die Sorlanze trifft nur die ersten `pierce + 1` Gegner auf ihrer Bahn (über einen festen Satz Plätze sortiert, nichts Neues im Kampf); `abfall` lässt jeden weiteren `lanceFalloff` (70 %) des Vorgängers erleiden.
+  Glutspur und zweite Lanze sind ein Streifenfeld bzw. ein `FollowUp` (`'lanze'`); `treffsicher` setzt die Kritchance gegen Gegner im Nachteil oder in Flammen auf 100 %.
+- **Glut formen:** Die Aura trifft den ganzen Kreis. Für Rang 4 trägt jeder Gegner eine kleine Uhr (`Enemy.scorch`, `scorchAt`): Wer länger als `scorchAfter` (2 s) im Kreis steht, fängt Feuer; wer den Kreis verlässt, beginnt nach 0,8 s von vorn.
+  Rang 5 zählt die Schläge und macht jeden achten zum Puls (doppelter Schaden, kleine Nahkämpfer ohne Zauber werden bis zu 3 m an den Rand geschoben).
+- **Erdstoß:** Die zweite Welle ist ein `FollowUp` (`'welle'`, 0,35 s später, 70 % des Radius und des Schadens, betäubt kurz). Der Ring aus Erde ist eine **neue Feldform `ring`** in `fields.ts` (Kreisring um einen Mittelpunkt,
+  Breite und Radius frei); ein Gegner darin wird gebremst. Das Bild (`effects.ts`, `earthRing`) steht als Palisade aus Zacken auf einem Band aus Staub.
+- **Wurzelgriff:** Das Arsenal merkt sich den Wurzelgriff (`rooter`). Rang 4 erhöht den Schaden von Feuer- und Lichtzaubern (`strikeKind` `brand` und `glut`) gegen Gegner, die dieser Wurzelgriff festhält. Rang 5 hört auf `kill`: Stirbt ein
+  Gefesselter, sucht die neue Wurzel im Umkreis von 6 m den nächsten Gegner, der weder festsitzt noch vom Verschlinger geführt wird (`regrowPick`).
+- **Sturmböe:** Neues Bild `gustLane` (Windfahnen entlang der Schneise). Der Schub ist ein zeitweiliger Wert (`Progression.addBuff`, Tempo ×1,3 für 2 s); Rang 5 setzt währenddessen alle 0,35 s ein Kreisfeld mit Staub
+  (`updateTrail`), das Verfolger verlangsamt und schwächt. Die Felder liegen im festen Pool.
+- **Schild:** `Player.shieldCharges` (Zahl) ersetzt den Wahrheitswert; `Player.shield` bleibt als Leseeigenschaft. Der letzte abgefangene Treffer meldet sich über `CombatEvents.hurt` (`absorbed`) und löst bei Rang 4 den Impuls aus.
+  Rang 5 hört auf `kill` und `hit`: Fünf Tode durch einen Zauber (`SPELLS`: alle sechs Angriffszauber des Magiers) oder zehn Treffer eines Zaubers an einem Großen (Troll, Verschlinger; Schaden über Zeit zählt nicht) ziehen ein Viertel der Neubildungszeit ab,
+  solange der Schild lädt. Die Neubildung beginnt erst, wenn die letzte Ladung verbraucht ist.
+- Neue Bilder: Glutlinie (`strips.ts`, Aussehen `glutlinie`), Windschneise, Glutpuls, Staubspur, Impuls und Treffer des Schilds (`effects.ts`: `gustLane`, `glowLine`, `emberBurst`, `dustTrail`, `dustPulse`, `shieldHit`). Der alte Strahlenkranz der Sturmböe ist entfallen.
+  Für die Angriffe der Sturmböe, des Wurzelgriffs und des Schilds gibt es bereits Klänge in `audio.json`; neue sind nicht nötig.
+
+**Abweichungen von der Vorlage** (die Vorlage ist ein Leitfaden, siehe [Lore](#lore)):
+
+- Wo die Vorlage „Abklingzeit verringert“ ohne Zahl nennt, ist es im Spiel der Faktor **0,8**; „−x Sekunden“ ist ein Faktor auf die Grundzeit (etwa Erdstoß, Rang 3: −0,7 s ≙ ×0,82 von 3,8 s).
+- Hitze werfen und Sorlanze: „Rüstung wird spröde“ und „Nachteil“ sind ein **Nachteil** (`weak`): Der Gegner erleidet 20 % mehr Schaden. Sorlanze, Rang 1: Die Vorlage nennt keinen Schadensverlust beim zweiten und dritten Treffer; im Spiel sind es **70 %** je weiterem Ziel.
+  Rang 2: „bis zum Bildschirmrand“ ist eine **um 30 % längere Bahn** (19,5 m).
+- Gegner mit Fernangriff gibt es im Spiel nur als Priester (Schwarzer Sog, ein Bodenzauber, kein Geschoss). Darum werden aus „Geschosse ablenken/abfangen“: Erdstoß, Rang 5: der Ring **bremst** nur, er hält nichts auf; Sturmböe, Rang 3:
+  die Böe **stört Zauberer** (`silence`, 1,5 s); Sturmböe, Rang 5: die Staubspur senkt statt der „Treffergenauigkeit“ den **Schaden der Verfolger** (`feeble`) und bremst sie; Schild: Der Impuls aus Rang 4 trifft Angreifer in 3,5 m.
+- Glut formen, Rang 3: „Angriffsgeschwindigkeit −15 %“ ist **Schwäche** (`feeble`, 15 %): Die Gegner schlagen seltener und schwächer zu.
+- Erdstoß, Rang 2: „mehr Rückstoß gegen Schwache“ gilt für alle (×1,4); große Gegner lassen sich ohnehin schwerer stoßen (der Rückstoß teilt sich durch die Größe). Rang 4: „betäubt“ ist `hold` für 0,8 s.
+- Wurzelgriff, Rang 3: „kontinuierlicher Schaden“ ist **Blutung** (3 je Sekunde, solange der Gegner festsitzt); Rang 4: die 20 % mehr gelten für Treffer von Feuer- und Lichtzaubern auf Gefesselte *dieses* Wurzelgriffs (Hitze werfen, Glut formen, Sorlanze).
+- Schild: „fängt den nächsten Treffer ab“ gilt für jeden Treffer eines Gegners, auch den eines Fernangriffs. Rang 5: „Zauber“ sind die sechs Angriffszauber des Magiers; „Elite oder Boss“ ist Großwild (Gegner ab Größe 1,5, also Troll und Verschlinger).
+- Die Grundwerte folgen den Rangtabellen der Vorlage und weichen von den alten ab: Hitze werfen 1,2 s statt 0,95 s; Sorlanze 2,5 s und 26 Schaden statt 2,4 s und 22; Erdstoß 3,8 s statt 5 s, dafür kein Festhalten mehr, nur Rückstoß;
+  Wurzelgriff 3,8 s statt 4,5 s, Rang 1 hält 1,8 s statt 3 s; Schild 10 s statt 12 s. Aus der Sturmböe, früher ein Rundumstoß alle 6 s, ist eine Windschneise nach vorn alle 2,2 s geworden (Schaden 6, Rückstoß, Tempo-Schub ab Rang 2).
+  Im Messlauf (zwölf Nächte, zwei Saatwerte, 24 Läufe je Stand) überlebt die Automatik-Figur des Magiers damit im Mittel 450 s gegen 384 s vorher (die Streuung liegt bei 130 bis 190 s); eine Feinjustierung der Zahlen war nicht nötig.
 - Kein Savegame- und kein Plattform-Eingriff: `SAVEGAME_VERSION` bleibt, Pfade und Eingabe sind unverändert.
 
 ## Ton und Musik

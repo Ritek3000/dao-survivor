@@ -653,6 +653,71 @@ export const CONFIG = {
       netHold: 1.5,
       netSilence: 1.5,
     },
+    /** Fertigkeiten des Magiers. Die Zustände je Rang stehen in `weapons.ts`; hier stehen die Zahlen, die über mehrere Ränge gleich bleiben. */
+    magier: {
+      /** Hitze werfen, Rang 5: Die Aschelinie am Ende des Kegels liegt so lange (Sekunden), ist so breit und höchstens so lang (Meter); Schaden je Takt als Anteil am Schaden des Zaubers. */
+      ashSeconds: 2.5,
+      ashWidth: 1,
+      ashLength: 7,
+      ashDamage: 0.35,
+      ashBurnSeconds: 1,
+      ashBurnPower: 4,
+      /** Sorlanze, Rang 1: Der zweite und dritte Getroffene erleiden diesen Anteil des Schadens des Vorgängers. */
+      lanceFalloff: 0.7,
+      /** Sorlanze, Rang 4: Die Glutspur liegt so lange (Sekunden), ist so breit (Meter); Schaden je Takt als Anteil, Verlangsamung (Stärke, Sekunden). */
+      lineSeconds: 3,
+      lineWidth: 1,
+      lineDamage: 0.25,
+      lineSlow: 0.25,
+      lineSlowSeconds: 0.8,
+      /** Sorlanze, Rang 5: Die zweite Lanze folgt nach so vielen Sekunden, so viele Meter seitlich versetzt. */
+      lanceAgain: 0.3,
+      lanceOffset: 0.5,
+      /** Glut formen, Rang 4: Wer so lange (Sekunden) im Kreis steht, fängt Feuer und brennt so lange mit dieser Stärke weiter. Wer den Kreis verlässt, beginnt nach `scorchGap` Sekunden von vorn. */
+      scorchAfter: 2,
+      scorchGap: 0.8,
+      scorchSeconds: 3,
+      scorchPower: 4,
+      /** Glut formen, Rang 5: Jeder so vielte Schlag ist ein Puls (Faktor auf den Schaden); er stößt kleine Nahkämpfer höchstens so viele Meter zum Rand. */
+      pulseEvery: 8,
+      pulseFactor: 2,
+      pulsePush: 3,
+      /** Erdstoß, Rang 4: Die zweite Welle folgt nach so vielen Sekunden, reicht so weit (Anteil des Radius), trifft mit diesem Anteil des Schadens und betäubt so lange (Sekunden). */
+      waveDelay: 0.35,
+      waveRadius: 0.7,
+      waveDamage: 0.7,
+      waveStun: 0.8,
+      /** Erdstoß, Rang 5: Der Ring aus Erde liegt so lange (Sekunden), ist so breit (Meter) und bremst Gegner darin (Stärke, Sekunden). */
+      ringSeconds: 2.5,
+      ringWidth: 1.2,
+      ringSlow: 0.45,
+      ringSlowSeconds: 0.6,
+      /** Wurzelgriff, Rang 4: Gefesselte erleiden von Feuer- und Lichtzaubern diesen Faktor mehr. Rang 5: Die neue Wurzel sucht einen freien Gegner in dieser Entfernung (Meter) und hält ihn so lange (Sekunden). */
+      dryFactor: 1.2,
+      regrowRange: 6,
+      regrowSeconds: 1.5,
+      /** Sturmböe, Rang 2: Nach jeder Böe so viel mehr Tempo, so lange (Sekunden). Rang 3: Getroffene Zauberer sind so lange (Sekunden) gestört. */
+      boostSpeed: 1.3,
+      boostSeconds: 2,
+      scatterSeconds: 1.5,
+      /** Sturmböe, Rang 5: Die Staubspur: alle so viele Sekunden ein Feld mit diesem Radius, das so lange liegt und Verfolger bremst und schwächt (Stärke, Sekunden). */
+      trailEvery: 0.35,
+      trailRadius: 1.1,
+      trailSeconds: 1.6,
+      trailSlow: 0.3,
+      trailFeeble: 0.3,
+      trailEffectSeconds: 0.6,
+      /** Schild, Rang 4: Der Impuls beim Brechen reicht so weit (Meter), blendet (Stärke, Sekunden) und verlangsamt (Stärke, Sekunden). */
+      pulseRadius: 3.5,
+      pulseBlind: 0.5,
+      pulseBlindSeconds: 2,
+      pulseSlow: 0.4,
+      pulseSlowSeconds: 1.2,
+      /** Schild, Rang 5: So viele Tode durch Zauber oder so viele Treffer an einem Großen verkürzen die Ladezeit um diesen Anteil. */
+      primeKills: 5,
+      primeHits: 10,
+      primeShare: 0.25,
+    },
   },
   xp: {
     /** Bedarf für die nächste Stufe: base + linear * Stufe + quadratic * Stufe². */

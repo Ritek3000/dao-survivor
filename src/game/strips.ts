@@ -37,6 +37,8 @@ export type StripLook =
   | 'lance'
   /** Der Schein eines Strahls auf dem Boden unter ihm. */
   | 'lancelight'
+  /** Eine glimmende Linie am Boden, die bis zum Ende ihrer Zeit steht (Aschelinie, Glutspur). */
+  | 'glutlinie'
   /** Flimmernde Luft entlang einer Strecke. */
   | 'heat'
   /** Druckwelle: ein Ring, der das Bild dahinter verzieht. */
@@ -406,6 +408,22 @@ const LOOKS: Record<StripLook, LookDef> = {
       float ends = smoothstep(0.0, 0.1, vUv.y) * (1.0 - smoothstep(0.85, 1.0, vUv.y));
       float envelope = smoothstep(0.0, 0.08, uLife.x) * (1.0 - smoothstep(0.3, 1.0, uLife.x));
       emit(uColor * spread * dust * ends * envelope);
+    `,
+  },
+  glutlinie: {
+    mode: 'add',
+    defines: { STRAIGHT: '' },
+    body: /* glsl */ `
+      float fromAxis = abs(vUv.x - 0.5) * 2.0;
+      float along = mix(uExtent.x, uExtent.y, vUv.y);
+      float t = uLife.x;
+      // Glut glimmt ungleichmäßig und wandert langsam: Mal glüht eine Stelle auf, mal fällt sie in Asche zurück.
+      float flicker = 0.35 + 0.65 * noise(vec2(along * 2.6 - uLife.w * 1.4, fromAxis * 3.0 + uLife.z * 9.0 + uLife.w * 1.1));
+      float spark = smoothstep(0.72, 0.95, noise(vec2(along * 7.0 + uLife.w * 2.0, fromAxis * 6.0 + uLife.z * 5.0)));
+      float body = exp(-fromAxis * fromAxis * 5.0);
+      float ends = smoothstep(0.0, 0.06, vUv.y) * (1.0 - smoothstep(0.92, 1.0, vUv.y));
+      float envelope = smoothstep(0.0, 0.05, t) * (1.0 - smoothstep(0.7, 1.0, t));
+      emit((uColor * body * flicker * 0.75 + vec3(1.0, 0.8, 0.4) * spark * body * 0.6) * ends * envelope);
     `,
   },
   heat: {
