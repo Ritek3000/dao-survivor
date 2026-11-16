@@ -884,6 +884,20 @@ body[data-vitals='bottom-left'] #debug {
   text-transform: uppercase;
 }
 
+/*
+  Die Versionsnummer in der unteren rechten Ecke: da, aber nie im Weg. Sie steht außerhalb des Flusses (absolut im festen
+  Overlay), damit sie in niedrigen Fenstern Symbol, Titel und Menü nicht nach oben schiebt, und in der Ecke, damit sie
+  auch dort nicht mit der Tastenzeile in der Mitte zusammenstößt. Sie hilft zu erkennen, welcher Stand gerade läuft.
+*/
+#title .version {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  opacity: 0.75;
+}
+
 /* Eine dünne Linie unter dem Titel, die an den Rändern ausläuft. */
 .rule {
   width: min(420px, 70vw);
