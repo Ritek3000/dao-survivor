@@ -431,8 +431,8 @@ export const CONFIG = {
     inventorySize: 25,
     /**
      * Preis eines Gegenstands (`itemValue`): die Basis der Seltenheit mal (0,75 + 0,5 × Güte des Wurfs), die Güte von 0 bis 1.
-     * Der Verkaufspreis ist ein Viertel davon (`sellShare`); der Händler (später) kauft zum vollen Preis. Wer Gold braucht und
-     * das Inventar voll hat, verkauft so, was nicht mehr hineinpasst.
+     * Der Händler verkauft zu diesem Preis und kauft für ein Viertel davon (`sellShare`); das Verhältnis 4 zu 1 verhindert eine
+     * Schleife aus Kaufen und Verkaufen. Wer das Inventar voll hat, verkauft so, was nicht mehr hineinpasst.
      */
     price: { normal: 100, selten: 400, rar: 1600, legendaer: 6400, sellShare: 0.25 },
     /**
@@ -447,6 +447,22 @@ export const CONFIG = {
       tabPrice: 500,
       nameLength: 16,
       colors: ['#d4604f', '#e0954a', '#d6c25a', '#8fc98a', '#5cc0b8', '#6f9be0', '#a47fd6', '#d67fb0'],
+    },
+    /**
+     * Der Händler (`game/haendler.ts`). Sein Angebot hat `size` Plätze; je Platz fällt Legendäres (ein Ring der Klasse eines
+     * zufälligen Gegenstands) mit `chances.legendaer`, sonst Rar mit `chances.rar` (höchstens einmal je Angebot), sonst Selten
+     * mit `chances.selten`, sonst Normal. Gewürfelt wird, wenn man ihn nach einer gespielten Nacht wieder ansieht. Der Rückkauf
+     * merkt sich die letzten `buybackSize` verkauften Gegenstände; zurückkaufen kostet, was der Verkauf eingebracht hat.
+     * Das Angebot erneuern: das erste Mal je Nacht gratis, dann `rerollPrice` Gold, und jedes weitere Mal das Doppelte.
+     * Ein Lauf, den man vor `minNightSeconds` abbricht, zählt nicht als gespielte Nacht (sonst gäbe es das Angebot gratis neu).
+     * Die Preise der Gegenstände stehen unter `price`.
+     */
+    shop: {
+      size: 10,
+      buybackSize: 10,
+      chances: { selten: 0.3, rar: 0.08, legendaer: 0.001 },
+      rerollPrice: 25,
+      minNightSeconds: 60,
     },
     properties: {
       schaden: { min: 6, max: 14, step: 1, cap: 50, core: { waffe: 1.5 } },
