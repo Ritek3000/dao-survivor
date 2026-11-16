@@ -25,7 +25,9 @@ export type FieldShape =
   /** Ein Kreis um die Mitte des Felds. */
   | 'circle'
   /** Ein Streifen: Er beginnt in der Mitte des Felds und läuft in Richtung `angle` über `length` Meter, `width` Meter breit. */
-  | 'line';
+  | 'line'
+  /** Ein Ring um die Mitte des Felds: bei `radius` Meter, `width` Meter dick (der Erdring des Erdstoßes). */
+  | 'ring';
 
 export interface FieldDef {
   id: string;
@@ -225,6 +227,7 @@ export class Fields implements CombatListener {
     const dx = x - field.x;
     const dz = z - field.z;
     if (field.def.shape === 'circle') return Math.hypot(dx, dz) <= field.radius + margin;
+    if (field.def.shape === 'ring') return Math.abs(Math.hypot(dx, dz) - field.radius) <= field.width / 2 + margin;
     const directionX = Math.sin(field.angle);
     const directionZ = Math.cos(field.angle);
     const along = dx * directionX + dz * directionZ;
@@ -236,6 +239,10 @@ export class Fields implements CombatListener {
   private search(field: Field, visit: (enemy: Enemy) => void): void {
     if (field.def.shape === 'circle') {
       this.enemies.queryRadius(field.x, field.z, field.radius, visit);
+      return;
+    }
+    if (field.def.shape === 'ring') {
+      this.enemies.queryRadius(field.x, field.z, field.radius + field.width / 2, visit);
       return;
     }
     const half = field.length / 2;
@@ -274,10 +281,15 @@ export class Fields implements CombatListener {
   private readonly pullEnemy = (enemy: Enemy): void => {
     const field = this.current;
     if (enemy.hp <= 0 || enemy.driven || !this.contains(field, enemy.x, enemy.z, enemy.type.radius)) return;
-    // Zur Mitte eines Kreises, bei einem Streifen zu seiner Linie.
+    // Zur Mitte eines Kreises, bei einem Streifen zu seiner Linie, bei einem Ring zu seinem Rand.
     let toX = field.x - enemy.x;
     let toZ = field.z - enemy.z;
-    if (field.def.shape === 'line') {
+    if (field.def.shape === 'ring') {
+      const out = Math.hypot(-toX, -toZ);
+      if (out < 1e-3) return;
+      toX += (-toX / out) * field.radius;
+      toZ += (-toZ / out) * field.radius;
+    } else if (field.def.shape === 'line') {
       const directionX = Math.sin(field.angle);
       const directionZ = Math.cos(field.angle);
       const along = Math.min(Math.max((enemy.x - field.x) * directionX + (enemy.z - field.z) * directionZ, 0), field.length);

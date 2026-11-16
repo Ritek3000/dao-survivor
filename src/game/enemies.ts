@@ -42,6 +42,9 @@ export interface Enemy {
   mantle: number;
   /** Bewegt sich nicht von selbst: Der Verschlinger wird von boss.ts geführt. */
   driven: boolean;
+  /** Wie lange er ohne Unterbrechung im Glutkreis des Magiers steht (Sekunden) und wann er zuletzt darin war (Spielzeit); Glut formen, Rang 4. */
+  scorch: number;
+  scorchAt: number;
 }
 
 /** Was die Horde dem Spiel meldet. */
@@ -421,6 +424,8 @@ export class Enemies {
       strikeIn: 0,
       mantle: 0,
       driven: false,
+      scorch: 0,
+      scorchAt: -Infinity,
     };
     enemy.type = type;
     enemy.hp = hp;
@@ -440,6 +445,8 @@ export class Enemies {
     enemy.strikeIn = 0;
     enemy.mantle = type.mantle ?? 0;
     enemy.driven = false;
+    enemy.scorch = 0;
+    enemy.scorchAt = -Infinity;
     return enemy;
   }
 

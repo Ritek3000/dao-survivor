@@ -78,8 +78,8 @@ export class Player {
   verstaubung = 0;
   /** Woran die Figur zuletzt Leben verloren hat. */
   lastDamage: DamageCause = 'treffer';
-  /** Geladener Schild: fängt den nächsten Treffer vollständig ab. */
-  shield = false;
+  /** Wie viele Treffer der Schild noch vollständig abfängt; 0 = nicht geladen (ab Rang 3 sind es zwei). */
+  shieldCharges = 0;
   /** Faktor auf erlittene Treffer aus der Besonderheit der Klasse. */
   takenFactor = 1;
   private readonly figure = new THREE.Group();
@@ -256,7 +256,7 @@ export class Player {
     this.hp = this.stats.maxHp;
     this.verstaubung = 0;
     this.lastDamage = 'treffer';
-    this.shield = false;
+    this.shieldCharges = 0;
     this.takenFactor = 1;
     this.invulnerable = 0;
     this.hurtGlow = 0;
@@ -503,6 +503,11 @@ export class Player {
     }
   }
 
+  /** Ist der Schild geladen? */
+  get shield(): boolean {
+    return this.shieldCharges > 0;
+  }
+
   /**
    * Treffer eines Gegners; während der Schonfrist wirkungslos. Mit `verstaubt` stammt er aus
    * einem Dhargass-Zauber: Was er an Leben nimmt, verstaubt zugleich und kehrt erst im Licht zurück.
@@ -515,8 +520,8 @@ export class Player {
     // trifft trotzdem: Sonst machte ein Kratzer gegen den Schwarzen Sog unverwundbar.
     if ((this.invulnerable > 0 && !announced) || !this.alive) return;
     this.invulnerable = CONFIG.player.invulnerableSeconds * this.stats.grace;
-    if (this.shield) {
-      this.shield = false;
+    if (this.shieldCharges > 0) {
+      this.shieldCharges--;
       audio.play('schild.faengt', this.position.x, this.position.z);
       this.events.hurt(attacker, 0, true);
       return;
