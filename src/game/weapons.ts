@@ -33,8 +33,7 @@ export type WeaponLook =
   | 'wirbel'
   | 'schrei'
   | 'erdstoss'
-  | 'boee'
-  | 'brand';
+  | 'boee';
 
 export interface WeaponDef {
   id: string;
@@ -52,7 +51,7 @@ export interface WeaponDef {
   /** Öffnungswinkel eines Kegels in Radiant, abhängig vom Rang. */
   arc?: (rank: number) => number;
   knockback?: number;
-  /** Sekunden, die Getroffene festgehalten werden: umgeworfen, verwurzelt oder geblendet. */
+  /** Sekunden, die Getroffene festgehalten werden: umgeworfen oder verwurzelt. */
   hold?: number;
   /** Sekunden mit halbem Tempo. */
   slow?: number;
@@ -266,17 +265,6 @@ const DEFS: readonly WeaponDef[] = [
     damage: 3,
     range: 7,
     knockback: 18,
-  },
-  {
-    id: 'sorhennas-brand',
-    name: 'Sorhennas Brand',
-    text: 'Weißer Lichtstoß, blendet alle im Umkreis',
-    kind: 'nova',
-    look: 'brand',
-    cooldown: 9,
-    damage: 0,
-    range: 7.5,
-    hold: 2.2,
   },
   {
     id: 'schild',

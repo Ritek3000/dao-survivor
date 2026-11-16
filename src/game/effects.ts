@@ -115,7 +115,7 @@ export class Effects {
   private readonly strips = new Strips();
   private readonly glow = new Particles(1600, 'glow');
   private readonly dust = new Particles(900, 'dust');
-  /** Leuchtet für Augenblicke auf: Sorlanze, Sorhennas Brand. */
+  /** Leuchtet für Augenblicke auf: Sorlanze. */
   private readonly flashLight = new THREE.PointLight(0xffffff, 0, 10, 1.4);
   private flashPeak = 0;
   private flashAge = 0;
@@ -777,49 +777,6 @@ export class Effects {
         spin: (this.random() - 0.5) * 24,
         rest: -1,
       });
-    }
-  }
-
-  /**
-   * Sorhennas Brand: ein lautloser weißer Lichtstoß, der für einen Augenblick alles ausleuchtet.
-   * Strahlen schießen in der Luft nach allen Seiten, eine Lichtwelle läuft über den Boden.
-   */
-  flare(x: number, z: number, radius: number): void {
-    this.strips.spawn({ look: 'flare', x, z, inner: 0, outer: radius, y: 1.5, color: 0xfff6e4, opacity: 1.2, life: 0.5 });
-    this.strips.spawn({
-      look: 'lichtwelle',
-      x,
-      z,
-      inner: radius * 0.1,
-      outer: radius * 0.22,
-      innerTo: radius * 0.8,
-      outerTo: radius * 0.98,
-      y: 0.06,
-      color: 0xffeccc,
-      opacity: 0.9,
-      life: 0.55,
-    });
-    this.strips.spawn({ look: 'glow', x, z, inner: 0, outer: radius * 1.3, y: 0.06, color: 0xfff6e0, opacity: 0.3, life: 0.3 });
-    this.flash(x, 2.4, z, 0xffffff, 110, radius * 2.4, 0.24);
-    // Der Staub in der Luft hängt noch einen Atemzug lang hell.
-    for (let i = 0; i < 90; i++) {
-      const a = this.random() * TAU;
-      const r = Math.sqrt(this.random()) * radius;
-      const p = this.particle;
-      p.x = x + Math.sin(a) * r;
-      p.y = 0.3 + this.random() * 1.8;
-      p.z = z + Math.cos(a) * r;
-      p.vx = Math.sin(a) * 0.9;
-      p.vy = 0.1 + this.random() * 0.3;
-      p.vz = Math.cos(a) * 0.9;
-      p.life = 0.6 + this.random() * 0.9;
-      p.size = 0.05 + this.random() * 0.08;
-      p.grow = 0;
-      p.gravity = 0;
-      p.drag = 1.5;
-      p.color.set(0xfff4dc).multiplyScalar(1 + 2.5 * Math.pow(this.random(), 3));
-      p.alpha = 0.9;
-      this.glow.spawn(p);
     }
   }
 

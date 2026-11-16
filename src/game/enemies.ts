@@ -20,7 +20,7 @@ export interface Enemy {
   flash: number;
   heading: number;
   age: number;
-  /** Restsekunden, in denen er sich nicht rührt: umgeworfen, verwurzelt oder geblendet. */
+  /** Restsekunden, in denen er sich nicht rührt: umgeworfen oder verwurzelt. */
   hold: number;
   /** Restsekunden mit halbem Tempo. */
   slow: number;

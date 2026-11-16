@@ -36,7 +36,6 @@
     "angriff.erdstoss": {"beschreibung": "Magier: Erdstoß", "datei": "sfx/angriff-erdstoss.ogg", "lautstaerke": 1.0, "prioritaet": 1},
     "angriff.wurzelgriff": {"beschreibung": "Magier: Wurzelgriff", "datei": "sfx/angriff-wurzelgriff.ogg", "lautstaerke": 0.8, "prioritaet": 1},
     "angriff.sturmboee": {"beschreibung": "Magier: Sturmböe", "datei": "sfx/angriff-sturmboee.ogg", "lautstaerke": 0.9, "prioritaet": 1},
-    "angriff.sorhennas-brand": {"beschreibung": "Magier: Sorhennas Brand", "datei": "sfx/angriff-sorhennas-brand.ogg", "lautstaerke": 0.9, "prioritaet": 1},
     "treffer.stahl": {"beschreibung": "Ein Angriff mit Stahl trifft einen Gegner", "datei": ["sfx/treffer-stahl-1.ogg", "sfx/treffer-stahl-2.ogg", "sfx/treffer-stahl-3.ogg"], "lautstaerke": 0.6, "streuung": 250, "abstand": 0.045, "reichweite": 24, "prioritaet": 0},
     "treffer.staub": {"beschreibung": "Ein Angriff mit Staub oder Wucht trifft einen Gegner", "datei": ["sfx/treffer-staub-1.ogg", "sfx/treffer-staub-2.ogg", "sfx/treffer-staub-3.ogg"], "lautstaerke": 0.6, "streuung": 250, "abstand": 0.045, "reichweite": 24, "prioritaet": 0},
     "treffer.brand": {"beschreibung": "Ein Angriff mit Licht oder Feuer trifft einen Gegner", "datei": ["sfx/treffer-brand-1.ogg", "sfx/treffer-brand-2.ogg", "sfx/treffer-brand-3.ogg"], "lautstaerke": 0.6, "streuung": 250, "abstand": 0.045, "reichweite": 24, "prioritaet": 0},
