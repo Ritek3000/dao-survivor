@@ -13,6 +13,8 @@ export type Action =
   | 'down'
   /** Öffnet die Steigerungen der Klassen (Menü zwischen den Nächten). */
   | 'upgrade'
+  /** Öffnet die Ausrüstung der Klassen (Menü zwischen den Nächten). */
+  | 'lager'
   | 'choice1'
   | 'choice2'
   | 'choice3';
@@ -53,6 +55,7 @@ const ACTION_KEYS: Readonly<Record<string, Action>> = {
   KeyS: 'down',
   ArrowDown: 'down',
   KeyU: 'upgrade',
+  KeyL: 'lager',
   Digit1: 'choice1',
   Numpad1: 'choice1',
   Digit2: 'choice2',

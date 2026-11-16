@@ -5,8 +5,10 @@ import { Input, type MoveVector } from '../core/input';
 import { createRandom } from '../core/random';
 import { loadSettings, saveSettings, type Settings, type VitalsPosition } from '../core/settings';
 import { formatTime, type Hud } from '../ui/hud';
+import { LagerView } from '../ui/lagerView';
 import { Menus, type MenuCommand } from '../ui/menus';
 import { Arsenal, type CombatTraits } from './arsenal';
+import { Ausruestung } from './ausruestung';
 import { Boss } from './boss';
 import { CameraRig } from './cameraRig';
 import { CLASSES, TRAITS, type ClassDef } from './classes';
@@ -14,6 +16,7 @@ import { Coins } from './coins';
 import { finsternisUniforms } from './darkness';
 import { Dust } from './dust';
 import { Enemies, type EnemyHooks } from './enemies';
+import { Lager } from './lager';
 import { loadModels, type Models } from './models';
 import { Pickups } from './pickups';
 import { Player } from './player';
@@ -37,9 +40,9 @@ const BOSS_SEGEN_SECONDS = 3;
 /**
  * 'loading' = Modelle werden geladen, 'title' = Startbildschirm, 'select' = Klassenwahl vor der Nacht,
  * 'levelup' = Wahl einer Stärkung, 'steigerung' = Menü, in dem man zwischen den Nächten Gold für dauerhafte Ränge
- * der Klassen ausgibt. Der Startbildschirm und die Pause tragen die Menüs (Optionen, Anleitung, Rückfragen) als Unterseiten.
+ * der Klassen ausgibt, 'lager' = Menü der Ausrüstung zwischen den Nächten. Der Startbildschirm und die Pause tragen die Menüs (Optionen, Anleitung, Rückfragen) als Unterseiten.
  */
-type Phase = 'loading' | 'title' | 'select' | 'playing' | 'paused' | 'levelup' | 'steigerung' | 'ended';
+type Phase = 'loading' | 'title' | 'select' | 'playing' | 'paused' | 'levelup' | 'steigerung' | 'lager' | 'ended';
 
 /** Eine wählbare Stärkung beim Stufenaufstieg: neuer Angriff, höherer Rang oder Segen. */
 interface Offer {
@@ -67,6 +70,11 @@ export class Game {
   private readonly coins = new Coins();
   /** Geldbörse und Ränge der Klassen; bleiben über die Nächte hinweg bestehen und werden gespeichert. */
   private readonly steigerungen = new Steigerungen();
+  /** Die Gegenstände jeder Klasse; sie wirken beim Start der Nacht auf die Werte (`startRun`). */
+  private readonly ausruestung = new Ausruestung();
+  private readonly lager: Lager;
+  /** Sind die Knöpfe und die Taste zur Ausrüstung freigeschaltet? */
+  private lagerEnabled = false;
   private readonly arsenal: Arsenal;
   private readonly threats = new Threats();
   private readonly boss = new Boss();
@@ -148,6 +156,9 @@ export class Game {
       this.dust.points,
     );
 
+    this.lager = new Lager(new LagerView(), this.ausruestung, () => this.steigerungen.gold);
+    this.lager.onClose = () => this.closeLager();
+    this.hud.onLager = () => this.openLagerFromMenu();
     this.hud.onPick = (index) => this.pick(index);
     this.hud.onSteigern = () => this.openSteigerungFromMenu();
     this.hud.onSteigerungBuy = (index) => {
@@ -231,12 +242,16 @@ export class Game {
       case 'steigerung':
         this.updateSteigerung();
         break;
+      case 'lager':
+        this.lager.update(this.input);
+        break;
       case 'ended':
         this.player.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         this.boss.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         this.arsenal.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         if (this.input.wasPressed('confirm')) this.openSelect();
         else if (this.input.wasPressed('upgrade')) this.openSteigerungFromMenu();
+        else if (this.input.wasPressed('lager')) this.openLagerFromMenu();
         else if (this.input.wasPressed('pause')) this.openTitle();
         break;
       case 'loading':
@@ -472,7 +487,7 @@ export class Game {
         audio.play('auswahl');
         break;
       case 'new':
-        if (this.steigerungen.hasProgress()) this.confirmNewGame();
+        if (this.steigerungen.hasProgress() || this.ausruestung.hasAny()) this.confirmNewGame();
         else this.startNewGame();
         break;
       case 'continue':
@@ -513,9 +528,11 @@ export class Game {
   /** Warnt vor dem Löschen des Spielstands und nennt, was verloren ginge. */
   private confirmNewGame(): void {
     const ranks = CLASSES.reduce((sum, entry) => sum + this.steigerungen.totalRanks(entry.id), 0);
+    const items = CLASSES.reduce((sum, entry) => sum + this.ausruestung.count(entry.id), 0);
     const lost: string[] = [];
     if (this.steigerungen.gold > 0) lost.push(`${this.steigerungen.gold} Gold`);
     if (ranks > 0) lost.push(`${ranks} Ränge der Steigerungen`);
+    if (items > 0) lost.push(`${items} ${items === 1 ? 'Gegenstand' : 'Gegenstände'}`);
     this.confirming = 'new';
     this.menus.showConfirm({
       title: 'Neues Spiel beginnen?',
@@ -526,9 +543,10 @@ export class Game {
     audio.play('auswahl');
   }
 
-  /** Beginnt bei null: leere Börse, keine Ränge, dann die Klassenwahl. */
+  /** Beginnt bei null: leere Börse, keine Ränge, keine Gegenstände, dann die Klassenwahl. */
   private startNewGame(): void {
     this.steigerungen.reset();
+    this.ausruestung.reset();
     this.menus.hide();
     audio.play('bestaetigen');
     this.openSelect();
@@ -540,8 +558,9 @@ export class Game {
     this.hud.hideChoice();
     this.hud.hideEnd();
     this.hud.hideSteigerung();
+    this.lager.close();
     this.confirming = null;
-    this.menus.showTitle(this.steigerungen.hasProgress(), back);
+    this.menus.showTitle(this.steigerungen.hasProgress() || this.ausruestung.hasAny(), back);
   }
 
   /** Die Klassenwahl vor der Nacht; `selected` markiert eine Klasse, sonst die zuletzt gespielte. */
@@ -550,16 +569,20 @@ export class Game {
     this.selected = selected;
     this.hud.hideEnd();
     this.hud.hideSteigerung();
+    this.lager.close();
+    this.updateLagerAccess();
     this.hud.showChoice(
       'Die Abendglocke läutet',
       'Wer steht heute Nacht vor der Mauer?',
       CLASSES.map((playerClass) => {
         const ranks = this.steigerungen.totalRanks(playerClass.id);
+        const worn = this.ausruestung.equippedItems(playerClass.id).length;
+        const steigerung = ranks > 0 ? `Gesteigert: ${ranks} Ränge` : 'Noch nicht gesteigert';
         return {
           name: playerClass.name,
           text: playerClass.text,
           note: playerClass.home,
-          extra: ranks > 0 ? `Gesteigert: ${ranks} Ränge` : 'Noch nicht gesteigert',
+          extra: this.lagerEnabled ? `${steigerung} · Ausrüstung: ${worn} von 9` : steigerung,
         };
       }),
       this.selected,
@@ -579,7 +602,10 @@ export class Game {
     this.weakened = 0;
     this.goldRun = 0;
     this.hud.setGold(0);
-    this.progression.reset(playerClass, (stats) => this.steigerungen.apply(playerClass.id, stats));
+    this.progression.reset(playerClass, (stats) => {
+      this.steigerungen.apply(playerClass.id, stats);
+      this.ausruestung.apply(playerClass.id, stats);
+    });
     this.player.setClass(playerClass, this.models?.heroes.get(playerClass.id) ?? null);
     this.player.reset();
     this.dust.setLightColor(playerClass.lightColor);
@@ -694,6 +720,10 @@ export class Game {
       this.openSteigerung(this.selected);
       return;
     }
+    if (this.phase === 'select' && this.input.wasPressed('lager') && this.lagerEnabled) {
+      this.openLager(this.selected);
+      return;
+    }
     if (this.phase === 'select' && this.input.wasPressed('pause')) {
       this.openTitle();
       return;
@@ -737,6 +767,7 @@ export class Game {
     const survived = Math.min(this.time, CONFIG.run.nightSeconds);
     const stats = `${this.playerClass.name} · Überlebt: ${formatTime(survived)} · Stufe ${this.progression.level} · Erschlagen: ${this.enemies.kills}`;
     const gold = this.settle(won, survived);
+    this.updateLagerAccess();
     this.hud.setBoss(null);
     if (outcome === 'aborted') {
       this.hud.showEnd('Lauf abgebrochen', 'Du hast dich aus der Nacht zurückgezogen.', stats, gold);
@@ -864,6 +895,38 @@ export class Game {
     else if (this.input.wasPressed('pause') || this.input.wasPressed('upgrade')) this.closeSteigerung();
   }
 
+  /**
+   * Schaltet die Ausrüstung frei: im Entwicklungsmodus immer, im fertigen Spiel erst, wenn es Gegenstände gibt.
+   * Bis die Beute (siehe unten) Gegenstände liefert, bliebe das Menü sonst ein leerer Bildschirm.
+   */
+  private updateLagerAccess(): void {
+    this.lagerEnabled = import.meta.env.DEV || this.ausruestung.hasAny();
+    this.hud.setLagerEnabled(this.lagerEnabled);
+  }
+
+  /** Öffnet die Ausrüstung aus der Klassenwahl (für die markierte Klasse) oder vom Ende der Nacht (für die gespielte). */
+  private openLagerFromMenu(): void {
+    if (!this.lagerEnabled) return;
+    if (this.phase === 'select') this.openLager(this.selected);
+    else if (this.phase === 'ended') this.openLager(Math.max(0, CLASSES.indexOf(this.playerClass)));
+  }
+
+  private openLager(classIndex: number): void {
+    this.phase = 'lager';
+    this.hud.hideChoice();
+    this.hud.hideEnd();
+    audio.play('auswahl');
+    this.lager.open(classIndex);
+  }
+
+  /** Zurück zur Klassenwahl, mit der Klasse markiert, deren Ausrüstung eben zu sehen war. */
+  private closeLager(): void {
+    if (this.phase !== 'lager') return;
+    audio.play('auswahl');
+    this.lager.close();
+    this.openSelect(this.lager.classIndex);
+  }
+
   /** In den letzten Sekunden der Nacht hellt der Staub zum Zwielicht des Tages auf. */
   private updateDawn(): void {
     const { nightSeconds, dawnSeconds } = CONFIG.run;
@@ -881,6 +944,7 @@ export class Game {
       case 'title':
       case 'select':
       case 'steigerung':
+      case 'lager':
         return 'menue';
       case 'ended':
         return this.aborted ? 'menue' : this.won ? 'sieg' : 'niederlage';

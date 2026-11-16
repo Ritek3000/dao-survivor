@@ -962,7 +962,8 @@ kbd {
 
 /* Geldbörse unter der Klassenwahl und Ertrag am Ende der Nacht. */
 #choice-gold,
-#steigerung-gold {
+#steigerung-gold,
+#lager-gold {
   font-size: 20px;
   letter-spacing: 0.08em;
   color: var(--gold);
@@ -982,7 +983,8 @@ kbd {
   background: rgba(3, 3, 4, 0.97);
 }
 
-#steigerung-gold.deny {
+#steigerung-gold.deny,
+#lager-gold.deny {
   animation: deny 0.4s ease-out;
 }
 
@@ -1122,6 +1124,248 @@ kbd {
   border-color: var(--ember);
 }
 
+/*
+ * Ausrüstung: links die angelegten Gegenstände (3 × 3), daneben das Inventar (5 × 5), rechts die Karte des markierten
+ * Gegenstands und die Summe der angelegten. Die Farbe eines Gegenstands folgt seiner Seltenheit.
+ */
+#lager {
+  justify-content: safe center;
+  overflow-y: auto;
+  background: rgba(3, 3, 4, 0.97);
+}
+
+#lager-body {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 18px 26px;
+  width: min(1000px, 96vw);
+  margin-top: 10px;
+}
+
+#lager .slots {
+  display: grid;
+  gap: 6px;
+}
+
+#lager-equipment {
+  grid-template-columns: repeat(3, 78px);
+}
+
+#lager-inventory {
+  grid-template-columns: repeat(5, 60px);
+}
+
+.rarity-normal {
+  --rarity: #b9b3a5;
+  --rarity-line: rgba(185, 179, 165, 0.45);
+  --rarity-fill: rgba(185, 179, 165, 0.1);
+}
+
+.rarity-selten {
+  --rarity: #6fa8e8;
+  --rarity-line: rgba(111, 168, 232, 0.55);
+  --rarity-fill: rgba(111, 168, 232, 0.14);
+}
+
+.rarity-rar {
+  --rarity: #e6c04a;
+  --rarity-line: rgba(230, 192, 74, 0.55);
+  --rarity-fill: rgba(230, 192, 74, 0.14);
+}
+
+.rarity-legendaer {
+  --rarity: #ff8a3d;
+  --rarity-line: rgba(255, 138, 61, 0.65);
+  --rarity-fill: rgba(255, 138, 61, 0.18);
+}
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 60px;
+  padding: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+#lager-equipment .slot {
+  height: 78px;
+}
+
+.slot[class*='rarity-'] {
+  color: var(--rarity);
+  border-color: var(--rarity-line);
+  background: linear-gradient(var(--rarity-fill), var(--panel));
+}
+
+.slot.empty .icon {
+  opacity: 0.35;
+}
+
+.slot.selected {
+  border-color: var(--ember);
+  box-shadow: 0 0 18px rgba(255, 180, 94, 0.25);
+}
+
+.slot .label {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.icon {
+  display: inline-flex;
+}
+
+.icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+#lager-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 300px;
+  text-align: left;
+}
+
+.item-card {
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--rarity-line);
+  background-image: linear-gradient(var(--rarity-fill), transparent);
+}
+
+.item-card .head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--rarity);
+}
+
+.item-card .head .icon svg {
+  width: 34px;
+  height: 34px;
+}
+
+.item-card .name {
+  display: block;
+  font-size: 17px;
+  color: var(--rarity);
+}
+
+.item-card .sub {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.item-card .props {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item-card .props li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 10px;
+  font-size: 14px;
+}
+
+.item-card .range {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.item-card .bar {
+  grid-column: 1 / -1;
+  display: block;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--line);
+}
+
+.item-card .bar b {
+  display: block;
+  height: 100%;
+  background: var(--rarity);
+}
+
+.item-card .bound {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ember);
+}
+
+.item-card .compare {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.item-card .compare .title {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.compare .better {
+  color: #8fc98a;
+}
+
+.compare .worse {
+  color: #d4604f;
+}
+
+#lager-detail .empty {
+  display: block;
+  padding: 12px 0;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+#lager-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+
+#lager-summary .title {
+  margin-bottom: 4px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+#lager-summary .line.capped {
+  color: var(--ember);
+}
+
+#lager-summary .line.empty {
+  color: var(--text-dim);
+}
+
 @media (max-width: 760px) {
   .help-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -1131,5 +1375,9 @@ kbd {
     grid-auto-flow: row;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;
+  }
+
+  #lager-side {
+    width: min(420px, 94vw);
   }
 }

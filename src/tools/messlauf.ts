@@ -8,6 +8,7 @@
  *   __messlauf.start({ nights: 5, classes: [2] })    nur der Magier, fünf Nächte
  *   __messlauf.start({ steigerung: 'max' })          alle Steigerungen der Klassen voll ausgereizt
  *   __messlauf.start({ steigerung: 3 })              alle Steigerungen auf Rang 3 (oder darunter, wenn es weniger gibt)
+ *   __messlauf.start({ ausruestung: 'rar' })         alle neun Plätze jeder Klasse mit rar gewürfelten Gegenständen belegt
  *   __messlauf.results                               alle Messwerte
  *   __messlauf.config.enemies.ratePerMinute = 0.3  einen Wert nur für diese Sitzung ändern
  *   __messlauf.weapon('bogenschuss').damage = 20     ebenso einen Angriff
@@ -25,6 +26,8 @@ import { CLASSES, type ClassId } from '../game/classes';
 import type { Enemy } from '../game/enemies';
 import type { Game } from '../game/game';
 import type { Stats } from '../game/progression';
+import type { Ausruestung } from '../game/ausruestung';
+import { ITEM_SLOTS, rollItem, type Rarity } from '../game/items';
 import { STEIGERUNGEN, type Steigerungen } from '../game/steigerung';
 import { weaponById } from '../game/weapons';
 import type { Zone } from '../game/zones';
@@ -59,6 +62,7 @@ interface Internals {
   };
   progression: { level: number; stats: Stats; blessed: { name: string }[] };
   steigerungen: Steigerungen;
+  ausruestung: Ausruestung;
   input: { getMove(out: MoveVector): MoveVector };
   hud: { hideEnd(): void };
 }
@@ -141,6 +145,12 @@ interface Options {
    * unabhängig vom Spielstand vergleichbar bleiben. Der echte Spielstand wird weder gelesen noch verändert.
    */
   steigerung?: number | 'max';
+  /**
+   * Alle neun Plätze jeder Klasse mit gewürfelten Gegenständen dieser Seltenheit belegen (Würfel aus `seed`, bei allen
+   * Klassen gleich gezogen). Ohne Angabe ist nichts angelegt, damit die Werte unabhängig vom Spielstand vergleichbar bleiben.
+   * Der echte Spielstand wird weder gelesen noch verändert.
+   */
+  ausruestung?: Exclude<Rarity, 'legendaer'>;
   seed?: number;
 }
 
@@ -388,6 +398,16 @@ export function installMesslauf(game: Game): void {
           steigerungen.setRank(playerClass.id, steigerung, options.steigerung === 'max' ? steigerung.max : (options.steigerung ?? 0));
         }
       }
+      // Dasselbe für die Gegenstände: Die Ausrüstung der Messung ersetzt die echte, bis der Spielstand neu gelesen wird.
+      const ausruestung = (game as unknown as Internals).ausruestung;
+      ausruestung.persist = false;
+      const itemRandom = createRandom((options.seed ?? 12345) + 777);
+      for (const playerClass of CLASSES) {
+        ausruestung.setLoadout(
+          playerClass.id,
+          options.ausruestung ? ITEM_SLOTS.map((slot) => rollItem(itemRandom, slot, options.ausruestung as Rarity, playerClass.id)) : [],
+        );
+      }
       try {
         for (const classIndex of classes) {
           for (let night = 1; night <= nights; night++) {
@@ -404,6 +424,8 @@ export function installMesslauf(game: Game): void {
         audio.silenced = false;
         steigerungen.persist = true;
         steigerungen.reload();
+        ausruestung.persist = true;
+        ausruestung.reload();
         (game as unknown as Internals).hud.hideEnd();
         (game as unknown as Internals).openSelect();
       }

@@ -7,6 +7,8 @@ export interface Stats {
   /** Faktor auf Abklingzeiten; kleiner ist schneller. */
   cooldown: number;
   critChance: number;
+  /** Faktor auf den Schaden eines kritischen Treffers. */
+  critDamage: number;
   /** Fester Abzug von jedem Treffer. */
   armor: number;
   /** Faktor auf den Zuwachs der Verstaubung. */
@@ -30,6 +32,8 @@ export interface Stats {
   scorch: number;
   /** Faktor auf die Schonfrist nach einem Treffer. */
   grace: number;
+  /** Faktor auf die Heilung bei der Rast im Licht. */
+  restHeal: number;
   /** Faktor auf Treffer gegen große Gegner. */
   bigGame: number;
   /** Faktor auf eingesammelte Erfahrung. */
@@ -191,6 +195,7 @@ function baseStats(): Stats {
     damage: 1,
     cooldown: 1,
     critChance: 0,
+    critDamage: 2,
     armor: 0,
     verstaubung: 1,
     maxHp: CONFIG.player.maxHp,
@@ -204,6 +209,7 @@ function baseStats(): Stats {
     ignite: 1,
     scorch: 0,
     grace: 1,
+    restHeal: 1,
     bigGame: 1,
     xp: 1,
     heldDamage: 1,
@@ -229,7 +235,7 @@ export class Progression {
 
   /**
    * Neue Nacht mit den Grundwerten der gewählten Klasse. `boost` setzt noch darauf, was die Klasse
-   * zwischen den Nächten dauerhaft hinzugewonnen hat (Steigerungen); die Stärkungen der Nacht kommen danach.
+   * zwischen den Nächten dauerhaft hinzugewonnen hat (Steigerungen und Ausrüstung); die Stärkungen der Nacht kommen danach.
    */
   reset(playerClass: ClassDef, boost?: (stats: Stats) => void): void {
     this.level = 1;

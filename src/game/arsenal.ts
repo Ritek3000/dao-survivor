@@ -335,7 +335,7 @@ export class Arsenal {
     const { def } = weapon;
     let amount = def.damage * (1 + DAMAGE_PER_RANK * (weapon.rank - 1)) * this.stats.damage * this.traits.dealt;
     if (amount > 0) {
-      if (this.random() < this.stats.critChance) amount *= 2;
+      if (this.random() < this.stats.critChance) amount *= this.stats.critDamage;
       if (enemy.weak > 0) amount *= WEAK_FACTOR;
       if (this.traits.finsternisDamage !== 1 && this.zones.finsternisAt(enemy.x, enemy.z) > 0.5) {
         amount *= this.traits.finsternisDamage;

@@ -169,6 +169,8 @@ export const CONFIG = {
     /** Schonfrist nach einem Treffer. */
     invulnerableSeconds: 0.5,
     pickupRadius: 3.6,
+    /** Rüstung nimmt von einem Treffer höchstens so viel ab, dass dieser Anteil übrig bleibt (1 Schaden ist die Untergrenze). */
+    minDamageShare: 0.25,
   },
   camera: {
     fov: 42,
@@ -402,6 +404,36 @@ export const CONFIG = {
     horde: { callEvery: { min: 1.6, max: 3.6 }, range: 18, busy: 80 },
   },
   // Angriffe stehen in game/weapons.ts, Klassen und ihre Besonderheiten in game/classes.ts.
+  /**
+   * Gegenstände (`items.ts`): die Wertebereiche je Eigenschaft, in der Einheit der Anzeige (Prozent, Punkte, Leben).
+   * `min` und `max` gelten für einen gewöhnlichen Platz, `core` hebt sie auf dem Kernplatz einer Eigenschaft um einen Faktor an.
+   * `step` ist die Rundung des Wurfs. `cap` begrenzt die Summe über alle angelegten Gegenstände: ein Netz unter dem Gleichgewicht,
+   * falls sich später Ausreißer häufen. Die Grenzen sind aus den alten Steigerungen abgeleitet: Eine Eigenschaft kostet auf
+   * einem Gegenstand etwa zwei bis drei alte Ränge, und alle Plätze zusammen kommen auf den Höchstwert der Steigerung.
+   */
+  items: {
+    /** Plätze im Inventar einer Figur. */
+    inventorySize: 25,
+    properties: {
+      schaden: { min: 6, max: 14, step: 1, cap: 50, core: { waffe: 1.5 } },
+      tempo: { min: 3, max: 10, step: 1, cap: 30, core: {} },
+      kritChance: { min: 2, max: 6, step: 1, cap: 18, core: {} },
+      kritSchaden: { min: 8, max: 20, step: 1, cap: 60, core: {} },
+      reichweite: { min: 4, max: 12, step: 1, cap: 24, core: {} },
+      leben: { min: 5, max: 13, step: 1, cap: 72, core: { brust: 1.5 } },
+      ruestung: { min: 0.4, max: 0.8, step: 0.1, cap: 3.6, core: { brust: 1.5 } },
+      staub: { min: 3, max: 8, step: 1, cap: 32, core: {} },
+      schonfrist: { min: 3, max: 8, step: 1, cap: 32, core: {} },
+      rastheilung: { min: 5, max: 12, step: 1, cap: 48, core: {} },
+      lauftempo: { min: 2, max: 5, step: 1, cap: 20, core: { schuh: 2 } },
+      sammelradius: { min: 6, max: 14, step: 1, cap: 63, core: { handschuh: 1.5 } },
+      erfahrung: { min: 5, max: 13, step: 1, cap: 39, core: {} },
+      gold: { min: 5, max: 15, step: 1, cap: 45, core: {} },
+      licht: { min: 2, max: 6, step: 1, cap: 21, core: { fackel: 1.5 } },
+      brenndauer: { min: 10, max: 30, step: 1, cap: 30, core: {} },
+      zuendtempo: { min: 10, max: 30, step: 1, cap: 30, core: {} },
+    },
+  },
   xp: {
     /** Bedarf für die nächste Stufe: base + linear * Stufe + quadratic * Stufe². */
     base: 5,

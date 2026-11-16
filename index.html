@@ -227,6 +227,7 @@
       <p id="choice-gold" hidden></p>
       <div class="buttons">
         <button id="choice-steigern" class="button" type="button" hidden>Klassen steigern (U)</button>
+        <button id="choice-lager" class="button" type="button" hidden>Ausrüstung (L)</button>
         <button id="choice-main-menu" class="button" type="button" hidden>Hauptmenü (Esc)</button>
       </div>
       <p id="choice-keys" class="keys">1 · 2 · 3 oder Pfeiltasten und Enter</p>
@@ -243,6 +244,25 @@
       </p>
     </div>
 
+    <div id="lager" class="overlay" hidden>
+      <h1>Ausrüstung</h1>
+      <p id="lager-gold"></p>
+      <div id="lager-tabs"></div>
+      <div id="lager-body">
+        <div id="lager-equipment" class="slots" aria-label="Angelegt"></div>
+        <div id="lager-inventory" class="slots" aria-label="Inventar"></div>
+        <aside id="lager-side">
+          <div id="lager-detail"></div>
+          <div id="lager-summary"></div>
+        </aside>
+      </div>
+      <button id="lager-back" class="button" type="button">Zurück (Esc)</button>
+      <p class="keys">
+        Pfeiltasten: wählen · Enter: anlegen oder ablegen · Links und Rechts im Rand: zwischen Angelegt und Inventar · 1 · 2 · 3:
+        Klasse wechseln · Esc oder L: zurück
+      </p>
+    </div>
+
     <div id="end" class="overlay" hidden>
       <h1 id="end-title"></h1>
       <p id="end-text"></p>
@@ -250,9 +270,10 @@
       <p id="end-gold"></p>
       <div class="buttons">
         <button id="end-steigern" class="button" type="button">Gold ausgeben (U)</button>
+        <button id="end-lager" class="button" type="button" hidden>Ausrüstung (L)</button>
         <button id="end-main-menu" class="button" type="button">Hauptmenü (Esc)</button>
       </div>
-      <p class="keys">Enter: Klasse wählen und neue Nacht beginnen · U: Gold für Steigerungen ausgeben · Esc: Hauptmenü</p>
+      <p id="end-keys" class="keys">Enter: Klasse wählen und neue Nacht beginnen · U: Gold für Steigerungen ausgeben · Esc: Hauptmenü</p>
     </div>
 
     <div id="error" class="overlay" hidden></div>

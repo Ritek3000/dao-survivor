@@ -63,6 +63,8 @@ export class Hud {
   onPick: (index: number) => void = () => {};
   /** Die Knöpfe der Auswahl und des Steigerungsmenüs. */
   onSteigern: () => void = () => {};
+  /** Der Knopf zur Ausrüstung bei der Klassenwahl und am Ende der Nacht. */
+  onLager: () => void = () => {};
   onSteigerungBuy: (index: number) => void = () => {};
   onSteigerungClass: (index: number) => void = () => {};
   onSteigerungBack: () => void = () => {};
@@ -95,6 +97,9 @@ export class Hud {
   private readonly choiceCards = element('choice-cards');
   private readonly choiceGold = element('choice-gold');
   private readonly choiceSteigern = element('choice-steigern');
+  private readonly choiceLager = element('choice-lager');
+  private readonly endLager = element('end-lager');
+  private readonly endKeys = element('end-keys');
   private readonly choiceMainMenu = element('choice-main-menu');
   private readonly choiceKeys = element('choice-keys');
   private readonly end = element('end');
@@ -110,6 +115,7 @@ export class Hud {
   private readonly shown = new Map<HTMLElement, string>();
   private cards: HTMLButtonElement[] = [];
   private steigerungRows: HTMLButtonElement[] = [];
+  private lagerEnabled = false;
 
   constructor(showDebug: boolean) {
     this.debug = showDebug ? element('debug') : null;
@@ -118,6 +124,8 @@ export class Hud {
     for (const [id, action] of [
       ['choice-steigern', () => this.onSteigern()],
       ['end-steigern', () => this.onSteigern()],
+      ['choice-lager', () => this.onLager()],
+      ['end-lager', () => this.onLager()],
       ['steigerung-back', () => this.onSteigerungBack()],
       ['choice-main-menu', () => this.onMainMenu()],
       ['end-main-menu', () => this.onMainMenu()],
@@ -244,14 +252,22 @@ export class Hud {
     this.choiceCards.replaceChildren(...this.cards);
     this.choiceGold.hidden = gold === null;
     this.choiceSteigern.hidden = gold === null;
+    this.choiceLager.hidden = gold === null || !this.lagerEnabled;
     this.choiceMainMenu.hidden = gold === null;
     if (gold !== null) this.choiceGold.textContent = `Gold: ${gold}`;
     this.choiceKeys.textContent =
       gold === null
         ? '1 · 2 · 3 oder Pfeiltasten und Enter'
-        : '1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen · U: Klassen steigern · Esc: Hauptmenü';
+        : `1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen · U: Klassen steigern${this.lagerEnabled ? ' · L: Ausrüstung' : ''} · Esc: Hauptmenü`;
     this.select(selected);
     this.choice.hidden = false;
+  }
+
+  /** Zeigt die Knöpfe zur Ausrüstung oder versteckt sie; wirkt ab dem nächsten Bild der Klassenwahl und des Endes. */
+  setLagerEnabled(enabled: boolean): void {
+    this.lagerEnabled = enabled;
+    this.endLager.hidden = !enabled;
+    this.endKeys.textContent = `Enter: Klasse wählen und neue Nacht beginnen · U: Gold für Steigerungen ausgeben${enabled ? ' · L: Ausrüstung' : ''} · Esc: Hauptmenü`;
   }
 
   select(index: number): void {
