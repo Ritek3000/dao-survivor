@@ -229,7 +229,6 @@ export class Arsenal {
         else if (def.look === 'schrei') this.effects.shout(origin.x, origin.z, range);
         else if (def.look === 'erdstoss') this.effects.quake(origin.x, origin.z, range);
         else if (def.look === 'boee') this.effects.gust(origin.x, origin.z, range);
-        else this.effects.flare(origin.x, origin.z, range);
         break;
       case 'projectile': {
         const count = def.count?.(rank) ?? 1;

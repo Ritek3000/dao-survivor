@@ -23,10 +23,6 @@ export type StripLook =
   | 'glow'
   /** Windfahnen, die nach außen jagen. */
   | 'gust'
-  /** Weißer Lichtstoß. */
-  | 'flare'
-  /** Heller Ring aus gestreutem Licht, der über den Boden nach außen läuft. */
-  | 'lichtwelle'
   /** Glutbrocken am Boden: ein gebrochener, rot bis gelb glühender Ring. */
   | 'glut'
   /** Brennender Boden: Flammen zucken über eine ganze Fläche und steigen auf. */
@@ -344,35 +340,6 @@ const LOOKS: Record<StripLook, LookDef> = {
       float wave = smoothstep(front - 0.75, front - 0.1, vUv.y) * (1.0 - smoothstep(front, front + 0.05, vUv.y));
       float glow = pick * dash * soft * wave * (1.0 - smoothstep(0.55, 1.0, t)) * smoothstep(0.02, 0.15, vUv.y);
       emit(uColor * glow * lit());
-    `,
-  },
-  flare: {
-    mode: 'add',
-    body: /* glsl */ `
-      float t = uLife.x;
-      // Strahlen: Jeder hat seine eigene Länge, ein paar reichen weit hinaus.
-      float angular = vUv.x * 64.0 + uLife.z * 13.0;
-      float spoke = pow(noise(vec2(angular, 1.7)), 2.2);
-      float fine = 0.55 + 0.45 * noise(vec2(vUv.x * 180.0, uLife.z * 9.0));
-      float reach = 0.3 + 0.7 * noise(vec2(angular * 0.5, 9.1));
-      float run = min(1.0, t * 3.2);
-      float rays = spoke * fine * smoothstep(run * reach, run * reach * 0.35, vUv.y) * smoothstep(0.0, 0.05, vUv.y);
-      // Ein Stoß, kein Leuchten: sofort grell, nach einem Wimpernschlag vorbei.
-      float core = exp(-vUv.y * vUv.y * 26.0) * (1.0 - smoothstep(0.0, 0.3, t));
-      float halo = exp(-vUv.y * vUv.y * 5.0) * (1.0 - smoothstep(0.0, 0.4, t));
-      float fade = (1.0 - smoothstep(0.25, 1.0, t));
-      emit(uColor * (core * 1.2 + halo * 0.18 + rays * 1.9 * fade));
-    `,
-  },
-  lichtwelle: {
-    mode: 'add',
-    body: /* glsl */ `
-      float band = sin(vUv.y * 3.14159);
-      float core = pow(band, 7.0);
-      // Der Staub am Boden fängt das Licht unregelmäßig: Die Welle ist körnig, nicht glatt.
-      float grain = 0.6 + 0.4 * noise(vec2(vUv.x * uShape.w * 7.0 + uLife.z * 20.0, uLife.w * 2.0));
-      float fade = (1.0 - uLife.x) * (1.0 - uLife.x);
-      emit(uColor * (core * 2.2 + band * band * 0.55) * grain * fade);
     `,
   },
   crack: {

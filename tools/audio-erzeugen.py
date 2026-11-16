@@ -789,17 +789,6 @@ def sfx_angriff_sturmboee(rng):
     return fade_edges(whoosh(rng, 1.1, 250, 2200, peak=0.4, tail=0.28, q=0.55), 0.01, 0.2)
 
 
-def sfx_angriff_sorhennas_brand(rng):
-    out = np.zeros(n_of(2.2))
-    t = taxis(2.2)
-    for index, f in enumerate([1318.5, 1975.5, 2637.0, 3951.0]):
-        glide = f * (0.92 + 0.08 * smooth(t, 0, 0.25))
-        out += sine(glide, len(t)) * (0.5 / (1 + index * 0.5)) * smooth(t, 0, 0.12) * np.exp(-t / 0.8)
-    out += bandpass(white(len(t), rng), 2500, 11000) * smooth(t, 0, 0.05) * np.exp(-t / 0.18) * 0.7
-    stereo = reverb(out, rt60=2.0, wet=0.3, seed='brand')
-    return stereo.mean(axis=1)
-
-
 # --- Treffer und Tod der Gegner -----------------------------------------------
 
 
@@ -1398,7 +1387,6 @@ def build_catalogue():
     sfx('sfx/angriff-erdstoss', sfx_angriff_erdstoss, -17.0)
     sfx('sfx/angriff-wurzelgriff', sfx_angriff_wurzelgriff, -21.0)
     sfx('sfx/angriff-sturmboee', sfx_angriff_sturmboee, -20.0)
-    sfx('sfx/angriff-sorhennas-brand', sfx_angriff_sorhennas_brand, -19.0)
 
     many('sfx/treffer-stahl', sfx_treffer_stahl, 3, -21.0)
     many('sfx/treffer-staub', sfx_treffer_staub, 3, -22.0)
