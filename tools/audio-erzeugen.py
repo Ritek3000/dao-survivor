@@ -878,6 +878,81 @@ def sfx_angriff_netz(rng):
     return fade_edges(out, 0.001, 0.12)
 
 
+# --- Evolutionen (Rang 6) -------------------------------------------------
+
+
+def sfx_evolution(rng):
+    """Ein Angriff entwickelt sich: ein tiefer Schlag, eine grosse Glocke darunter und aufsteigende Toene, die im Staub verschwimmen."""
+    out = np.zeros(n_of(2.6))
+    place(out, thump(95, 38, 1.2, 0.34), 0.0, 1.0)
+    place(out, bell(110.0, 2.4, rng, 1.2, 0.9), 0.0, 0.5)
+    for i, f in enumerate((440.0, 554.4, 659.3, 880.0)):
+        place(out, chime(f, 1.6, 0.45, ((1, 1), (2.0, 0.3), (3.01, 0.12)), rng), 0.2 + 0.13 * i, 0.4)
+    place(out, whoosh(rng, 1.4, 600, 5200, peak=0.7, tail=0.4, q=1.2), 0.15, 0.35)
+    return fade_edges(out, 0.003, 0.4)
+
+
+def sfx_evolution_sichel(rng):
+    """Henkersbeil: eine schwere Sichel aus Staub und Stahl faehrt durch die Reihen, ein heller Nachklang bleibt."""
+    out = np.zeros(n_of(1.0))
+    place(out, whoosh(rng, 0.7, 350, 3200, peak=0.35, tail=0.16, q=1.1), 0.0, 1.0)
+    place(out, thump(110, 42, 0.35, 0.09), 0.1, 0.9)
+    place(out, noise_hit(rng, 1500, 7000, 0.18, 0.04), 0.12, 0.6)
+    place(out, chime(1480.0, 0.7, 0.22, ((1, 1), (2.76, 0.3)), rng), 0.2, 0.25)
+    return fade_edges(out, 0.002, 0.2)
+
+
+def sfx_evolution_sturm(rng):
+    """Sturm der Klingen: sechs Aexte surren im Kreis, dann fliegen sie auseinander."""
+    n = n_of(1.4)
+    t = np.arange(n) / SR
+    spin = whoosh(rng, 1.1, 500, 2600, peak=0.8, tail=0.1, q=1.5) * (0.5 + 0.5 * np.sin(2 * np.pi * 21 * t[: n_of(1.1)]))
+    out = np.zeros(n)
+    place(out, spin, 0.0, 0.8)
+    place(out, noise_hit(rng, 1200, 6000, 0.12, 0.025), 1.1, 0.8)
+    place(out, whoosh(rng, 0.3, 1000, 4200, peak=0.2, tail=0.08), 1.1, 0.9)
+    return fade_edges(out, 0.003, 0.15)
+
+
+def sfx_evolution_mahlstrom(rng):
+    """Mahlstrom: ein Tornado aus Staub und Eisen schwillt an."""
+    n = n_of(2.2)
+    t = np.arange(n) / SR
+    out = whoosh(rng, 2.2, 220, 1700, peak=0.6, tail=0.7, q=0.8) * (0.7 + 0.3 * np.sin(2 * np.pi * 5.5 * t))
+    place(out, thump(70, 40, 1.0, 0.3), 0.0, 0.6)
+    return fade_edges(out, 0.01, 0.4)
+
+
+def sfx_evolution_mahlstrom_ende(rng):
+    """Mahlstrom, Ende: die Druckwelle faehrt nach aussen, Eisen klirrt."""
+    out = np.zeros(n_of(1.4))
+    place(out, thump(140, 32, 1.0, 0.25), 0.0, 1.2)
+    place(out, noise_hit(rng, 0, 3000, 0.7, 0.16), 0.0, 0.9)
+    place(out, noise_hit(rng, 2000, 8000, 0.25, 0.05), 0.0, 0.7)
+    place(out, whoosh(rng, 0.7, 2500, 400, peak=0.1, tail=0.3), 0.02, 0.5)
+    return fade_edges(out, 0.002, 0.25)
+
+
+def sfx_evolution_spalter(rng):
+    """Spalter von Ghen: der Boden bricht in einer langen Linie auf, tief und knirschend."""
+    out = np.zeros(n_of(1.6))
+    place(out, thump(85, 28, 1.3, 0.38), 0.0, 1.3)
+    place(out, noise_hit(rng, 0, 1800, 1.0, 0.25), 0.0, 1.0)
+    place(out, noise_hit(rng, 900, 5000, 0.5, 0.1), 0.02, 0.6)
+    place(out, crackle(rng, 1.2, 60, 800, 4500, 0.6, 0.006, 0.2), 0.05, 0.6)
+    return fade_edges(out, 0.002, 0.3)
+
+
+def sfx_evolution_donner(rng):
+    """Donner der Alten Ordnung: der Schrei rollt als Donner ueber das Feld."""
+    out = np.zeros(n_of(2.0))
+    place(out, thump(120, 30, 1.6, 0.45), 0.0, 1.2)
+    place(out, noise_hit(rng, 0, 1400, 1.5, 0.4), 0.0, 1.0)
+    place(out, noise_hit(rng, 1200, 6000, 0.12, 0.02), 0.0, 0.7)
+    place(out, whoosh(rng, 1.2, 300, 1200, peak=0.2, tail=0.5, q=0.8), 0.05, 0.5)
+    return fade_edges(out, 0.002, 0.4)
+
+
 def sfx_angriff_hitze_werfen(rng):
     n = n_of(0.7)
     t = np.arange(n) / SR
@@ -1540,6 +1615,13 @@ def build_catalogue():
     sfx('sfx/angriff-erdstoss', sfx_angriff_erdstoss, -17.0)
     sfx('sfx/angriff-wurzelgriff', sfx_angriff_wurzelgriff, -21.0)
     sfx('sfx/angriff-sturmboee', sfx_angriff_sturmboee, -20.0)
+    sfx('sfx/evolution', sfx_evolution, -16.0)
+    sfx('sfx/evolution-sichel', sfx_evolution_sichel, -18.0)
+    sfx('sfx/evolution-sturm', sfx_evolution_sturm, -19.0)
+    sfx('sfx/evolution-mahlstrom', sfx_evolution_mahlstrom, -20.0)
+    sfx('sfx/evolution-mahlstrom-ende', sfx_evolution_mahlstrom_ende, -17.0)
+    sfx('sfx/evolution-spalter', sfx_evolution_spalter, -16.0)
+    sfx('sfx/evolution-donner', sfx_evolution_donner, -16.0)
 
     many('sfx/treffer-stahl', sfx_treffer_stahl, 3, -21.0)
     many('sfx/treffer-staub', sfx_treffer_staub, 3, -22.0)

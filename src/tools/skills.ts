@@ -9,7 +9,8 @@
  *                                            stellt ein Bodenfeld an der Figur auf (Felder siehe fields.ts; ohne Angaben ein Kreis mit Schaden)
  *   __skills.wert('speed', 'mul', 1.5, 6)    setzt einen zeitweiligen Wert: Wert, 'add' oder 'mul', Betrag, Sekunden, Stapel (optional)
  *   __skills.hoeren()                        zählt von jetzt an Treffer, Tode und Verletzungen der Figur mit Urheber; `__skills.ereignisse()` liest den Stand
- *   __skills.raenge('wirbelschlag')          die aufgelösten Ränge eines Angriffs (siehe weapons.ts, `resolveRank`)
+ *   __skills.raenge('wirbelschlag')          die aufgelösten Ränge eines Angriffs (siehe weapons.ts, `resolveRank`; mit Evolution ein Rang mehr)
+ *   __skills.entwickeln('axthieb')           schaltet die Evolution frei, als trüge die Figur den Ring, und hebt den Angriff auf Rang 6
  *   __skills.stand()                         was gerade wirkt: Zustände der Gegner, Felder, zeitweilige Werte
  *
  * Sichtbar ist davon nur, was ohnehin sichtbar ist: Ein Gegner im Zustand `hold` steht fahl da. Alles Übrige zeigt `stand()`.
@@ -22,7 +23,8 @@ import type { Fields, FieldDef, FieldOptions } from '../game/fields';
 import type { Game } from '../game/game';
 import type { Progression } from '../game/progression';
 import { applyStatus, STATUS_KINDS, type StatusKind } from '../game/status';
-import { resolveRank, weaponById } from '../game/weapons';
+import type { Arsenal } from '../game/arsenal';
+import { EVOLUTION_RANK, MAX_RANK, resolveRank, weaponById } from '../game/weapons';
 
 interface Internals {
   phase: string;
@@ -30,6 +32,7 @@ interface Internals {
   enemies: Enemies;
   fields: Fields;
   progression: Progression;
+  arsenal: Arsenal;
   player: { position: { x: number; z: number } };
 }
 
@@ -107,7 +110,19 @@ export function installSkillTools(game: Game): void {
 
     raenge(id: string): unknown {
       const def = weaponById(id);
-      return [1, 2, 3, 4, 5].map((rank) => resolveRank(def, rank));
+      const top = def.evolution ? EVOLUTION_RANK : MAX_RANK;
+      return Array.from({ length: top }, (_, index) => resolveRank(def, index + 1));
+    },
+
+    entwickeln(id: string): number {
+      requireNight(internals);
+      const def = weaponById(id);
+      if (!def.evolution) throw new Error(`${id} hat keine Evolution.`);
+      const { arsenal } = internals;
+      arsenal.unlockEvolutions(new Set([id]));
+      // Bis Rang 5 aufsteigen; der letzte Schritt entwickelt ihn.
+      while (arsenal.rankOf(id) < EVOLUTION_RANK) arsenal.take(def);
+      return arsenal.rankOf(id);
     },
 
     stand(): unknown {

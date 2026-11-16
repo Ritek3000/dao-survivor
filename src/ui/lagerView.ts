@@ -15,6 +15,8 @@ export interface ItemView {
   props: readonly { text: string; range: string; quality: number }[];
   /** Hinweis zur Bindung an eine Klasse („Nur für den Magier“), sonst `null`. */
   bound: string | null;
+  /** Die Evolution eines legendären Rings: ihr Name, was sie freischaltet und was sie bewirkt; sonst `null`. */
+  evolution: { title: string; requirement: string; text: string } | null;
 }
 
 /** Ein Preis in Gold, wie ihn der Händler an einen Gegenstand schreibt; `poor`: Das Gold in der Börse reicht dafür nicht. */
@@ -304,6 +306,12 @@ export class LagerView {
       props.append(row);
     }
     card.append(head, props);
+    if (item.evolution) {
+      const evolution = document.createElement('div');
+      evolution.className = 'evolution';
+      evolution.append(span('title', item.evolution.title), span('requirement', item.evolution.requirement), span('text', item.evolution.text));
+      card.append(evolution);
+    }
     if (item.bound) card.append(span('bound', item.bound));
     if (view.price) card.append(span(view.price.poor ? 'price poor' : 'price', view.price.text));
     if (view.compare) {

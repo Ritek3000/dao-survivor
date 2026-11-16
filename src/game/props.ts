@@ -96,6 +96,19 @@ export function throwingAxeGeometry(): THREE.BufferGeometry {
 }
 
 /**
+ * Eine Eisenstange des Bollwerks der Stacheln: ein Schaft mit scharfer Spitze und angebackenem Staub, nach +Z, rund 1,7 m lang. Sie ist
+ * dicker als eine echte, damit sie aus der Spielkamera zu sehen ist.
+ */
+export function spikeGeometry(): THREE.BufferGeometry {
+  const CRUST = 0x8a775c;
+  const shaft = new THREE.CylinderGeometry(0.045, 0.06, 1.2, 6).rotateX(Math.PI / 2).translate(0, 0, 0.6);
+  const tip = new THREE.ConeGeometry(0.075, 0.55, 6).rotateX(Math.PI / 2).translate(0, 0, 1.47);
+  const hook = new THREE.ConeGeometry(0.045, 0.24, 4).rotateX(Math.PI / 2).rotateY(0.5).translate(0.07, 0, 1.0);
+  const crust = new THREE.SphereGeometry(0.1, 5, 4).scale(1, 0.8, 1.7).translate(0.02, 0.03, 0.45);
+  return joined([painted(shaft, IRON), painted(tip, STEEL), painted(hook, STEEL), painted(crust, CRUST)]);
+}
+
+/**
  * Das Banner des Kämpfers: eine Stange mit Eisenspitze und Querholz, daran ein zerfetztes Tuch aus fünf Streifen verschiedener
  * Länge. Das Tuch hängt zur +X-Seite; das Ganze ist rund 2,5 m hoch.
  */

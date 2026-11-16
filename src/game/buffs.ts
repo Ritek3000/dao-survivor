@@ -88,6 +88,23 @@ export class Buffs {
     return true;
   }
 
+  /**
+   * Wie `add`, legt aber die Zahl der Stapel fest, statt sie zu erhöhen: Wer mit jedem Gegner im Umkreis einen Stapel bekommt und
+   * einen verliert, wenn er geht (Reliquie der Nimmersatten), setzt den Wert in jedem Takt neu.
+   */
+  set(spec: BuffSpec, stacks: number): boolean {
+    for (const slot of this.slots) {
+      if (slot.time <= 0 || slot.id !== spec.id || slot.stat !== spec.stat) continue;
+      slot.mode = spec.mode;
+      slot.amount = spec.amount;
+      slot.time = spec.seconds;
+      slot.stacks = Math.min(spec.maxStacks ?? 1, Math.max(1, stacks));
+      this.changed = true;
+      return true;
+    }
+    return this.add(spec, stacks);
+  }
+
   /** Wie viele Stapel der Wert gerade hat; 0, wenn er nicht wirkt. */
   stacks(id: string, stat: BuffStat): number {
     for (const slot of this.slots) if (slot.time > 0 && slot.id === id && slot.stat === stat) return slot.stacks;

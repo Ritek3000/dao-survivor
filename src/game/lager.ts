@@ -41,6 +41,7 @@ import { needsConfirm } from './haendler';
 import {
   compareItems,
   canEquip,
+  describeEvolution,
   describeProperty,
   formatRange,
   formatValue,
@@ -74,6 +75,7 @@ function itemView(item: Item, viewer: ClassId): ItemView {
       quality: propertyQuality(item.slot, property),
     })),
     bound: owner ? `Gehört zur Klasse ${owner.name}` : null,
+    evolution: describeEvolution(item),
   };
 }
 

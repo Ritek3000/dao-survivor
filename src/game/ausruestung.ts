@@ -125,6 +125,13 @@ export class Ausruestung {
     return ITEM_SLOTS.flatMap((slot) => equipment[slot] ?? []);
   }
 
+  /** Die Evolutionen, die die angelegten Gegenstände einer Klasse freischalten: die Kennungen der Angriffe (siehe `Arsenal.reset`). */
+  evolutionsOf(classId: ClassId): Set<string> {
+    const unlocked = new Set<string>();
+    for (const item of this.equippedItems(classId)) if (item.evolution) unlocked.add(item.evolution);
+    return unlocked;
+  }
+
   /** Anzahl der Gegenstände einer Klasse, angelegt und im Inventar. */
   count(classId: ClassId): number {
     const { inventory } = this.of(classId);

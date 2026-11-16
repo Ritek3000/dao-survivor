@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { createRandom } from '../core/random';
 import { ShieldDome } from './dome';
+import { EvolutionEffects } from './evolutionEffects';
 import { Particles, type Particle } from './particles';
 import { arrowGeometry, bannerGeometry, decoyGeometry, podGeometry, propMaterial, rockGeometry, rootsGeometry, shardGeometry, trapGeometry } from './props';
 import { Strips, type Strip } from './strips';
@@ -146,6 +147,8 @@ export class Effects {
   /** Läuft mit; das Tuch der Banner wiegt sich danach. */
   private swayTime = 0;
   private readonly lightTint = new THREE.Color();
+  /** Das Bild der Evolutionen (Rang 6); es nutzt Flächen und Teilchen von hier. */
+  readonly evolution: EvolutionEffects;
 
   private fireRing: Strip | null = null;
   private fireCoals: Strip | null = null;
@@ -195,6 +198,18 @@ export class Effects {
     this.bannerMesh = instanced(bannerGeometry(), propMaterial(0.85), BANNER_CAPACITY, true);
     this.decoyMesh = instanced(decoyGeometry(), propMaterial(0.9), DECOY_CAPACITY, true);
     this.podMesh = instanced(podGeometry(), propMaterial(0.8), POD_CAPACITY, false);
+    this.evolution = new EvolutionEffects({
+      strips: this.strips,
+      glow: this.glow,
+      dust: this.dust,
+      random: this.random,
+      particle: this.particle,
+      after: (seconds, run) => this.after(seconds, run),
+      groundWave: (x, z, radius, color, opacity) => this.groundWave(x, z, radius, color, opacity),
+      puff: (x, z, angle, speed, color, alpha) => this.puff(x, z, angle, speed, color, alpha),
+      sparks: (x, y, z, count, color, speed) => this.sparks(x, y, z, count, color, speed),
+      flash: (x, y, z, color, intensity, distance, seconds) => this.flash(x, y, z, color, intensity, distance, seconds),
+    });
 
     this.group.add(
       this.strips.group,
@@ -212,6 +227,7 @@ export class Effects {
       this.bannerMesh,
       this.decoyMesh,
       this.podMesh,
+      this.evolution.group,
     );
   }
 
@@ -231,6 +247,7 @@ export class Effects {
     this.fireRing = this.fireCoals = this.fireGlow = this.fireBed = this.shieldRing = this.shieldGlow = null;
     this.fireSurge = 0;
     this.dome.reset();
+    this.evolution.reset();
     for (const mesh of [this.hailMesh, this.rockMesh, this.shardMesh, this.rootMesh, this.openTraps, this.shutTraps, this.bannerMesh, this.decoyMesh, this.podMesh]) mesh.count = 0;
   }
 

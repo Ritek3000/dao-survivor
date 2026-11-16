@@ -45,6 +45,10 @@ export interface Enemy {
   /** Wie lange er ohne Unterbrechung im Glutkreis des Magiers steht (Sekunden) und wann er zuletzt darin war (Spielzeit); Glut formen, Rang 4. */
   scorch: number;
   scorchAt: number;
+  /** Sein Leben zu Beginn: Die Hinrichtung der Evolutionen (Henkersbeil) misst den Rest daran. */
+  maxHp: number;
+  /** Bis zu dieser Spielzeit erleidet er mehr Schaden aus Nahkampfangriffen des Kämpfers (Donner der Alten Ordnung); sonst 0. */
+  thunderUntil: number;
 }
 
 /** Was die Horde dem Spiel meldet. */
@@ -426,9 +430,13 @@ export class Enemies {
       driven: false,
       scorch: 0,
       scorchAt: -Infinity,
+      maxHp: hp,
+      thunderUntil: 0,
     };
     enemy.type = type;
     enemy.hp = hp;
+    enemy.maxHp = hp;
+    enemy.thunderUntil = 0;
     enemy.pushX = 0;
     enemy.pushZ = 0;
     enemy.flash = 0;

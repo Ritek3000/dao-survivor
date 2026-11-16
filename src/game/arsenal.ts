@@ -10,10 +10,11 @@ import { sourceOf, type CombatListener, type Source } from './events';
 import type { Field, FieldDef, Fields } from './fields';
 import type { Pickups } from './pickups';
 import type { Player } from './player';
+import { Evolutions } from './evolutions';
 import { Projectiles, type Projectile, type ProjectileOptions } from './projectiles';
 import { BIG_GAME_SCALE, type Progression, type Stats } from './progression';
 import { applyStatus, markChance, takenFactor } from './status';
-import { hasFlag, MAX_RANK, resolveRank, statusSeconds, weaponById, type ResolvedRank, type WeaponDef } from './weapons';
+import { EVOLUTION_RANK, hasFlag, MAX_RANK, resolveRank, statusSeconds, weaponById, type ResolvedRank, type WeaponDef } from './weapons';
 import type { Site, Zones } from './zones';
 
 /** Was Klasse und Zone gerade am Kampf verändern. */
@@ -36,7 +37,7 @@ export interface OwnedWeapon {
   cooldown: number;
   /** Die Figur holt für diesen Angriff schon aus. */
   windingUp: boolean;
-  /** Sekunden, die der Angriff beim nächsten Auslösen von seiner Abklingzeit abzieht (Wirbelschlag, Wuchthieb). */
+  /** Sekunden, die der Angriff beim nächsten Auslösen von seiner Abklingzeit abzieht (Wirbelschlag, Wuchthieb); negativ: die er dazurechnet (Mahlstrom). */
   refund: number;
   /** Der nächste Schlag ist sicher kritisch (Wuchthieb, Rang 5). */
   primed: boolean;
@@ -71,6 +72,7 @@ const FOLLOW_UPS = 12;
 const KAEMPFER = CONFIG.skills.kaempfer;
 const LAEUFER = CONFIG.skills.laeufer;
 const MAGIER = CONFIG.skills.magier;
+const EVOLUTION = CONFIG.skills.evolution;
 /** Die zeitweiligen Werte der Kämpfer-Fertigkeiten; `seconds` stellt der Aufrufer vor dem Setzen ein. */
 const GUARD: BuffSpec = { id: 'schutz', stat: 'taken', mode: 'mul', amount: 1, seconds: 1 };
 const WHIRL_SPEED: BuffSpec = { id: 'wirbelschlag-tempo', stat: 'speed', mode: 'mul', amount: KAEMPFER.whirlSpeed, seconds: KAEMPFER.whirlSpeedSeconds };
@@ -90,6 +92,9 @@ const PUSH_PER_METER = 8;
 const BEAM_SLOTS = 8;
 const LINE_COLOR = 0xffb454;
 const ASH_COLOR = 0xff6a24;
+/** Die Nahkampfangriffe des Kämpfers: Nur sie erleiden die Mehrung durch den Donner der Alten Ordnung. */
+const MELEE: ReadonlySet<string> = new Set(['axthieb', 'wirbelschlag', 'wuchthieb', 'kriegsschrei', 'dornenschild']);
+const NO_EVOLUTIONS: ReadonlySet<string> = new Set();
 /** Die Glut der Feuerschalen (Kwests Esse) als Urheber ihres Schadens. */
 const SEAR_SOURCE = sourceOf('kwests-esse');
 const lightAt = new THREE.Vector3();
@@ -136,6 +141,8 @@ export class Arsenal {
   private trapper: OwnedWeapon | null = null;
   /** Faktor auf den Schaden des nächsten Treffers; Aufrufer stellen ihn vor einem Schlag ein und danach zurück auf 1. */
   private factor = 1;
+  /** Der nächste Treffer stößt nicht zurück (der Mahlstrom zieht und schleudert selbst). */
+  private pushless = false;
   /** Wie viele Gegner der laufende Schlag getroffen hat. */
   private swept = 0;
   private readonly options = new Map<ResolvedRank, ProjectileOptions>();
@@ -179,6 +186,14 @@ export class Arsenal {
   private trailWeapon: OwnedWeapon | null = null;
   private trailTime = 0;
   private trailGap = 0;
+  /** Die Evolutionen (Rang 6), die die Ringe dieser Nacht freischalten: die Kennungen der Angriffe. */
+  private evolved: ReadonlySet<string> = NO_EVOLUTIONS;
+  /** Das Spiel erfährt, wenn ein Angriff sich entwickelt (Meldung auf dem Bildschirm). */
+  onEvolve: ((weapon: OwnedWeapon) => void) | null = null;
+  private readonly evolutions: Evolutions;
+  /** Das Feld des schwebenden Banners (Reliquie der Nimmersatten), wenn eines liegt. */
+  private relic: Field | null = null;
+  private relicSeen: Field | null = null;
 
   constructor(
     private readonly stats: Stats,
@@ -201,11 +216,46 @@ export class Arsenal {
     }
     for (let i = 0; i < BANNER_CAPACITY; i++) this.bannerSites.push({ x: 0, z: 0 });
     for (let i = 0; i < DECOY_CAPACITY; i++) this.decoySites.push({ x: 0, z: 0 });
+    const arsenal = this;
+    this.evolutions = new Evolutions({
+      stats,
+      enemies,
+      player,
+      support,
+      effects: this.effects,
+      projectiles: this.projectiles,
+      get traits() {
+        return arsenal.traits;
+      },
+      get now() {
+        return arsenal.now;
+      },
+      strike: (enemy, weapon, fromX, fromZ, factor, push = true) => {
+        this.factor = factor;
+        this.pushless = !push;
+        this.hit(enemy, weapon, fromX, fromZ);
+        this.factor = 1;
+        this.pushless = false;
+      },
+      range: (weapon) => weapon.def.range * this.stats.reach * weapon.rules.range,
+      projectileOptions: (weapon) => this.projectileOptions(weapon),
+      swing: (weapon, angle) => {
+        const swing = this.swings[weapon.def.id];
+        if (swing) this.player.strike(swing, angle);
+      },
+    });
   }
 
-  /** Neue Nacht: nur der Startangriff der Klasse. */
-  reset(playerClass: ClassDef): void {
+  /**
+   * Neue Nacht: nur der Startangriff der Klasse. `evolutions` sind die Angriffe, deren Evolution ein angelegter legendärer Ring
+   * freischaltet; sie werden Rang 6, sobald sie Rang 5 erreichen (`take`).
+   */
+  reset(playerClass: ClassDef, evolutions: ReadonlySet<string> = NO_EVOLUTIONS): void {
     this.available = playerClass.weapons.map(weaponById);
+    this.evolved = evolutions;
+    this.relic = null;
+    this.relicSeen = null;
+    this.evolutions.reset();
     this.swings = playerClass.swings;
     this.owned.length = 0;
     this.traps.length = 0;
@@ -248,11 +298,30 @@ export class Arsenal {
       .filter((entry) => entry.rank < MAX_RANK);
   }
 
+  /** Schaltet Evolutionen frei, als trüge die Figur den Ring dazu (Werkzeuge; `reset` setzt sie aus den angelegten Ringen). */
+  unlockEvolutions(ids: ReadonlySet<string>): void {
+    this.evolved = ids;
+  }
+
+  /** Der Rang des Angriffs mit dieser Kennung in dieser Nacht; 0, wenn die Figur ihn noch nicht hat. */
+  rankOf(id: string): number {
+    return this.owned.find((weapon) => weapon.def.id === id)?.rank ?? 0;
+  }
+
+  /** Hat der Angriff eine Evolution, die ein angelegter Ring freischaltet? */
+  unlocks(def: WeaponDef): boolean {
+    return def.evolution !== undefined && this.evolved.has(def.id);
+  }
+
   take(def: WeaponDef): void {
     const weapon = this.find(def);
     if (weapon) {
       weapon.rank++;
+      // Rang 5 mit dem passenden Ring entwickelt sich sofort zum Rang 6.
+      const evolves = weapon.rank === MAX_RANK && this.unlocks(def);
+      if (evolves) weapon.rank = EVOLUTION_RANK;
       weapon.rules = resolveRank(def, weapon.rank);
+      if (evolves) this.evolve(weapon);
     } else {
       const owned: OwnedWeapon = {
         def,
@@ -285,24 +354,35 @@ export class Arsenal {
         this.updateShield(dt, weapon);
         continue;
       }
-      // Das Dornenschild wirkt nur, wenn ein Gegner die Figur trifft (`hurt`).
-      if (weapon.def.kind === 'thorns') continue;
+      // Das Dornenschild wirkt nur, wenn ein Gegner die Figur trifft (`hurt`); sein Bollwerk (Rang 6) steht dauernd vor der Figur.
+      if (weapon.def.kind === 'thorns') {
+        if (weapon.rank === EVOLUTION_RANK) this.evolutions.keepBulwark(weapon, dt);
+        continue;
+      }
+      // Die Reliquie der Nimmersatten ist ein Banner ohne Abklingzeit: Es schwebt immer über der Figur.
+      if (weapon.rank === EVOLUTION_RANK && hasFlag(weapon.rules, 'reliquie')) {
+        this.keepRelic(weapon, origin);
+        continue;
+      }
       if (weapon.def.kind === 'aura') aura = weapon;
       weapon.cooldown -= dt * traits.haste;
       if (weapon.cooldown > 0) {
         this.announce(weapon, origin);
+        // Spalter von Ghen: Beim Ausholen zieht der Staub nahe Gegner zum Einschlagpunkt.
+        if (weapon.windingUp && weapon.rank === EVOLUTION_RANK && hasFlag(weapon.rules, 'spalter')) this.windup(weapon, origin, dt);
         continue;
       }
       if (this.fire(weapon, origin)) {
         weapon.cooldown = weapon.def.cooldown * this.stats.cooldown * weapon.rules.cooldown;
         weapon.windingUp = false;
-        if (weapon.refund > 0) {
+        if (weapon.refund !== 0) {
           weapon.cooldown = Math.max(0, weapon.cooldown - weapon.refund);
           weapon.refund = 0;
         }
       }
     }
 
+    this.evolutions.update(dt);
     this.updateFollowUps(dt);
     this.updateVolleys(dt);
     this.updateTraps();
@@ -357,6 +437,9 @@ export class Arsenal {
     const target = this.enemies.nearest(origin.x, origin.z, weapon.def.range * this.stats.reach * weapon.rules.range);
     if (!target) return;
     weapon.windingUp = true;
+    if (weapon.rank === EVOLUTION_RANK && hasFlag(weapon.rules, 'spalter')) {
+      this.evolutions.windupStart(weapon, origin.x, origin.z, Math.atan2(target.x - origin.x, target.z - origin.z), lead);
+    }
     // Wuchthieb und Wirbelschlag schützen die Figur beim Ausholen; der Wirbel noch durch das Ausschwingen.
     if (weapon.rules.flags.length > 0 && hasFlag(weapon.rules, 'schutz')) {
       this.guard(weapon.def.kind === 'nova' ? KAEMPFER.whirlGuard : KAEMPFER.windupGuard, lead + (weapon.def.kind === 'nova' ? swing.recover : 0.1));
@@ -394,9 +477,16 @@ export class Arsenal {
         this.strikeArc(weapon, origin, angle, range, 1, true);
         break;
       case 'nova':
-        this.strikeNova(weapon, origin, angle, range * rules.radius, 1, true);
+        // Mahlstrom aus Staub und Eisen: Statt der zwei Wirbel dreht sich die Figur mehrere Sekunden.
+        if (rules.flags.length > 0 && hasFlag(rules, 'mahlstrom')) this.evolutions.vortex(weapon, origin.x, origin.z, angle);
+        else this.strikeNova(weapon, origin, angle, range * rules.radius, 1, true);
         break;
       case 'projectile': {
+        // Sturm der Klingen: Statt eines Wurfs kreisen sechs Äxte um die Figur und fliegen dann auf die stärksten Ziele.
+        if (rules.flags.length > 0 && hasFlag(rules, 'sturm')) {
+          this.evolutions.storm(weapon, origin.x, origin.z);
+          break;
+        }
         const count = rules.count;
         const options = this.projectileOptions(weapon);
         for (let i = 0; i < count; i++) {
@@ -471,12 +561,22 @@ export class Arsenal {
       }
     }
     if (hasFlag(rules, 'asche')) this.ashLine(weapon, origin, angle, range, width);
+    // Evolutionen (Rang 6): Henkersbeil und Spalter von Ghen.
+    if (hasFlag(rules, 'sichel')) this.evolutions.sickle(weapon, origin.x, origin.z, angle);
+    if (hasFlag(rules, 'spalter')) this.evolutions.cleave(weapon, origin.x, origin.z, angle);
   }
 
   /** Eine Wirkung rundum (Wirbelschlag, Kriegsschrei, Erdstoß, Sturmböe) mit dem Radius `radius`. */
   private strikeNova(weapon: OwnedWeapon, origin: Site, angle: number, radius: number, factor: number, first: boolean): void {
     const { def, rules } = weapon;
-    if (rules.flags.length === 0) {
+    if (rules.flags.length > 0 && hasFlag(rules, 'donner')) {
+      // Donner der Alten Ordnung: Der Schrei fährt als Kegel in Blickrichtung hinaus.
+      this.factor = factor;
+      this.sweep(weapon, origin, angle, radius, EVOLUTION.kaempfer.thunderArc);
+      this.factor = 1;
+      this.effects.evolution.thunder(origin.x, origin.z, angle, radius, EVOLUTION.kaempfer.thunderArc);
+      if (first) audio.play('evolution.donner', origin.x, origin.z);
+    } else if (rules.flags.length === 0) {
       this.burst(weapon, origin.x, origin.z, radius);
     } else {
       // Umzingelt (Wirbelschlag, Rang 5): Ab so vielen Gegnern im Kreis schlägt der Wirbel doppelt zu.
@@ -486,7 +586,7 @@ export class Arsenal {
       this.factor = 1;
     }
     if (def.look === 'wirbel') this.effects.whirl(origin.x, origin.z, angle, radius);
-    else if (def.look === 'schrei') this.effects.shout(origin.x, origin.z, radius);
+    else if (def.look === 'schrei' && !hasFlag(rules, 'donner')) this.effects.shout(origin.x, origin.z, radius);
     else if (def.look === 'erdstoss') this.effects.quake(origin.x, origin.z, radius);
     if (!first || rules.flags.length === 0) return;
     if (hasFlag(rules, 'doppelt')) {
@@ -522,6 +622,23 @@ export class Arsenal {
     GUARD.amount = factor;
     GUARD.seconds = seconds;
     this.support.progression.addBuff(GUARD);
+  }
+
+  // ---------------------------------------------------------------- Evolutionen
+
+  /** Ein Angriff hat sich entwickelt: Licht steigt vom Boden auf, das Spiel meldet es. */
+  private evolve(weapon: OwnedWeapon): void {
+    const origin = this.player.position;
+    this.effects.evolution.awaken(origin.x, origin.z);
+    audio.play('evolution', origin.x, origin.z);
+    this.onEvolve?.(weapon);
+  }
+
+  /** Spalter von Ghen, Ausholen: Der Staub zieht Gegner zum Einschlagpunkt vor der Figur. */
+  private windup(weapon: OwnedWeapon, origin: Site, dt: number): void {
+    const target = this.enemies.nearest(origin.x, origin.z, weapon.def.range * this.stats.reach * weapon.rules.range);
+    if (!target) return;
+    this.evolutions.windup(origin.x, origin.z, Math.atan2(target.x - origin.x, target.z - origin.z), dt);
   }
 
   // ------------------------------------------------------------ Folgen nach Verzögerung
@@ -598,16 +715,18 @@ export class Arsenal {
     const { rules } = weapon;
     let field = this.bannerFields.get(rules);
     if (!field) {
+      // Die Reliquie der Nimmersatten (Rang 6) schwebt dauerhaft über der Figur; sie zählt zusätzlich die Gegner im Umkreis.
+      const relic = hasFlag(rules, 'reliquie');
       field = {
-        id: weapon.def.id,
+        id: relic ? 'reliquie' : weapon.def.id,
         shape: 'circle',
-        duration: hasFlag(rules, 'lang') ? 8 : 6,
+        duration: relic ? Infinity : hasFlag(rules, 'lang') ? 8 : 6,
         every: 0.5,
         instant: true,
         damage: weapon.def.damage,
         statuses: rules.statuses.length > 0 ? rules.statuses : undefined,
         onKill: hasFlag(rules, 'splitter') ? this.bannerKill : undefined,
-        onTick: hasFlag(rules, 'magnet') ? this.bannerPulse : undefined,
+        onTick: relic ? this.relicTick : hasFlag(rules, 'magnet') ? this.bannerPulse : undefined,
       };
       this.bannerFields.set(rules, field);
     }
@@ -625,6 +744,26 @@ export class Arsenal {
     this.support.pickups.attract(field.x, field.z, field.radius * KAEMPFER.bannerMagnet);
   };
 
+  /** Reliquie der Nimmersatten: Das Banner zieht (wie jedes mit Rang 5) Edelsteine heran und gibt der Figur Tempo für jeden Gegner im Umkreis. */
+  private readonly relicTick = (field: Field): void => {
+    this.bannerPulse(field);
+    this.evolutions.relicTick(field);
+  };
+
+  /** Hält die Reliquie am Leben: Sie liegt als Feld an der Figur und wird neu gesetzt, wenn der Vorrat der Felder sie verdrängt hat. */
+  private keepRelic(weapon: OwnedWeapon, origin: Site): void {
+    const { rules } = weapon;
+    const def = this.bannerField(weapon);
+    let field = this.relic;
+    if (!field || !field.active || field.def !== def) {
+      field = this.support.fields.spawn(def, origin.x, origin.z, { radius: this.area(weapon), follow: true, source: weapon.source });
+      this.relic = field;
+    }
+    // Schaden, Größe und Stärkungen ändern sich im Lauf der Nacht; das Feld folgt ihnen.
+    field.radius = this.area(weapon);
+    field.scale = rules.damage * this.stats.damage * this.traits.dealt;
+  }
+
   private bannerCount = 0;
   private decoyCount = 0;
 
@@ -636,6 +775,8 @@ export class Arsenal {
         site.x = field.x;
         site.z = field.z;
       }
+    } else if (field.def.id === 'reliquie') {
+      this.relicSeen = field;
     } else if (field.def.id === 'koederpuppe') {
       if (this.decoyCount >= DECOY_CAPACITY) return;
       const site = this.decoySites[this.decoyCount++];
@@ -650,7 +791,10 @@ export class Arsenal {
   private showFields(): void {
     this.bannerCount = 0;
     this.decoyCount = 0;
+    this.relicSeen = null;
     this.support.fields.eachActive(this.showField);
+    const relic = this.relicSeen as Field | null;
+    this.effects.evolution.relic(relic !== null, relic?.x ?? 0, relic?.z ?? 0, relic?.radius ?? 0, EVOLUTION.kaempfer.relicLift, this.now);
     this.effects.showBanners(this.bannerSites, this.bannerCount);
     this.effects.showDecoys(this.decoySites, this.decoyCount);
   }
@@ -1348,6 +1492,8 @@ export class Arsenal {
       }
       if (weapon.primed || roll < chance) amount *= this.stats.critDamage;
       amount *= takenFactor(enemy.status);
+      // Donner der Alten Ordnung: Wen der Schrei getroffen hat, erleidet von den Nahkampfangriffen des Kämpfers mehr.
+      if (enemy.thunderUntil > this.now && MELEE.has(def.id)) amount *= EVOLUTION.kaempfer.thunderFactor;
       if (this.traits.finsternisDamage !== 1 && this.zones.finsternisAt(enemy.x, enemy.z) > 0.5) {
         amount *= this.traits.finsternisDamage;
       }
@@ -1371,7 +1517,7 @@ export class Arsenal {
 
     let pushX = 0;
     let pushZ = 0;
-    if (def.knockback) {
+    if (def.knockback && !this.pushless) {
       const dx = enemy.x - fromX;
       const dz = enemy.z - fromZ;
       // Große Gegner lassen sich schwerer zurückstoßen.
@@ -1382,6 +1528,7 @@ export class Arsenal {
     this.enemies.damage(enemy, amount, pushX, pushZ, weapon.source);
     if (this.plain) return;
     for (const apply of rules.statuses) applyStatus(enemy.status, apply.kind, apply.seconds, apply.power, weapon.source);
+    if (rules.flags.length > 0 && hasFlag(rules, 'donner')) enemy.thunderUntil = this.now + EVOLUTION.kaempfer.thunderSeconds;
     if (this.stun) applyStatus(enemy.status, 'hold', MAGIER.waveStun, undefined, weapon.source);
     // Sturmböe, Rang 3: Wen die Böe trifft und zaubert (der Priester), dessen Zauber zerstreut sie.
     if (enemy.type.cast && rules.flags.length > 0 && hasFlag(rules, 'zerstreuen')) applyStatus(enemy.status, 'silence', MAGIER.scatterSeconds, undefined, weapon.source);

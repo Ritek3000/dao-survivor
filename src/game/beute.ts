@@ -14,7 +14,7 @@ import { CONFIG } from '../config';
 import { createRandom, type Random } from '../core/random';
 import type { Ausruestung } from './ausruestung';
 import type { ClassId } from './classes';
-import { itemValue, ITEM_SLOTS, LEGENDARY_SLOTS, rollItem, sellPrice, type Item, type Rarity, RARITIES } from './items';
+import { evolutionChoices, itemValue, ITEM_SLOTS, LEGENDARY_SLOTS, rollItem, sellPrice, type Item, type Rarity, RARITIES } from './items';
 
 /** Woher ein Gegenstand kommt: `schwach` und `stark` sind Gegner (siehe `EnemyLoot`), `kiste` die des Verschlingers. */
 export type LootSource = keyof typeof CONFIG.loot.rarity;
@@ -75,6 +75,8 @@ export class Beute {
   fixedSeed: number | null = null;
   private random: Random = createRandom(1);
   private classId: ClassId = 'kaempfer';
+  /** Der Rang, den ein Angriff in dieser Nacht hat (0: nicht gewählt); das Spiel setzt es, damit die Beute den Verlauf kennt. */
+  rankOf: (weaponId: string) => number = () => 0;
 
   constructor(private readonly ausruestung: Ausruestung) {}
 
@@ -138,6 +140,23 @@ export class Beute {
   private make(rarity: Rarity): Item {
     const slots = rarity === 'legendaer' ? LEGENDARY_SLOTS : ITEM_SLOTS;
     const slot = slots[Math.floor(this.random() * slots.length)] ?? 'ring';
-    return rollItem(this.random, slot, rarity, this.classId);
+    return rollItem(this.random, slot, rarity, this.classId, rarity === 'legendaer' ? this.evolutionFor() : undefined);
+  }
+
+  /**
+   * Die Evolution eines legendären Rings: gleich verteilt unter denen der Klasse, nur dass Angriffe, die in dieser Nacht schon weit
+   * gewachsen sind (`lootRank`), häufiger gewürfelt werden. Das ist eine Hilfe, kein Zwang: Jede Evolution bleibt möglich.
+   */
+  private evolutionFor(): string | undefined {
+    const choices = evolutionChoices(this.classId);
+    if (choices.length === 0) return undefined;
+    const { lootRank, lootWeight } = CONFIG.skills.evolution;
+    const weights = choices.map((id) => (this.rankOf(id) >= lootRank ? lootWeight : 1));
+    let roll = this.random() * weights.reduce((sum, weight) => sum + weight, 0);
+    for (let i = 0; i < choices.length; i++) {
+      roll -= weights[i] ?? 1;
+      if (roll < 0) return choices[i];
+    }
+    return choices[choices.length - 1];
   }
 }
