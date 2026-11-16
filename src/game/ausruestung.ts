@@ -3,13 +3,13 @@
  * Klassen gemeinsam gehört (`truhe.ts`), und der Stand des Händlers (`haendler.ts`).
  *
  * Jede Klasse hat ihr eigenes Inventar und ihre eigene Ausrüstung; das Gold gehört allen gemeinsam. Gespeichert wird im
- * Spielstand (`core/savegame.ts`, Feld `items`). Wie bei den Steigerungen liest jede Änderung den gespeicherten Stand neu,
+ * Spielstand (`core/savegame.ts`, Feld `items`). Wie bei der Börse liest jede Änderung den gespeicherten Stand neu,
  * damit zwei offene Tabs einander nicht überschreiben.
  *
  * Ein Gegenstand wandert zwischen Inventar, Truhe und Ausrüstung mit `move`: Beide Plätze ändern sich in einem Zug oder keiner,
  * so geht auch bei einem Fehlschlag oder einem Neuladen nichts verloren. Ebenso geschieht jeder Handel (kaufen, verkaufen,
  * zurückkaufen, einen Reiter bezahlen) in einem Zug: Gold, Gegenstand und Angebot ändern sich zusammen oder gar nicht. Darum
- * rechnet der Handel hier mit dem Gold des Spielstands, nicht über `Steigerungen`, das seinen Stand erst neu lesen muss.
+ * rechnet der Handel hier mit dem Gold des Spielstands, nicht über `Boerse`, die ihren Stand erst neu lesen muss.
  *
  * Angelegt wird nur zwischen den Nächten: Die Werte einer Nacht stehen beim Start fest (`apply` über `Progression.reset`).
  */

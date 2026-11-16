@@ -83,7 +83,7 @@ export interface EnemyStrike {
 export interface EnemyGold {
   /** Wahrscheinlichkeit von 0 bis 1, dass ein erschlagener Gegner eine Münze fallen lässt. */
   chance: number;
-  /** Wert der Münze in Gold (vor dem Faktor der Steigerung „Kaufmannsblick“). */
+  /** Wert der Münze in Gold (vor dem Goldfaktor der Figur, den Gegenstände geben). */
   value: number;
 }
 
@@ -354,9 +354,9 @@ export const CONFIG = {
     verschlingen: { belowHp: 0.5, radius: 10, seconds: 8, cooldown: 22 },
   },
   /**
-   * Gold: Münzen aus Gegnern, Sold für die überlebte Zeit und die Siegprämie. Es bezahlt zwischen den Nächten die
-   * Steigerungen der Klassen (game/steigerung.ts). Was eine Gegnerart fallen lässt, steht bei ihr (`gold`).
-   * Alle Beträge sind Gold vor dem Faktor der Steigerung „Kaufmannsblick“.
+   * Gold: Münzen aus Gegnern, Sold für die überlebte Zeit und die Siegprämie. Es bezahlt zwischen den Nächten beim Händler
+   * Gegenstände und Reiter der Truhe (game/ausruestung.ts). Was eine Gegnerart fallen lässt, steht bei ihr (`gold`).
+   * Alle Beträge sind Gold vor dem Goldfaktor der Figur (Eigenschaft „Gold“ der Gegenstände).
    */
   gold: {
     /** So viele Münzen liegen höchstens zugleich da; der Wert weiterer geht in eine vorhandene Münze. */
@@ -379,8 +379,6 @@ export const CONFIG = {
     victory: 60,
     /** Anteil des Ertrags, den man behält, wenn man fällt. 1 = alles, 0,5 = die Hälfte. */
     deathKeep: 1,
-    /** Jeder weitere Rang einer Steigerung kostet so viel mal mehr als der vorige. */
-    upgradeGrowth: 1.2,
   },
   /**
    * Ton und Musik. Welche Datei zu welchem Ereignis klingt, steht nicht hier, sondern in
@@ -423,7 +421,7 @@ export const CONFIG = {
    * Gegenstände (`items.ts`): die Wertebereiche je Eigenschaft, in der Einheit der Anzeige (Prozent, Punkte, Leben).
    * `min` und `max` gelten für einen gewöhnlichen Platz, `core` hebt sie auf dem Kernplatz einer Eigenschaft um einen Faktor an.
    * `step` ist die Rundung des Wurfs. `cap` begrenzt die Summe über alle angelegten Gegenstände: ein Netz unter dem Gleichgewicht,
-   * falls sich später Ausreißer häufen. Die Grenzen sind aus den alten Steigerungen abgeleitet: Eine Eigenschaft kostet auf
+   * falls sich später Ausreißer häufen. Die Grenzen sind aus den früheren Steigerungen (bis Fassung 5 des Spielstands) abgeleitet: Eine Eigenschaft kostet auf
    * einem Gegenstand etwa zwei bis drei alte Ränge, und alle Plätze zusammen kommen auf den Höchstwert der Steigerung.
    */
   items: {

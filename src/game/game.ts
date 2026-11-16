@@ -9,6 +9,7 @@ import { LagerView } from '../ui/lagerView';
 import { Menus, type MenuCommand } from '../ui/menus';
 import { Arsenal, type CombatTraits } from './arsenal';
 import { Ausruestung } from './ausruestung';
+import { Boerse } from './boerse';
 import { Beute, type LootSettlement } from './beute';
 import { Boss } from './boss';
 import { CameraRig } from './cameraRig';
@@ -24,7 +25,6 @@ import { loadModels, type Models } from './models';
 import { Pickups } from './pickups';
 import { Player } from './player';
 import { Progression, SEGEN_EVERY_LEVELS } from './progression';
-import { Steigerungen, STEIGERUNGEN } from './steigerung';
 import { Threats } from './threats';
 import { MAX_RANK } from './weapons';
 import { World } from './world';
@@ -42,10 +42,10 @@ const BOSS_SEGEN_SECONDS = 3;
 
 /**
  * 'loading' = Modelle werden geladen, 'title' = Startbildschirm, 'select' = Klassenwahl vor der Nacht,
- * 'levelup' = Wahl einer Stärkung, 'steigerung' = Menü, in dem man zwischen den Nächten Gold für dauerhafte Ränge
- * der Klassen ausgibt, 'lager' = Lager (Ausrüstung und Truhe) zwischen den Nächten. Der Startbildschirm und die Pause tragen die Menüs (Optionen, Anleitung, Rückfragen) als Unterseiten.
+ * 'levelup' = Wahl einer Stärkung, 'lager' = Lager (Ausrüstung, Truhe und Händler) zwischen den Nächten. Der Startbildschirm und die Pause
+ * tragen die Menüs (Optionen, Anleitung, Rückfragen) als Unterseiten.
  */
-type Phase = 'loading' | 'title' | 'select' | 'playing' | 'paused' | 'levelup' | 'steigerung' | 'lager' | 'ended';
+type Phase = 'loading' | 'title' | 'select' | 'playing' | 'paused' | 'levelup' | 'lager' | 'ended';
 
 /** Eine wählbare Stärkung beim Stufenaufstieg: neuer Angriff, höherer Rang oder Segen. */
 interface Offer {
@@ -72,7 +72,7 @@ export class Game {
   private readonly pickups = new Pickups();
   private readonly coins = new Coins();
   /** Geldbörse und Ränge der Klassen; bleiben über die Nächte hinweg bestehen und werden gespeichert. */
-  private readonly steigerungen = new Steigerungen();
+  private readonly boerse = new Boerse();
   /** Die Gegenstände jeder Klasse; sie wirken beim Start der Nacht auf die Werte (`startRun`). */
   private readonly ausruestung = new Ausruestung();
   /** Was in dieser Nacht fällt und im Beutel liegt; am Ende der Nacht wandert es ins Inventar. */
@@ -111,11 +111,8 @@ export class Game {
   private shownLight = 0;
   private offers: Offer[] = [];
   private selected = 0;
-  /** Gold, das in dieser Nacht eingesammelt wurde, schon mit dem Faktor der Steigerungen. */
+  /** Gold, das in dieser Nacht eingesammelt wurde, schon mit dem Goldfaktor der Figur. */
   private goldRun = 0;
-  /** Im Menü der Steigerungen: die gewählte Klasse und die markierte Zeile. */
-  private menuClass = 0;
-  private menuRow = 0;
   /** Kämpfer: stand im letzten Frame im Licht. */
   private wasInLight = false;
   /** Kämpfer: Restzeit der Schwäche nach erloschenem Feuer. */
@@ -172,14 +169,6 @@ export class Game {
     this.lager.onClose = () => this.closeLager();
     this.hud.onLager = () => this.openLagerFromMenu();
     this.hud.onPick = (index) => this.pick(index);
-    this.hud.onSteigern = () => this.openSteigerungFromMenu();
-    this.hud.onSteigerungBuy = (index) => {
-      if (this.phase !== 'steigerung') return;
-      this.menuRow = index;
-      this.buySteigerung();
-    };
-    this.hud.onSteigerungClass = (index) => this.selectSteigerungClass(index);
-    this.hud.onSteigerungBack = () => this.closeSteigerung();
     this.hud.onMainMenu = () => this.openTitle();
     this.settings = loadSettings({
       sound: { ...CONFIG.audio.defaults, muted: false },
@@ -251,9 +240,6 @@ export class Game {
       case 'levelup':
         this.updateChoice();
         break;
-      case 'steigerung':
-        this.updateSteigerung();
-        break;
       case 'lager':
         this.lager.update(this.input);
         break;
@@ -262,7 +248,6 @@ export class Game {
         this.boss.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         this.arsenal.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         if (this.input.wasPressed('confirm')) this.openSelect();
-        else if (this.input.wasPressed('upgrade')) this.openSteigerungFromMenu();
         else if (this.input.wasPressed('lager')) this.openLagerFromMenu();
         else if (this.input.wasPressed('pause')) this.openTitle();
         break;
@@ -541,7 +526,7 @@ export class Game {
         audio.play('auswahl');
         break;
       case 'new':
-        if (this.steigerungen.hasProgress() || this.ausruestung.hasAny()) this.confirmNewGame();
+        if (this.boerse.hasGold() || this.ausruestung.hasAny()) this.confirmNewGame();
         else this.startNewGame();
         break;
       case 'continue':
@@ -581,11 +566,9 @@ export class Game {
 
   /** Warnt vor dem Löschen des Spielstands und nennt, was verloren ginge. */
   private confirmNewGame(): void {
-    const ranks = CLASSES.reduce((sum, entry) => sum + this.steigerungen.totalRanks(entry.id), 0);
     const items = CLASSES.reduce((sum, entry) => sum + this.ausruestung.count(entry.id), this.ausruestung.chestCount());
     const lost: string[] = [];
-    if (this.steigerungen.gold > 0) lost.push(`${this.steigerungen.gold} Gold`);
-    if (ranks > 0) lost.push(`${ranks} Ränge der Steigerungen`);
+    if (this.boerse.gold > 0) lost.push(`${this.boerse.gold} Gold`);
     if (items > 0) lost.push(`${items} ${items === 1 ? 'Gegenstand' : 'Gegenstände'}`);
     this.confirming = 'new';
     this.menus.showConfirm({
@@ -597,9 +580,9 @@ export class Game {
     audio.play('auswahl');
   }
 
-  /** Beginnt bei null: leere Börse, keine Ränge, keine Gegenstände, dann die Klassenwahl. */
+  /** Beginnt bei null: leere Börse, keine Gegenstände, dann die Klassenwahl. */
   private startNewGame(): void {
-    this.steigerungen.reset();
+    this.boerse.reset();
     this.ausruestung.reset();
     this.menus.hide();
     audio.play('bestaetigen');
@@ -611,10 +594,9 @@ export class Game {
     this.phase = 'title';
     this.hud.hideChoice();
     this.hud.hideEnd();
-    this.hud.hideSteigerung();
     this.lager.close();
     this.confirming = null;
-    this.menus.showTitle(this.steigerungen.hasProgress() || this.ausruestung.hasAny(), back);
+    this.menus.showTitle(this.boerse.hasGold() || this.ausruestung.hasAny(), back);
   }
 
   /** Die Klassenwahl vor der Nacht; `selected` markiert eine Klasse, sonst die zuletzt gespielte. */
@@ -622,26 +604,27 @@ export class Game {
     this.phase = 'select';
     this.selected = selected;
     this.hud.hideEnd();
-    this.hud.hideSteigerung();
     this.lager.close();
     this.updateLagerAccess();
+    // Wer Ränge der entfallenen Steigerungen hatte, liest hier einmal, wohin das Gold dafür gegangen ist.
+    const { refund } = this.boerse;
     this.hud.showChoice(
       'Die Abendglocke läutet',
       'Wer steht heute Nacht vor der Mauer?',
-      CLASSES.map((playerClass) => {
-        const ranks = this.steigerungen.totalRanks(playerClass.id);
-        const worn = this.ausruestung.equippedItems(playerClass.id).length;
-        const steigerung = ranks > 0 ? `Gesteigert: ${ranks} Ränge` : 'Noch nicht gesteigert';
-        return {
-          name: playerClass.name,
-          text: playerClass.text,
-          note: playerClass.home,
-          extra: this.lagerEnabled ? `${steigerung} · Ausrüstung: ${worn} von 9` : steigerung,
-        };
-      }),
+      CLASSES.map((playerClass) => ({
+        name: playerClass.name,
+        text: playerClass.text,
+        note: playerClass.home,
+        extra: this.lagerEnabled ? `Ausrüstung: ${this.ausruestung.equippedItems(playerClass.id).length} von 9` : undefined,
+      })),
       this.selected,
-      this.steigerungen.gold,
+      this.boerse.gold,
+      refund > 0
+        ? `Die Steigerungen sind entfallen: Die ${refund} Gold, die in ihren Rängen steckten, liegen wieder in deiner Börse. Beim Händler im Lager (L) kaufst du dafür Gegenstände.`
+        : '',
     );
+    // Gelesen ist die Erklärung, sobald sie auf dem Bildschirm stand; beim nächsten Mal bleibt sie weg.
+    this.boerse.acknowledgeRefund();
   }
 
   private startRun(playerClass: ClassDef): void {
@@ -656,10 +639,7 @@ export class Game {
     this.weakened = 0;
     this.goldRun = 0;
     this.hud.setGold(0);
-    this.progression.reset(playerClass, (stats) => {
-      this.steigerungen.apply(playerClass.id, stats);
-      this.ausruestung.apply(playerClass.id, stats);
-    });
+    this.progression.reset(playerClass, (stats) => this.ausruestung.apply(playerClass.id, stats));
     this.player.setClass(playerClass, this.models?.heroes.get(playerClass.id) ?? null);
     this.player.reset();
     this.dust.setLightColor(playerClass.lightColor);
@@ -775,10 +755,6 @@ export class Game {
     if (this.selected !== before) audio.play('auswahl');
     this.hud.select(this.selected);
 
-    if (this.phase === 'select' && this.input.wasPressed('upgrade')) {
-      this.openSteigerung(this.selected);
-      return;
-    }
     if (this.phase === 'select' && this.input.wasPressed('lager') && this.lagerEnabled) {
       this.openLager(this.selected);
       return;
@@ -867,97 +843,12 @@ export class Game {
     const bonus = won ? Math.round(victory * factor) : 0;
     const kept = won ? 1 : deathKeep;
     const total = Math.round((loot + pay + bonus) * kept) + sold;
-    this.steigerungen.credit(total);
+    this.boerse.credit(total);
     const parts = [`Münzen ${loot}`, `Sold ${pay}`];
     if (won) parts.push(`Sonnenaufgang ${bonus}`);
     if (sold > 0) parts.push(`Verkauf ${sold}`);
     const cut = kept < 1 ? ` · davon behalten: ${Math.round(kept * 100)} %` : '';
-    return `${parts.join(' · ')}${cut} · Ertrag: +${total} Gold · Börse: ${this.steigerungen.gold}`;
-  }
-
-  /** Öffnet die Steigerungen aus der Klassenwahl (für die markierte Klasse) oder vom Ende der Nacht (für die gespielte). */
-  private openSteigerungFromMenu(): void {
-    if (this.phase === 'select') this.openSteigerung(this.selected);
-    else if (this.phase === 'ended') this.openSteigerung(Math.max(0, CLASSES.indexOf(this.playerClass)));
-  }
-
-  private openSteigerung(classIndex: number): void {
-    if (classIndex !== this.menuClass) this.menuRow = 0;
-    this.menuClass = classIndex;
-    this.phase = 'steigerung';
-    this.hud.hideChoice();
-    this.hud.hideEnd();
-    audio.play('auswahl');
-    this.refreshSteigerung();
-  }
-
-  /** Zeichnet das Menü der Steigerungen neu, etwa nach einem Kauf. */
-  private refreshSteigerung(): void {
-    const playerClass = CLASSES[this.menuClass];
-    if (!playerClass) return;
-    const { steigerungen } = this;
-    this.hud.showSteigerung({
-      gold: steigerungen.gold,
-      classes: CLASSES.map((entry) => ({ name: entry.name, ranks: steigerungen.totalRanks(entry.id) })),
-      active: this.menuClass,
-      rows: STEIGERUNGEN.map((steigerung) => {
-        const cost = steigerungen.cost(playerClass.id, steigerung);
-        return {
-          name: steigerung.name,
-          text: steigerung.text,
-          rank: steigerungen.rank(playerClass.id, steigerung),
-          max: steigerung.max,
-          cost,
-          affordable: cost !== null && cost <= steigerungen.gold,
-        };
-      }),
-      selected: this.menuRow,
-    });
-  }
-
-  private selectSteigerungClass(index: number): void {
-    if (this.phase !== 'steigerung' || index === this.menuClass || !CLASSES[index]) return;
-    this.menuClass = index;
-    audio.play('auswahl');
-    this.refreshSteigerung();
-  }
-
-  private buySteigerung(): void {
-    const playerClass = CLASSES[this.menuClass];
-    const steigerung = STEIGERUNGEN[this.menuRow];
-    if (!playerClass || !steigerung) return;
-    if (this.steigerungen.buy(playerClass.id, steigerung)) audio.play('steigerung');
-    else this.hud.denySteigerung();
-    this.refreshSteigerung();
-  }
-
-  /** Zurück zur Klassenwahl, mit der gesteigerten Klasse markiert. */
-  private closeSteigerung(): void {
-    if (this.phase !== 'steigerung') return;
-    audio.play('auswahl');
-    this.openSelect(this.menuClass);
-  }
-
-  /** Bedienung des Menüs: Auf und Ab wählen die Steigerung, Links und Rechts die Klasse, Enter kauft. */
-  private updateSteigerung(): void {
-    const rows = STEIGERUNGEN.length;
-    const row = this.menuRow;
-    if (this.input.wasPressed('up')) this.menuRow = (this.menuRow + rows - 1) % rows;
-    if (this.input.wasPressed('down')) this.menuRow = (this.menuRow + 1) % rows;
-    if (this.menuRow !== row) {
-      audio.play('auswahl');
-      this.hud.selectSteigerung(this.menuRow);
-    }
-
-    const count = CLASSES.length;
-    if (this.input.wasPressed('left')) this.selectSteigerungClass((this.menuClass + count - 1) % count);
-    else if (this.input.wasPressed('right')) this.selectSteigerungClass((this.menuClass + 1) % count);
-    else if (this.input.wasPressed('choice1')) this.selectSteigerungClass(0);
-    else if (this.input.wasPressed('choice2')) this.selectSteigerungClass(1);
-    else if (this.input.wasPressed('choice3')) this.selectSteigerungClass(2);
-
-    if (this.input.wasPressed('confirm')) this.buySteigerung();
-    else if (this.input.wasPressed('pause') || this.input.wasPressed('upgrade')) this.closeSteigerung();
+    return `${parts.join(' · ')}${cut} · Ertrag: +${total} Gold · Börse: ${this.boerse.gold}`;
   }
 
   /**
@@ -965,7 +856,7 @@ export class Game {
    * Sonst bliebe das Menü ein leerer Bildschirm.
    */
   private updateLagerAccess(): void {
-    this.lagerEnabled = import.meta.env.DEV || this.ausruestung.hasAny() || this.steigerungen.gold > 0;
+    this.lagerEnabled = import.meta.env.DEV || this.ausruestung.hasAny() || this.boerse.gold > 0;
     this.hud.setLagerEnabled(this.lagerEnabled);
   }
 
@@ -989,8 +880,8 @@ export class Game {
     if (this.phase !== 'lager') return;
     audio.play('auswahl');
     this.lager.close();
-    // Der Handel im Lager hat das Gold im Spielstand geändert; die Steigerungen und die Klassenwahl sollen es kennen.
-    this.steigerungen.reload();
+    // Der Handel im Lager hat das Gold im Spielstand geändert; die Börse und die Klassenwahl sollen es kennen.
+    this.boerse.reload();
     this.openSelect(this.lager.classIndex);
   }
 
@@ -1010,7 +901,6 @@ export class Game {
       case 'loading':
       case 'title':
       case 'select':
-      case 'steigerung':
       case 'lager':
         return 'menue';
       case 'ended':

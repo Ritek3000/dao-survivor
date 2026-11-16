@@ -7,8 +7,8 @@ Wer bis zum Sonnenaufgang überlebt, gewinnt.
 
 Das Spiel ist ein früher Prototyp. Es gibt drei Klassen (Kämpfer, Wildnisläufer, Magier), Stufenaufstiege
 mit Stärkungen, Segen der Höheren Mächte, eine Gegnerhorde, Feuerschalen als Lichtinseln und einen
-Endgegner. Das Gold, das eine Nacht einbringt, bezahlt zwischen den Nächten dauerhafte Steigerungen jeder Klasse
-(siehe [Gold und Steigerungen](#gold-und-steigerungen)). Die Zielplattform (Browser oder Desktop) ist noch offen;
+Endgegner. Das Gold, das eine Nacht einbringt, kauft zwischen den Nächten beim Händler im Lager Gegenstände für die Klassen
+(siehe [Gold](#gold) und [Gegenstände](#gegenstände)). Die Zielplattform (Browser oder Desktop) ist noch offen;
 vorerst läuft das Spiel im Browser.
 
 ## Schnellstart
@@ -53,12 +53,8 @@ Nach jedem Merge auf `main` baut GitHub das Spiel und veröffentlicht den Stand 
 | Esc oder P                 | Pause (Weiter, Optionen, Lauf abbrechen); in Menüs zurück; bei der Klassenwahl und am Ende der Nacht zum Startbildschirm |
 | M                          | Ton an oder aus                         |
 | 1, 2, 3 oder Pfeile, Enter | Klasse und Stärkungen wählen, Bestätigen |
-| U                          | Steigerungen öffnen (bei der Klassenwahl und am Ende der Nacht) |
-| L                          | Lager öffnen: Ausrüstung, Truhe und Händler (ebenso; sobald es Gegenstände oder Gold gibt, siehe [Gegenstände](#gegenstände)) |
+| L oder U                   | Lager öffnen: Ausrüstung, Truhe und Händler (bei der Klassenwahl und am Ende der Nacht; sobald es Gegenstände oder Gold gibt, siehe [Gegenstände](#gegenstände)). U war die Taste der entfallenen Steigerungen |
 | Tab, E (im Lager)          | Ansicht wechseln (Ausrüstung, Truhe, Händler); Gegenstand gleich anlegen, umräumen, beim Händler kaufen oder verkaufen |
-
-Im Menü der Steigerungen wählen Auf und Ab (W, S oder Pfeile) die Steigerung, Links und Rechts (oder 1, 2, 3) die Klasse,
-Enter kauft den nächsten Rang, Esc oder U führen zurück.
 
 Die Eingabe läuft über Aktionen (`src/core/input.ts`), damit später ein Gamepad ohne Eingriff in die
 Spiellogik dazukommen kann.
@@ -85,7 +81,7 @@ public/icons/items/   Bilder der Gegenstände im Lager: 27 WebP-Dateien, neun Pl
 src/
   main.ts             Einstieg: baut das Spiel und hängt Entwicklungswerkzeuge nur im Dev-Modus an
   config.ts           Zentrale Stellschrauben: Nachtdauer, Welt, Gegnerarten, Kulisse
-  core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Steigerungen, Gegenstände)
+  core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Gegenstände)
   audio/              Ton und Musik: Engine, Ereignisnamen, Lesen von audio.json
   game/               Spiellogik und Darstellung (siehe unten)
   ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Anleitung, Rückfragen; lagerView.ts: Lager (Ausrüstung, Truhe und Händler)
@@ -104,7 +100,7 @@ Wichtige Teile von `src/game/`:
 | `effects.ts`, `strips.ts`, `particles.ts`, `props.ts` | Wie die Angriffe aussehen                        |
 | `enemies.ts`, `boss.ts`, `threats.ts` | Horde, Verschlinger und die Zauber der Gegner                    |
 | `progression.ts`               | Stufen, Stärkungen und die Segen der Höheren Mächte                     |
-| `steigerung.ts`, `coins.ts`    | Dauerhafte Steigerungen der Klassen und die Münzen, die das Gold bringen |
+| `boerse.ts`, `coins.ts`        | Die Börse (das Gold im Spielstand) und die Münzen, die das Gold bringen |
 | `items.ts`, `ausruestung.ts`, `truhe.ts`, `haendler.ts`, `lager.ts` | Gegenstände (Eigenschaften, Würfeln), die Gegenstände jeder Klasse samt Truhe, das Angebot des Händlers und das Menü des Lagers |
 | `beute.ts`, `drops.ts`         | Beute: was aus Gegnern und der Kiste des Verschlingers fällt, der Beutel der Nacht, die Gegenstände am Boden und die Kiste |
 | `zones.ts`, `darkness.ts`, `dust.ts` | Lichtinseln, Finsternis und Verstaubung                           |
@@ -114,8 +110,8 @@ Wichtige Teile von `src/game/`:
 ## Menüs und Oberfläche
 
 **Startbildschirm** (nach dem Laden): *Neues Spiel*, *Spiel fortsetzen*, *Optionen* und *Anleitung*. „Spiel fortsetzen“ erscheint nur, wenn es einen
-Spielstand gibt (Gold in der Börse oder gekaufte Ränge) und führt zur Klassenwahl. „Neues Spiel“ setzt den dauerhaften Fortschritt zurück
-(Gold und Steigerungen aller Klassen; die Optionen bleiben). Gibt es einen Fortschritt, warnt davor eine Rückfrage, die nennt, was verloren ginge
+Spielstand gibt (Gold in der Börse oder Gegenstände) und führt zur Klassenwahl. „Neues Spiel“ setzt den dauerhaften Fortschritt zurück
+(Gold, Gegenstände und Truhe; die Optionen bleiben). Gibt es einen Fortschritt, warnt davor eine Rückfrage, die nennt, was verloren ginge
 (vorgewählt ist „Abbrechen“); ohne Fortschritt geht es sofort weiter. Von der Klassenwahl und vom Ende der Nacht führt **Esc** (oder der Knopf
 „Hauptmenü“) zurück zum Startbildschirm. Die **Anleitung** erklärt Ziel, Steuerung, Licht und Finsternis, Stufen, Gold und die Klassen
 (Text in `index.html`).
@@ -132,10 +128,10 @@ Alle Einstellungen bleiben erhalten (`localStorage`, Schlüssel `dao-survivor.ei
 Lebensgruppe gelten als „oben links“. Die Menüs stehen in `index.html`, bedient werden sie von `src/ui/menus.ts`; was ein Knopf bewirkt,
 entscheidet `Game.onMenuCommand`.
 
-## Gold und Steigerungen
+## Gold
 
-Jede Nacht bringt Gold ein. Damit steigert man zwischen den Nächten die Klassen. Das Gold gehört allen Klassen gemeinsam
-(eine Geldbörse), die Ränge der Steigerungen zählen aber **je Klasse einzeln**: Wer den Magier steigert, hat davon beim Kämpfer nichts.
+Jede Nacht bringt Gold ein. Damit kauft man zwischen den Nächten beim Händler im Lager Gegenstände (siehe [Gegenstände](#gegenstände)).
+Das Gold gehört allen Klassen gemeinsam (eine Geldbörse). Gegenstände gehören je einer Klasse; die Truhe teilen sich alle.
 
 **Woher das Gold kommt.** Alle Zahlen stehen in `CONFIG.gold` und bei den Gegnerarten (`gold`) in `src/config.ts`:
 
@@ -151,34 +147,33 @@ Jede Nacht bringt Gold ein. Damit steigert man zwischen den Nächten die Klassen
 Gutgeschrieben wird am Ende der Nacht (Sold und Prämie werden dann erst gerechnet); wer die Seite mitten in der Nacht schließt,
 verliert das Gold dieser Nacht. Die Endanzeige schlüsselt den Ertrag auf.
 
-**Was man kauft.** Die Steigerungen sind Daten in `src/game/steigerung.ts` (`STEIGERUNGEN`): Sammelradius, Erfahrung, Gold, Schaden,
-Angriffstempo, Lauftempo, Chance auf doppelten Schaden, Reichweite, Leben, Rüstung, Staubfestigkeit und Lichtschein. Jeder Eintrag
-nennt Wirkung je Rang, Höchstrang und Preis des ersten Rangs; jeder weitere Rang kostet `CONFIG.gold.upgradeGrowth`-mal so viel.
-Eine neue Steigerung ist ein weiterer Eintrag. Beim Start einer Nacht wirken die Ränge der gewählten Klasse auf die Werte der Figur
-(`Progression.reset`); die Stärkungen und Segen der Nacht kommen obendrauf.
+**Wofür es gut ist.** Gold zahlt den Händler (Gegenstände kaufen, sein Angebot erneuern) und weitere Reiter der Truhe; verkaufte Gegenstände bringen
+Gold zurück. Es gibt keine dauerhaften Steigerungen mehr: Die Werte der Figur kommen aus den Gegenständen, den Stärkungen und den Segen der Nacht.
 
-**Menü.** Bei der Klassenwahl und am Ende der Nacht öffnet die Taste **U** (oder der Knopf) das Menü der Steigerungen für die gewählte
-bzw. gerade gespielte Klasse.
-
-**Speicherung.** Gold und Ränge liegen im Browser (`localStorage`, Schlüssel `dao-survivor.spielstand`) als JSON mit Versionsnummer
-(`version`, jetzt 5). Der Zugriff steckt hinter `TextStore` in `src/core/storage.ts` und `src/core/savegame.ts`; wo `localStorage` fehlt oder
-gesperrt ist, gilt der Stand nur für die Sitzung. Eine Desktop-Fassung kann mit `useSavegameStore` eine Datei an die Stelle setzen.
-Ein unlesbarer Stand beginnt bei null; was das Spiel nicht kennt (etwa eine entfernte Steigerung), bleibt beim Speichern erhalten.
+**Speicherung.** Gold und Gegenstände liegen im Browser (`localStorage`, Schlüssel `dao-survivor.spielstand`) als JSON mit Versionsnummer
+(`version`, jetzt 6). Der Zugriff steckt hinter `TextStore` in `src/core/storage.ts` und `src/core/savegame.ts`; wo `localStorage` fehlt oder
+gesperrt ist, gilt der Stand nur für die Sitzung. Eine Desktop-Fassung kann mit `useSavegameStore` eine Datei an die Stelle setzen (und als zweiten Speicher
+eine für die Sicherung). Ein unlesbarer Stand beginnt bei null; was das Spiel nicht kennt (etwa die Gegenstände einer neueren Fassung), bleibt beim Speichern erhalten.
 Zurücksetzen lässt sich der Stand mit „Neues Spiel“ im Startbildschirm (mit Rückfrage); in den Entwicklerwerkzeugen genügt auch `localStorage.removeItem('dao-survivor.spielstand')`.
 
-**Gleichgewicht.** Der Messlauf rechnet standardmäßig ohne Steigerungen (so bleiben die Zahlen vergleichbar) und schreibt das Gold jeder Nacht
-mit (`gold`). `__messlauf.start({ steigerung: 'max' })` lässt alle Klassen voll gesteigert antreten, `{ steigerung: 3 }` auf Rang 3. Der
-echte Spielstand wird dabei weder gelesen noch verändert.
+**Umstellung von Fassung 5 auf 6 (entfallene Steigerungen).** Wer vor Version 0.7.0 Ränge gekauft hatte, bekommt das Gold dafür zurück: `von5auf6` in `src/core/savegame.ts`
+rechnet für jeden gekauften Rang nach, was er gekostet hat (`RETIRED_UPGRADES`, die alten Preise und die Steigerung der Preise je Rang) und schreibt die Summe der Börse gut.
+Die Klassenwahl nennt es einmal („Die Steigerungen sind entfallen: …“). Bevor ein älterer Stand gehoben wird, legt `loadSavegame` seinen Text unverändert unter
+`dao-survivor.spielstand.sicherung` ab. Zurückholen lässt sich der alte Stand in der Browser-Konsole mit
+`localStorage.setItem('dao-survivor.spielstand', localStorage.getItem('dao-survivor.spielstand.sicherung'))` und einem Neuladen mit der älteren Fassung des Spiels.
+
+**Gleichgewicht.** Der Messlauf rechnet ohne Gegenstände (so bleiben die Zahlen vergleichbar) und schreibt das Gold jeder Nacht
+mit (`gold`). Der echte Spielstand wird dabei weder gelesen noch verändert.
 
 Abweichungen von der Lore: Die Währung der Spielwelt sind Kupferpfennig, Silbermark und Goldkrone (100 Pfennig = 1 Mark, 100 Mark = 1 Krone).
 Im Spiel heißt sie schlicht Gold, und die drei Münzfarben stehen für kleine, mittlere und große Beträge im Verhältnis 1 zu 5 zu 25,
-sonst gäbe es keine Goldkronen zu sehen. Auch dass man mit Gold Werte steigert, ist eine Spielvereinfachung: In der Lore kaufen
-Spielende Steigerungen mit Charakterpunkten (`Steigerungskosten`), nicht mit Geld; die steigenden Preise je Rang stammen von dort.
+sonst gäbe es keine Goldkronen zu sehen. Die Steigerungen mit Gold, die es bis Version 0.6.0 gab, waren selbst eine Abweichung (in der Lore kaufen
+Spielende Steigerungen mit Charakterpunkten, nicht mit Geld); mit den Gegenständen ist sie entfallen.
 
 ## Gegenstände
 
-Zwischen den Nächten legen die Klassen Gegenstände an: Fackel, Helm, Gürtel, Waffe, Handschuh, Schuh, Ring, Brustrüstung und Amulett. Sie sollen
-die Steigerungen später ersetzen; das System entsteht in Paketen (Entwurf: „Item-, Loot- und Händlersystem“). **Stand: Grundlage, Beute, Truhe und Händler.**
+Zwischen den Nächten legen die Klassen Gegenstände an: Fackel, Helm, Gürtel, Waffe, Handschuh, Schuh, Ring, Brustrüstung und Amulett. Sie ersetzen
+die früheren Steigerungen; das System entsteht in Paketen (Entwurf: „Item-, Loot- und Händlersystem“). **Stand: Grundlage, Beute, Truhe, Händler; die Steigerungen sind entfallen.**
 Das Lager (Ausrüstung, Truhe und Händler) bleibt verborgen, solange kein Gegenstand im Spielstand liegt und kein Gold in der Börse; der erste Fund oder die erste Münze schaltet es frei.
 Im Entwicklungsmodus (`npm run dev`) ist es immer da, und die Browser-Konsole erzeugt Gegenstände, Beute und Gold zum Ausprobieren
 (`__items.fuellen()`, `__items.geben(0, 'ring', 'rar')`, `__items.fallen('rar')`, `__items.kiste()`, `__items.truhe(30)`, `__items.gold(5000)`, `__items.leeren()`; Beschreibung in `src/tools/items.ts`).
@@ -186,18 +181,18 @@ Im Entwicklungsmodus (`npm run dev`) ist es immer da, und die Browser-Konsole er
 **Aufbau.** Ein Gegenstand trägt je nach Seltenheit eine (Normal), zwei (Selten) oder drei (Rar) Eigenschaften; Legendär trägt drei und später
 die Evolution einer Fertigkeit, und gibt es vorerst nur als Ring (`LEGENDARY_SLOTS`). Jede Eigenschaft würfelt ihren Wert einmal beim Entstehen
 aus einem Bereich, der von der Eigenschaft und vom Platz abhängt; ein Kernplatz hebt ihn an (Schaden auf der Waffe, Leben und Rüstung auf der
-Brust, Lauftempo am Schuh, Sammelradius am Handschuh, Lichtschein an der Fackel). Es gibt 17 Eigenschaften (die zwölf der Steigerungen plus
+Brust, Lauftempo am Schuh, Sammelradius am Handschuh, Lichtschein an der Fackel). Es gibt 17 Eigenschaften (die zwölf der früheren Steigerungen plus
 Krit-Schaden, Schonfrist, Rastheilung, Brenndauer und Zündtempo); welche auf welchem Platz vorkommen kann, steht als Daten in `src/game/items.ts`
 (`PROPERTIES`), die Zahlen und Höchstwerte in `CONFIG.items` (`src/config.ts`). Fackel, Waffe und legendäre Gegenstände gehören zu einer Klasse und
 lassen sich nur von ihr anlegen; für den Magier heißt die Fackel „Kerzenwort“. Gegenstände ändern nur Werte, nicht das Aussehen der Figur.
 
 **Wirkung.** Beim Start einer Nacht werden die Eigenschaften der angelegten Gegenstände je Eigenschaft summiert (nach oben auf `cap` begrenzt) und
-auf die Werte der Figur gesetzt (`Progression.reset`, wie die Steigerungen); die Stärkungen und Segen der Nacht kommen obendrauf. Angelegt wird nur
+auf die Werte der Figur gesetzt (`Progression.reset`); die Stärkungen und Segen der Nacht kommen obendrauf. Angelegt wird nur
 zwischen den Nächten. Zwei Werte sind neu: `critDamage` (bisher fest doppelter Schaden bei einem kritischen Treffer) und `restHeal` (Heilung bei
 der Rast im Licht).
 
 **Mindestschaden.** Rüstung nimmt von einem Treffer nicht mehr alles weg: Mindestens ein Viertel (`CONFIG.player.minDamageShare`), mindestens 1 Schaden
-kommt durch. Sonst machte Rüstung aus Steigerungen, Stärkungen und Gegenständen zusammen die Figur gegen die Horde unverwundbar.
+kommt durch. Sonst machte Rüstung aus Stärkungen und Gegenständen zusammen die Figur gegen die Horde unverwundbar.
 
 **Lager.** Bei der Klassenwahl und am Ende der Nacht öffnet **L** (oder der Knopf) das Lager, mit der gewählten bzw. gerade gespielten Klasse. Es hat drei
 Ansichten, die man mit **Tab** oder den Knöpfen oben wechselt:
@@ -264,8 +259,9 @@ in `Ausruestung` (er ändert Gold, Gegenstände und Angebot in einem Zug), die B
 - Noch nicht umgesetzt: Die Evolution der legendären Ringe und die Zielhilfe bei ihrer Wahl (Paket „Evolutionen“); der legendäre Ring ist bis dahin
   ein Ring mit drei Eigenschaften.
 
-**Speicherung.** Die Gegenstände liegen im selben Spielstand wie Gold und Ränge (Feld `items`; `src/game/ausruestung.ts`), Fassung 5 (neu:
-der Stand des Händlers mit Angebot, Rückkauf und Zähler der Erneuerungen; Fassung 4 brachte die Truhe, Fassung 3 den Pech-Schutz). Ältere Stände (Fassung 1 bis 4) werden Schritt für Schritt gehoben; Gold, Ränge und Gegenstände bleiben unverändert. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
+**Speicherung.** Die Gegenstände liegen im selben Spielstand wie das Gold (Feld `items`; `src/game/ausruestung.ts`), Fassung 6 (neu: die Ränge der entfallenen Steigerungen sind
+als Gold erstattet und der alte Stand liegt als Sicherung bereit, siehe [Gold](#gold); Fassung 5 brachte den Stand des Händlers mit Angebot, Rückkauf und Zähler der Erneuerungen, Fassung 4 die Truhe,
+Fassung 3 den Pech-Schutz). Ältere Stände (Fassung 1 bis 5) werden Schritt für Schritt gehoben; Gold und Gegenstände bleiben unverändert. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
 Name, unmögliche Eigenschaft), wird beim Lesen verworfen, Werte außerhalb des heutigen Bereichs rücken an dessen Rand.
 
 **Gleichgewicht.** `__items.verteilung('stark')`, `__items.kisten()` und `__items.angebote()` würfeln die Seltenheiten, den Pech-Schutz und das Angebot des Händlers in der Konsole tausendfach nach

@@ -116,7 +116,7 @@
           <ul>
             <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> oder Pfeiltasten: bewegen. Angegriffen wird von selbst.</li>
             <li><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> oder Pfeile und <kbd>Enter</kbd>: wählen und bestätigen.</li>
-            <li><kbd>Esc</kbd> oder <kbd>P</kbd>: Pause · <kbd>M</kbd>: Ton an oder aus · <kbd>U</kbd>: Steigerungen.</li>
+            <li><kbd>Esc</kbd> oder <kbd>P</kbd>: Pause · <kbd>M</kbd>: Ton an oder aus · <kbd>L</kbd>: Lager (zwischen den Nächten).</li>
           </ul>
         </section>
         <section>
@@ -138,10 +138,11 @@
           </p>
         </section>
         <section>
-          <h2>Gold und Steigerungen</h2>
+          <h2>Gold und Gegenstände</h2>
           <p>
             Münzen aus Gegnern, Sold für jede überlebte Minute und eine Prämie bei Sonnenaufgang füllen den Geldbeutel.
-            Zwischen den Nächten gibst du das Gold bei der Klassenwahl (<kbd>U</kbd>) für dauerhafte Steigerungen aus; sie gelten je Klasse.
+            Gegner und die Kiste des Verschlingers lassen Gegenstände fallen; du legst sie zwischen den Nächten im Lager (<kbd>L</kbd>) an.
+            Beim Händler im Lager gibst du das Gold für Gegenstände aus und verkaufst, was du nicht brauchst.
           </p>
         </section>
         <section>
@@ -229,23 +230,12 @@
       <p id="choice-subtitle"></p>
       <div id="choice-cards"></div>
       <p id="choice-gold" hidden></p>
+      <p id="choice-note" hidden></p>
       <div class="buttons">
-        <button id="choice-steigern" class="button" type="button" hidden>Klassen steigern (U)</button>
         <button id="choice-lager" class="button" type="button" hidden>Lager (L)</button>
         <button id="choice-main-menu" class="button" type="button" hidden>Hauptmenü (Esc)</button>
       </div>
       <p id="choice-keys" class="keys">1 · 2 · 3 oder Pfeiltasten und Enter</p>
-    </div>
-
-    <div id="steigerung" class="overlay" hidden>
-      <h1>Steigerung</h1>
-      <p id="steigerung-gold"></p>
-      <div id="steigerung-tabs"></div>
-      <div id="steigerung-list"></div>
-      <button id="steigerung-back" class="button" type="button">Zurück (Esc)</button>
-      <p class="keys">
-        Auf und Ab: Steigerung wählen · Enter: Rang kaufen · Links und Rechts oder 1 · 2 · 3: Klasse wechseln · Esc oder U: zurück
-      </p>
     </div>
 
     <div id="lager" class="overlay" hidden>
@@ -296,11 +286,10 @@
       <p id="end-gold"></p>
       <div id="end-loot" hidden></div>
       <div class="buttons">
-        <button id="end-steigern" class="button" type="button">Gold ausgeben (U)</button>
         <button id="end-lager" class="button" type="button" hidden>Lager (L)</button>
         <button id="end-main-menu" class="button" type="button">Hauptmenü (Esc)</button>
       </div>
-      <p id="end-keys" class="keys">Enter: Klasse wählen und neue Nacht beginnen · U: Gold für Steigerungen ausgeben · Esc: Hauptmenü</p>
+      <p id="end-keys" class="keys">Enter: Klasse wählen und neue Nacht beginnen · Esc: Hauptmenü</p>
     </div>
 
     <div id="error" class="overlay" hidden></div>

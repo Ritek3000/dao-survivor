@@ -7,7 +7,7 @@
     "pause": {"beschreibung": "Pause beginnt oder endet", "datei": "sfx/pause.ogg", "lautstaerke": 0.8, "prioritaet": 3},
     "stufe": {"beschreibung": "Stufenaufstieg: Wahl einer Stärkung", "datei": "sfx/stufe.ogg", "lautstaerke": 0.9, "prioritaet": 3},
     "segen": {"beschreibung": "Eine Höhere Macht antwortet: Wahl eines Segens", "datei": "sfx/segen.ogg", "lautstaerke": 1.0, "prioritaet": 3},
-    "steigerung": {"beschreibung": "Ein Rang einer Steigerung wird mit Gold bezahlt", "datei": "sfx/steigerung.ogg", "lautstaerke": 0.9, "prioritaet": 3},
+    "steigerung": {"beschreibung": "Gold wird bezahlt: ein Kauf beim Händler, ein neuer Reiter der Truhe", "datei": "sfx/steigerung.ogg", "lautstaerke": 0.9, "prioritaet": 3},
     "spieler-treffer": {"beschreibung": "Die Spielfigur wird getroffen", "datei": ["sfx/spieler-treffer-1.ogg", "sfx/spieler-treffer-2.ogg", "sfx/spieler-treffer-3.ogg"], "lautstaerke": 1.0, "streuung": 120, "abstand": 0.1, "prioritaet": 3},
     "spieler-verstaubt": {"beschreibung": "Die Spielfigur wird von Finsternis oder Sog getroffen (verstaubt)", "datei": "sfx/spieler-verstaubt.ogg", "lautstaerke": 0.9, "prioritaet": 3},
     "schild.faengt": {"beschreibung": "Der Schild fängt einen Treffer ab", "datei": "sfx/schild-faengt.ogg", "lautstaerke": 0.9, "prioritaet": 3},

@@ -686,7 +686,7 @@ export class Lager {
       return;
     }
     this.say(`„${itemName(item)}“ ${zone === 'angebot' ? 'gekauft' : 'zurückgekauft'} für ${deal.price} Gold${this.whereIs(deal.place)}.`);
-    audio.play('muenze');
+    audio.play('steigerung');
     this.render();
   }
 
@@ -756,7 +756,7 @@ export class Lager {
       return;
     }
     this.say(price > 0 ? `Das Angebot ist erneuert (${price} Gold).` : 'Das Angebot ist erneuert.');
-    audio.play(price > 0 ? 'muenze' : 'bestaetigen');
+    audio.play(price > 0 ? 'steigerung' : 'bestaetigen');
     this.render();
   }
 
@@ -829,7 +829,7 @@ export class Lager {
     // Der Zeiger bleibt auf dem Befehl „Neuer Reiter“, der jetzt eine Stelle weiter rechts steht.
     this.cursor = deal.index + 1;
     this.say(deal.price > 0 ? `Neuer Reiter für ${deal.price} Gold.` : 'Neuer Reiter.');
-    audio.play(deal.price > 0 ? 'muenze' : 'bestaetigen');
+    audio.play(deal.price > 0 ? 'steigerung' : 'bestaetigen');
     this.render();
   }
 
