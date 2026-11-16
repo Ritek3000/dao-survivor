@@ -4,18 +4,21 @@ import { CONFIG } from '../config';
 import { Input, type MoveVector } from '../core/input';
 import { createRandom } from '../core/random';
 import { loadSettings, saveSettings, type Settings, type VitalsPosition } from '../core/settings';
-import { formatTime, type Hud } from '../ui/hud';
+import { formatTime, type EndLoot, type Hud } from '../ui/hud';
 import { LagerView } from '../ui/lagerView';
 import { Menus, type MenuCommand } from '../ui/menus';
 import { Arsenal, type CombatTraits } from './arsenal';
 import { Ausruestung } from './ausruestung';
+import { Beute, type LootSettlement } from './beute';
 import { Boss } from './boss';
 import { CameraRig } from './cameraRig';
 import { CLASSES, TRAITS, type ClassDef } from './classes';
 import { Coins } from './coins';
 import { finsternisUniforms } from './darkness';
+import { Chest, Drops } from './drops';
 import { Dust } from './dust';
 import { Enemies, type EnemyHooks } from './enemies';
+import { itemName, RARITIES, RARITY_LABELS, slotLabel, type Item, type Rarity } from './items';
 import { Lager } from './lager';
 import { loadModels, type Models } from './models';
 import { Pickups } from './pickups';
@@ -72,6 +75,13 @@ export class Game {
   private readonly steigerungen = new Steigerungen();
   /** Die Gegenstände jeder Klasse; sie wirken beim Start der Nacht auf die Werte (`startRun`). */
   private readonly ausruestung = new Ausruestung();
+  /** Was in dieser Nacht fällt und im Beutel liegt; am Ende der Nacht wandert es ins Inventar. */
+  private readonly beute = new Beute(this.ausruestung);
+  private readonly drops = new Drops();
+  /** Die Kiste, die der Verschlinger hinterlässt. */
+  private readonly chest = new Chest();
+  /** Die beste Seltenheit im Beutel dieser Nacht, für die Anzeige. */
+  private lootBest: Rarity | null = null;
   private readonly lager: Lager;
   /** Sind die Knöpfe und die Taste zur Ausrüstung freigeschaltet? */
   private lagerEnabled = false;
@@ -150,6 +160,8 @@ export class Game {
       this.boss.group,
       this.pickups.group,
       this.coins.group,
+      this.drops.group,
+      this.chest.group,
       this.player.object,
       this.threats.group,
       this.arsenal.group,
@@ -308,6 +320,8 @@ export class Game {
       this.hud.setGold(Math.floor(this.goldRun));
       audio.play('muenze', position.x, position.z);
     }
+    this.chest.update(dt, this.drops, this.collectLoot);
+    this.drops.update(dt, this.time, position, this.collectLoot);
 
     this.rig.update(dt, position);
     this.dust.update(this.time, position, this.player.light);
@@ -387,6 +401,8 @@ export class Game {
         this.pickups.drop(enemy.x, enemy.z, enemy.type.xp);
         const { gold } = enemy.type;
         if (gold && this.random() < gold.chance) this.coins.drop(enemy.x, enemy.z, gold.value);
+        const { loot } = enemy.type;
+        if (loot && this.beute.drops(loot.chance)) this.dropLoot(this.beute.roll(loot.tier), enemy.x, enemy.z);
         audio.play(`gegner-tod.${enemy.type.id}`, enemy.x, enemy.z);
         return;
       }
@@ -405,9 +421,12 @@ export class Game {
         this.coins.drop(enemy.x + Math.cos(angle) * distance, enemy.z + Math.sin(angle) * distance, value);
       }
       this.boss.fall();
+      // Seine Kiste springt auf; die Gegenstände sind schon gewürfelt (und der Pech-Schutz weitergezählt).
+      this.chest.open(enemy.x, enemy.z, this.beute.rollChest());
+      audio.play('beute.kiste', enemy.x, enemy.z);
       // Erst stürzt er, dann antwortet die Höhere Macht.
       this.segenIn = BOSS_SEGEN_SECONDS;
-      this.hud.announce(`${name} fällt`);
+      this.hud.announce(`${name} fällt · Eine Kiste springt auf`);
     },
     cast: (enemy, x, z) => {
       const cast = enemy.type.cast;
@@ -418,6 +437,40 @@ export class Game {
       if (strike) this.threats.arc(enemy.x, enemy.z, enemy.heading, strike.arc, strike.reach, strike.hitAt);
     },
   };
+
+  /** Legt einen gefallenen Gegenstand hin; ist kein Platz am Boden, geht er gleich in den Beutel. */
+  private dropLoot(item: Item, x: number, z: number): void {
+    audio.play(`beute.${item.rarity}`, x, z);
+    if (item.rarity === 'rar' || item.rarity === 'legendaer') {
+      this.hud.announce(`Fund · ${RARITY_LABELS[item.rarity]}: ${itemName(item)}`);
+    }
+    if (!this.drops.spawn(item, x, z)) this.collectLoot(item);
+  }
+
+  /** Die Figur hat einen Gegenstand erreicht: Er liegt jetzt im Beutel und wandert am Ende der Nacht ins Inventar. */
+  private readonly collectLoot = (item: Item): void => {
+    this.beute.collect(item);
+    if (this.lootBest === null || RARITIES.indexOf(item.rarity) > RARITIES.indexOf(this.lootBest)) this.lootBest = item.rarity;
+    this.hud.setLoot(this.beute.bag.length, this.lootBest);
+    audio.play('beute.eingesammelt');
+  };
+
+  /** Das Ende der Nacht: Was noch liegt oder fliegt, geht in den Beutel, dann wandert der Beutel ins Inventar. */
+  private settleLoot(): LootSettlement {
+    this.drops.flush((item) => this.beute.collect(item));
+    for (const item of this.chest.take()) this.beute.collect(item);
+    return this.beute.settle();
+  }
+
+  /** Die Zeilen der Endanzeige: jeder Gegenstand der Nacht und was aus ihm wurde. */
+  private lootLines(loot: LootSettlement): EndLoot[] {
+    return loot.items.map(({ item, stored, gold }) => ({
+      name: itemName(item),
+      rarity: item.rarity,
+      detail: `${RARITY_LABELS[item.rarity]} · ${slotLabel(item.slot, item.classId)}`,
+      note: stored ? 'im Inventar' : `verkauft für ${gold} Gold (Inventar voll)`,
+    }));
+  }
 
   private setPaused(paused: boolean): void {
     this.phase = paused ? 'paused' : 'playing';
@@ -612,6 +665,11 @@ export class Game {
     this.enemies.reset();
     this.pickups.reset();
     this.coins.reset();
+    this.drops.reset();
+    this.chest.reset();
+    this.beute.start(playerClass.id);
+    this.lootBest = null;
+    this.hud.setLoot(0, null);
     this.zones.reset();
     this.syncLight();
     this.applyBlessings();
@@ -766,11 +824,13 @@ export class Game {
     // Der letzte Frame läuft knapp über das Ende der Nacht hinaus.
     const survived = Math.min(this.time, CONFIG.run.nightSeconds);
     const stats = `${this.playerClass.name} · Überlebt: ${formatTime(survived)} · Stufe ${this.progression.level} · Erschlagen: ${this.enemies.kills}`;
-    const gold = this.settle(won, survived);
+    const loot = this.settleLoot();
+    const gold = this.settle(won, survived, loot.gold);
+    const lines = this.lootLines(loot);
     this.updateLagerAccess();
     this.hud.setBoss(null);
     if (outcome === 'aborted') {
-      this.hud.showEnd('Lauf abgebrochen', 'Du hast dich aus der Nacht zurückgezogen.', stats, gold);
+      this.hud.showEnd('Lauf abgebrochen', 'Du hast dich aus der Nacht zurückgezogen.', stats, gold, lines);
     } else if (won) {
       this.world.setDawn(1);
       const { name } = CONFIG.boss;
@@ -779,13 +839,13 @@ export class Game {
         : this.boss.appeared
           ? ` ${name} weicht mit der Finsternis.`
           : '';
-      this.hud.showEnd('Sor geht auf', `Du hast die Nacht vor der Mauer überstanden.${fate}`, stats, gold);
+      this.hud.showEnd('Sor geht auf', `Du hast die Nacht vor der Mauer überstanden.${fate}`, stats, gold, lines);
     } else {
       this.player.die();
       if (this.player.lastDamage === 'verstaubung') {
-        this.hud.showEnd('Verstaubt', 'Die Finsternis hat dich behalten.', stats, gold);
+        this.hud.showEnd('Verstaubt', 'Die Finsternis hat dich behalten.', stats, gold, lines);
       } else {
-        this.hud.showEnd('Gefallen', 'Die Nacht hat dich geholt.', stats, gold);
+        this.hud.showEnd('Gefallen', 'Die Nacht hat dich geholt.', stats, gold, lines);
       }
     }
   }
@@ -793,19 +853,21 @@ export class Game {
   /**
    * Rechnet den Ertrag der Nacht ab und schreibt ihn der Geldbörse gut: die eingesammelten Münzen, den Sold für die
    * überlebte Zeit und, wenn die Sonne aufgeht, die Prämie. Wer fällt, behält `CONFIG.gold.deathKeep` davon.
-   * Gibt die Zeile für die Endanzeige zurück.
+   * Dazu kommt, was der Verkauf überzähliger Gegenstände einbrachte (`sold`); das behält man immer ganz, denn die Gegenstände
+   * bleiben auch beim Sturz erhalten. Gibt die Zeile für die Endanzeige zurück.
    */
-  private settle(won: boolean, survived: number): string {
+  private settle(won: boolean, survived: number, sold: number): string {
     const { perMinute, victory, deathKeep } = CONFIG.gold;
     const factor = this.progression.stats.gold;
     const loot = Math.round(this.goldRun);
     const pay = Math.round(Math.floor(survived / 60) * perMinute * factor);
     const bonus = won ? Math.round(victory * factor) : 0;
     const kept = won ? 1 : deathKeep;
-    const total = Math.round((loot + pay + bonus) * kept);
+    const total = Math.round((loot + pay + bonus) * kept) + sold;
     this.steigerungen.credit(total);
-    const parts = [`Beute ${loot}`, `Sold ${pay}`];
+    const parts = [`Münzen ${loot}`, `Sold ${pay}`];
     if (won) parts.push(`Sonnenaufgang ${bonus}`);
+    if (sold > 0) parts.push(`Verkauf ${sold}`);
     const cut = kept < 1 ? ` · davon behalten: ${Math.round(kept * 100)} %` : '';
     return `${parts.join(' · ')}${cut} · Ertrag: +${total} Gold · Börse: ${this.steigerungen.gold}`;
   }

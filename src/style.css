@@ -989,6 +989,88 @@ kbd {
   color: var(--gold);
 }
 
+/* Gegenstände, die in dieser Nacht gefallen sind; die Farben liefern die Klassen `rarity-*` (siehe Ausrüstung). */
+#end-loot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(560px, 88vw);
+  max-height: 32vh;
+  overflow-y: auto;
+  margin: 2px 0 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  background: rgba(8, 8, 10, 0.6);
+  text-align: left;
+}
+
+#end-loot .title {
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+#end-loot .row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  column-gap: 16px;
+  align-items: baseline;
+  padding-left: 9px;
+  border-left: 3px solid var(--rarity-line);
+  color: var(--rarity);
+}
+
+#end-loot .name {
+  font-size: 16px;
+}
+
+#end-loot .detail,
+#end-loot .note {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+#end-loot .note {
+  min-width: 7em;
+  text-align: right;
+}
+
+/* Der Beutel dieser Nacht: ein Stein in der Farbe des besten Funds samt Zahl, mittig unter dem Geldbeutel. */
+#loot {
+  position: absolute;
+  left: 50%;
+  bottom: -12px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px 1px 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--rarity, #b9b3a5);
+  background: rgba(10, 8, 6, 0.88);
+  border: 1px solid var(--rarity-line, rgba(185, 179, 165, 0.45));
+  border-radius: 10px;
+  text-shadow: 0 0 4px #000;
+}
+
+#loot .gem {
+  display: block;
+  width: 9px;
+  height: 9px;
+  background: var(--rarity, #b9b3a5);
+  transform: rotate(45deg);
+  box-shadow: 0 0 6px var(--rarity-line, transparent);
+}
+
+/* Steht die Lebensgruppe unten, sitzt der Beutel oberhalb, damit er nicht aus dem Bild ragt. */
+body[data-vitals^='bottom'] #loot {
+  bottom: auto;
+  top: -14px;
+}
+
 /* Steigerungen: Reiter für die Klassen, darunter die Liste in zwei Spalten. */
 #steigerung {
   justify-content: safe center;

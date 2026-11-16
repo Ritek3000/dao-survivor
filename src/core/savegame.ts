@@ -13,12 +13,14 @@
 import { browserTextStore, type TextStore } from './storage';
 
 /** Die Fassung des Formats, die dieser Code schreibt. */
-export const SAVEGAME_VERSION = 2;
+export const SAVEGAME_VERSION = 3;
 
 /** Obergrenze für einen Rang beim Lesen; schützt vor Unsinn in einer von Hand bearbeiteten Datei. */
 const MAX_STORED_RANK = 99;
 /** Obergrenze für die Plätze, die je Klasse gelesen werden; das Spiel selbst kennt weniger (`CONFIG.items.inventorySize`). */
 const MAX_STORED_SLOTS = 200;
+/** Obergrenze für die Zahl der Boss-Kisten ohne Legendäres, die der Pech-Schutz zählt. */
+const MAX_STORED_PITY = 99;
 
 /**
  * Die Gegenstände der Klassen, so wie sie im Spielstand liegen. Was ein Gegenstand ist, kennt `game/items.ts`; dieser Teil
@@ -29,6 +31,8 @@ export interface StoredItems {
   next: number;
   /** Je Klasse das Inventar (Plätze in Reihenfolge, leere als `null`) und die angelegten Gegenstände nach Platz. */
   classes: Record<string, { inventory: unknown[]; equipment: Record<string, unknown> }>;
+  /** Seit Fassung 3: Wie viele Boss-Kisten in Folge ohne Legendäres blieben (Pech-Schutz, siehe `game/beute.ts`). */
+  pity: number;
 }
 
 export interface Savegame {
@@ -57,7 +61,7 @@ export function emptySavegame(): Savegame {
 }
 
 function emptyItems(): StoredItems {
-  return { next: 1, classes: {} };
+  return { next: 1, classes: {}, pity: 0 };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -81,7 +85,10 @@ export function parseSavegame(text: string | null): Savegame {
   }
   if (!isRecord(parsed)) return save;
   // Ältere Fassungen werden Schritt für Schritt auf die nächste gehoben.
-  const raw = typeof parsed.version === 'number' && parsed.version >= 2 ? parsed : von1auf2(parsed);
+  const version = typeof parsed.version === 'number' && Number.isFinite(parsed.version) ? parsed.version : 1;
+  let raw = parsed;
+  if (version < 2) raw = von1auf2(raw);
+  if (version < 3) raw = von2auf3(raw);
 
   if (typeof raw.version === 'number' && Number.isFinite(raw.version)) {
     // Ein Stand aus einer neueren Fassung wird so gut gelesen wie möglich, seine Nummer aber nicht zurückgesetzt.
@@ -108,10 +115,17 @@ function von1auf2(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, version: 2, items: emptyItems() };
 }
 
+/** Fassung 2 kannte den Pech-Schutz der Boss-Kisten nicht; er beginnt bei null. */
+function von2auf3(raw: Record<string, unknown>): Record<string, unknown> {
+  const items = isRecord(raw.items) ? raw.items : emptyItems();
+  return { ...raw, version: 3, items: { ...items, pity: 0 } };
+}
+
 function parseItems(raw: unknown): StoredItems {
   const items = emptyItems();
   if (!isRecord(raw)) return items;
   items.next = Math.max(1, wholeNumber(raw.next, Number.MAX_SAFE_INTEGER));
+  items.pity = wholeNumber(raw.pity, MAX_STORED_PITY);
   if (!isRecord(raw.classes)) return items;
   for (const [classId, perClass] of Object.entries(raw.classes)) {
     if (!isRecord(perClass)) continue;
