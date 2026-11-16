@@ -9,7 +9,16 @@ interface Gem extends Site {
   pull: number;
 }
 
+/** Ein Lebenssplitter: liegt da, bis die Figur ihn aufnimmt, und heilt sie dann. */
+interface Splinter extends Site {
+  heal: number;
+  pull: number;
+}
+
 type GemSize = 'small' | 'large';
+
+/** So viele Lebenssplitter liegen höchstens zugleich da; ein weiterer ersetzt den ältesten. */
+const SPLINTER_CAPACITY = 8;
 
 const COLLECT_DISTANCE = 0.6;
 const SIZES: readonly GemSize[] = ['small', 'large'];
@@ -26,18 +35,31 @@ function placeholder(color: number): PropModel {
   };
 }
 
-/** Erfahrung, die besiegte Gegner fallen lassen: kleine Edelsteine, von starken Gegnern große. */
+/** Erfahrung, die besiegte Gegner fallen lassen: kleine Edelsteine, von starken Gegnern große; dazu die Lebenssplitter des Banners. */
 export class Pickups {
   readonly group = new THREE.Group();
   private readonly gems: Gem[] = [];
   private meshes: Record<GemSize, THREE.InstancedMesh>;
   private overflow = 0;
+  private readonly splinters: Splinter[] = [];
+  private readonly splinterMesh: THREE.InstancedMesh;
+  /** Was die Lebenssplitter seit dem letzten `takeHealing` an Leben gebracht haben. */
+  private healed = 0;
 
   constructor() {
     this.meshes = {
       small: this.createMesh(placeholder(0x9fe3d0)),
       large: this.createMesh(placeholder(0x6fb6ff)),
     };
+    // Blutrot und unbeleuchtet, damit der Splitter im Dunkeln leuchtet wie die Edelsteine.
+    this.splinterMesh = new THREE.InstancedMesh(
+      new THREE.OctahedronGeometry(0.22).scale(0.8, 1.5, 0.8).translate(0, 0.3, 0),
+      new THREE.MeshBasicMaterial({ color: 0xd8413a }),
+      SPLINTER_CAPACITY,
+    );
+    this.splinterMesh.frustumCulled = false;
+    this.splinterMesh.count = 0;
+    this.group.add(this.splinterMesh);
   }
 
   /** Ersetzt die Platzhalter durch die Modelle; fehlt eines, bleibt sein Platzhalter. */
@@ -55,7 +77,29 @@ export class Pickups {
 
   reset(): void {
     this.gems.length = 0;
+    this.splinters.length = 0;
+    this.healed = 0;
+    this.splinterMesh.count = 0;
     for (const size of SIZES) this.meshes[size].count = 0;
+  }
+
+  /** Lässt einen Lebenssplitter fallen (Banner, Rang 3); er heilt `heal` Leben, wenn die Figur ihn aufnimmt. */
+  dropSplinter(x: number, z: number, heal: number): void {
+    if (this.splinters.length >= SPLINTER_CAPACITY) this.splinters.shift();
+    this.splinters.push({ x, z, heal, pull: 0 });
+  }
+
+  /** Zieht alle Edelsteine und Lebenssplitter im Umkreis zur Figur (Banner, Rang 5); sie fliegen von allein, bis sie sie erreichen. */
+  attract(x: number, z: number, radius: number): void {
+    for (const gem of this.gems) if (Math.hypot(gem.x - x, gem.z - z) <= radius) gem.pull = Math.max(gem.pull, 6);
+    for (const splinter of this.splinters) if (Math.hypot(splinter.x - x, splinter.z - z) <= radius) splinter.pull = Math.max(splinter.pull, 6);
+  }
+
+  /** Das Leben, das Lebenssplitter seit dem letzten Aufruf gebracht haben; danach 0. */
+  takeHealing(): number {
+    const healed = this.healed;
+    this.healed = 0;
+    return healed;
   }
 
   drop(x: number, z: number, value: number): void {
@@ -92,6 +136,36 @@ export class Pickups {
         }
       }
     }
+
+    for (let i = this.splinters.length - 1; i >= 0; i--) {
+      const splinter = this.splinters[i];
+      if (!splinter) continue;
+      const dx = player.x - splinter.x;
+      const dz = player.z - splinter.z;
+      const distance = Math.hypot(dx, dz);
+      if (splinter.pull <= 0 && distance >= pickupRadius) continue;
+      splinter.pull = Math.max(splinter.pull, 6) + 30 * dt;
+      const step = Math.min(distance, splinter.pull * dt);
+      if (distance > 1e-4) {
+        splinter.x += (dx / distance) * step;
+        splinter.z += (dz / distance) * step;
+      }
+      if (distance - step < COLLECT_DISTANCE) {
+        this.healed += splinter.heal;
+        this.splinters.splice(i, 1);
+      }
+    }
+    for (let i = 0; i < this.splinters.length; i++) {
+      const splinter = this.splinters[i];
+      if (!splinter) continue;
+      pose.position.set(splinter.x, 0.1 + 0.07 * Math.sin(time * 3 + splinter.x), splinter.z);
+      pose.rotation.y = time * 2.4 + splinter.z;
+      pose.scale.setScalar(1);
+      pose.updateMatrix();
+      this.splinterMesh.setMatrixAt(i, pose.matrix);
+    }
+    this.splinterMesh.count = this.splinters.length;
+    this.splinterMesh.instanceMatrix.needsUpdate = true;
 
     const { small, large, largeFrom } = CONFIG.xp.gems;
     const counts: Record<GemSize, number> = { small: 0, large: 0 };

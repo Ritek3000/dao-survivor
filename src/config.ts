@@ -553,6 +553,66 @@ export const CONFIG = {
     maxFields: 24,
     /** So viele zeitweilige Werte der Figur gibt es höchstens zugleich. */
     maxBuffs: 16,
+    /**
+     * Die Fertigkeiten des Kämpfers (Vorlage: „Klassen, Fertigkeiten & Evolutionen“). Was je Rang gilt, steht als Tabelle bei den
+     * Angriffen in `weapons.ts`; hier stehen die Zahlen, die für alle Ränge gleich sind und die man beim Abgleichen anfasst.
+     */
+    kaempfer: {
+      /** Axthieb, Rang 2: Wer auf einen Gegner zuläuft, trifft ihn mit diesem Faktor härter. */
+      chargeBonus: 1.3,
+      /** Als „zulaufend“ gilt, wer mindestens so schnell läuft (m/s) und höchstens so weit (Radiant) von der Richtung zum Gegner abweicht. */
+      chargeSpeed: 1,
+      chargeAngle: 0.8,
+      /** Axthieb, Rang 4: Rückhand-Hieb nach so vielen Sekunden, mit diesem Faktor auf den Schaden. */
+      backhandDelay: 0.22,
+      backhandDamage: 0.6,
+      /** Wirbelschlag, Rang 3: zweiter Wirbel nach so vielen Sekunden; so viel mehr Tempo, so lange (Sekunden). */
+      whirlAgain: 0.35,
+      whirlSpeed: 1.15,
+      whirlSpeedSeconds: 1.4,
+      /** Wirbelschlag, Rang 4: Jeder getroffene Gegner verkürzt die Abklingzeit um so viele Sekunden, insgesamt um höchstens diesen Anteil. */
+      whirlRefund: 0.12,
+      whirlRefundMax: 0.45,
+      /** Wirbelschlag, Rang 5: Ab so vielen Gegnern im Kreis gilt die Figur als umzingelt (doppelter Schaden); der Wirbel schützt sie. */
+      surround: 5,
+      surroundFactor: 2,
+      whirlGuard: 0.7,
+      /** Wuchthieb, Rang 2: So viel weniger Schaden nimmt die Figur beim Ausholen (Faktor auf erlittenen Schaden). */
+      windupGuard: 0.7,
+      /** Wuchthieb, Rang 5: Ab so vielen Getroffenen lädt der nächste Schlag fast sofort (Anteil der Abklingzeit, der entfällt) und ist sicher kritisch. */
+      chainHits: 5,
+      chainRefund: 0.7,
+      /** Kriegsschrei, Rang 3: Vorteil für so viele Sekunden (Faktor auf Abklingzeiten, dazu Kritchance). Rang 5: Echo nach so vielen Sekunden, mit diesem Faktor. */
+      shoutAdvantageSeconds: 4,
+      shoutAdvantageCooldown: 0.85,
+      shoutAdvantageCrit: 0.15,
+      echoDelay: 1.5,
+      echoFactor: 0.5,
+      /** Wurfaxt: So lange bleibt eine Axt in ihrem Ziel oder am Boden stecken (Sekunden). */
+      axeStick: 0.6,
+      /** Wurfaxt, Rang 4: Die Staubspur verlangsamt Gegner im Umkreis der Axt so stark und so lange. */
+      trailRadius: 0.9,
+      trailSlow: 0.35,
+      trailSeconds: 1.2,
+      /** Wurfaxt, Rang 5: Die Axt kehrt mit diesem Faktor auf ihr Tempo zurück. */
+      returnSpeed: 1.25,
+      /** Banner, Rang 3: Jeder so vielte Gegner, der darin stirbt, lässt einen Lebenssplitter fallen; er heilt so viel. */
+      splinterEvery: 10,
+      splinterHeal: 8,
+      /** Banner, Rang 5: Alle so viele Sekunden zieht es Edelsteine in diesem Umkreis (Faktor auf den Radius) zur Figur. */
+      bannerPulse: 2,
+      bannerMagnet: 3,
+      /** Dornenschild, Rang 3 (Rammbock): Als „frontal“ gilt ein Angreifer innerhalb dieses Winkels (Radiant) vor der Figur; Faktor auf den Schaden. */
+      rammAngle: 1.05,
+      rammFactor: 2,
+      /** Dornenschild, Rang 4: Jeder so vielte Treffer schleudert Eisensplitter (Zahl, Winkel dazwischen in Radiant, Faktor auf den Schaden, Tempo und Reichweite der Splitter). */
+      splitterEvery: 3,
+      splitterCount: 3,
+      splitterSpread: 0.14,
+      splitterDamage: 0.5,
+      splitterSpeed: 20,
+      splitterReach: 6,
+    },
   },
   xp: {
     /** Bedarf für die nächste Stufe: base + linear * Stufe + quadratic * Stufe². */

@@ -740,6 +740,30 @@ def sfx_angriff_wurfaxt(rng):
     return fade_edges(spin, 0.002, 0.1)
 
 
+def sfx_angriff_banner(rng):
+    """Kaempfer: Banner. Die Stange faehrt in den Boden, das Tuch schlaegt einmal aus und ein tiefes Horn antwortet."""
+    out = np.zeros(n_of(1.1))
+    place(out, thump(150, 48, 0.3, 0.07), 0.0, 1.0)
+    place(out, noise_hit(rng, 900, 4500, 0.05, 0.01), 0.0, 0.45)
+    flap = whoosh(rng, 0.5, 300, 1100, peak=0.3, tail=0.12, q=0.9) * 0.9
+    place(out, flap, 0.08, 0.55)
+    place(out, noise_hit(rng, 1500, 5000, 0.08, 0.02), 0.34, 0.3)
+    n = n_of(0.8)
+    t = np.arange(n) / SR
+    horn = (np.sin(phase_of(np.full(n, 110.0), n)) + 0.5 * np.sin(phase_of(np.full(n, 165.0), n)) + 0.25 * np.sin(phase_of(np.full(n, 220.0), n)))
+    place(out, horn * smooth(t, 0, 0.08) * np.exp(-np.maximum(t - 0.1, 0) / 0.3), 0.12, 0.28)
+    return fade_edges(out, 0.002, 0.12)
+
+
+def sfx_angriff_dornenschild(rng):
+    """Kaempfer: Dornenschild. Ein kurzer, harter Stich aus Eisen, kaum mehr als ein Klick mit hellem Nachklang."""
+    out = np.zeros(n_of(0.28))
+    place(out, noise_hit(rng, 2500, 9000, 0.03, 0.006), 0.0, 0.9)
+    place(out, thump(420, 160, 0.08, 0.02), 0.0, 0.5)
+    place(out, chime(2350.0, 0.25, 0.05, ((1, 1), (2.9, 0.35)), rng), 0.004, 0.35)
+    return fade_edges(out, 0.001, 0.05)
+
+
 def sfx_angriff_bogenschuss(rng):
     out = np.zeros(n_of(0.55))
     twang = pluck(196.0, 0.4, rng, brightness=0.8, base_tau=0.07)
@@ -1436,6 +1460,8 @@ def build_catalogue():
     sfx('sfx/angriff-wirbelschlag', sfx_angriff_wirbelschlag, -18.0)
     sfx('sfx/angriff-kriegsschrei', sfx_angriff_kriegsschrei, -19.0)
     sfx('sfx/angriff-wurfaxt', sfx_angriff_wurfaxt)
+    sfx('sfx/angriff-banner', sfx_angriff_banner, -19.0)
+    sfx('sfx/angriff-dornenschild', sfx_angriff_dornenschild, -23.0)
     sfx('sfx/angriff-bogenschuss', sfx_angriff_bogenschuss)
     sfx('sfx/angriff-pfeilhagel', sfx_angriff_pfeilhagel)
     sfx('sfx/einschlag-pfeilhagel', sfx_einschlag_pfeilhagel, -21.0)

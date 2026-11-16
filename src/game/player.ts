@@ -165,6 +165,16 @@ export class Player {
     return this.hp > 0;
   }
 
+  /** Wohin und wie schnell die Figur gerade läuft (Meter je Sekunde in x und z); nur lesen. */
+  get motion(): THREE.Vector3 {
+    return this.velocity;
+  }
+
+  /** Wohin sie blickt: Winkel wie bei den Angriffen (`atan2(dx, dz)`). */
+  get facing(): number {
+    return this.heading;
+  }
+
   /** Reichweite der Lichtquelle der gewählten Klasse. */
   get light(): number {
     return this.lightRadius;
