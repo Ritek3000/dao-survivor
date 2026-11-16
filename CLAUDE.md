@@ -35,8 +35,8 @@ Es gibt keine automatischen Tests und keinen Linter. **Bevor ein Pull Request au
   `verbatimModuleSyntax`). Typen werden mit `import type` bzw. `type`-Modifikator importiert.
 - `src/config.ts` ist der Ort für Stellschrauben (Nachtdauer, Gegnerarten, Kulisse, Boss). Neue Zahlen, die man beim
   Balancing anfassen will, gehören dorthin und nicht tief in die Logik.
-- Angriffe, Klassen, Segen, Steigerungen und Gegnerarten sind **Daten** (`weapons.ts`, `classes.ts`, `progression.ts`,
-  `steigerung.ts`, `config.ts`). Neue Inhalte sind meist ein weiterer Eintrag, kein neuer Code-Pfad.
+- Angriffe, Klassen, Segen, Gegenstände und Gegnerarten sind **Daten** (`weapons.ts`, `classes.ts`, `progression.ts`,
+  `items.ts`, `config.ts`). Neue Inhalte sind meist ein weiterer Eintrag, kein neuer Code-Pfad.
 - Die Welt entsteht deterministisch aus einem Seed (`createRandom` in `src/core/random.ts`). Wer die Welt, die Kulisse
   oder das Spawnen ändert, nimmt diesen Zufall und nicht `Math.random`. `Math.random` ist nur für rein Optisches erlaubt.
 - Im Kampf entstehen keine neuen Objekte: Teilchen, Gegner und Geschosse liegen in Pools bzw. Instanznetzen. Neue Effekte

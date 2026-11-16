@@ -11,13 +11,11 @@ export type Action =
   | 'right'
   | 'up'
   | 'down'
-  /** Öffnet die Steigerungen der Klassen (Menü zwischen den Nächten). */
-  | 'upgrade'
-  /** Öffnet die Ausrüstung der Klassen (Menü zwischen den Nächten). */
+  /** Öffnet das Lager mit Ausrüstung, Truhe und Händler (Menü zwischen den Nächten). */
   | 'lager'
   /** Im Lager: den markierten Gegenstand gleich anlegen oder wegräumen, ohne ihn erst aufzunehmen. */
   | 'use'
-  /** Im Lager: zwischen Ausrüstung und Truhe wechseln. */
+  /** Im Lager: zwischen Ausrüstung, Truhe und Händler wechseln. */
   | 'switch'
   | 'choice1'
   | 'choice2'
@@ -58,7 +56,8 @@ const ACTION_KEYS: Readonly<Record<string, Action>> = {
   ArrowUp: 'up',
   KeyS: 'down',
   ArrowDown: 'down',
-  KeyU: 'upgrade',
+  // U war die Taste der Steigerungen; wer sie gewohnt ist, landet nun im Lager (beim Händler gibt man das Gold aus).
+  KeyU: 'lager',
   KeyL: 'lager',
   KeyE: 'use',
   Tab: 'switch',

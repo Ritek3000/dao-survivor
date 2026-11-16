@@ -24,17 +24,17 @@
 import { CONFIG } from '../config';
 import { createRandom } from '../core/random';
 import type { Ausruestung } from '../game/ausruestung';
+import type { Boerse } from '../game/boerse';
 import { rollChestRarities, rollRarity, type Beute, type LootSource } from '../game/beute';
 import { CLASSES } from '../game/classes';
 import type { Chest } from '../game/drops';
 import type { Game } from '../game/game';
 import { rollStock } from '../game/haendler';
 import { isPossible, ITEM_SLOTS, rollItem, type Item, type ItemSlot, type Rarity } from '../game/items';
-import type { Steigerungen } from '../game/steigerung';
 
 interface Internals {
   ausruestung: Ausruestung;
-  steigerungen: Steigerungen;
+  boerse: Boerse;
   beute: Beute;
   chest: Chest;
   phase: string;
@@ -94,9 +94,9 @@ export function installItemTools(game: Game): void {
     },
     /** Schreibt der Geldbörse Gold gut und gibt, was darin liegt, zurück. */
     gold(amount = 1000): number {
-      internals.steigerungen.credit(amount);
+      internals.boerse.credit(amount);
       internals.ausruestung.reload();
-      return internals.steigerungen.gold;
+      return internals.boerse.gold;
     },
     haendler(): { stocked: boolean; stock: (Item | null)[]; buyback: Item[]; rerolls: number; nextReroll: number } {
       const { stocked, stock, buyback, rerolls } = internals.ausruestung.haendler();

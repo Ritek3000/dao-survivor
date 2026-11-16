@@ -1,22 +1,24 @@
 /**
- * Der Spielstand, der den Neustart überdauern soll: das Gold, die Ränge der Steigerungen, die Gegenstände jeder Klasse, die Truhe
- * und der Stand des Händlers.
+ * Der Spielstand, der den Neustart überdauern soll: das Gold, die Gegenstände jeder Klasse, die Truhe und der Stand des Händlers.
  *
  * Wo er liegt, versteckt `TextStore` (siehe `storage.ts`): im Browser in `localStorage`, in einer Desktop-Hülle
  * später etwa in einer Datei; dafür gibt es `useSavegameStore`. Gespeichert wird als JSON mit Versionsnummer.
  *
  * Neue Fassungen des Formats heben ältere Stände in `parseSavegame` an, Schritt für Schritt von der alten zur nächsten
- * Nummer; so geht beim Umbau von Steigerungen kein Gold verloren. Dieser Teil kennt keine Klassen und Steigerungen
- * und behält darum auch Einträge, die das Spiel gerade nicht kennt (etwa nach einem Rückschritt auf eine ältere Fassung):
- * Sie werden nicht angezeigt, aber auch nicht gelöscht.
+ * Nummer; so geht beim Umbau nichts verloren (die entfallenen Ränge der Steigerungen kommen als Gold zurück, siehe `von5auf6`).
+ * Dieser Teil kennt keine Klassen und behält darum auch Einträge, die das Spiel gerade nicht kennt (etwa nach einem Rückschritt
+ * auf eine ältere Fassung): Sie werden nicht angezeigt, aber auch nicht gelöscht.
+ *
+ * Bevor ein älterer Stand gehoben wird, legt `loadSavegame` seinen Text unverändert in einer Sicherung ab; so lässt sich nach
+ * einem Umbau, der Daten verwirft, der alte Stand zurückholen.
  */
 
 import { browserTextStore, type TextStore } from './storage';
 
 /** Die Fassung des Formats, die dieser Code schreibt. */
-export const SAVEGAME_VERSION = 5;
+export const SAVEGAME_VERSION = 6;
 
-/** Obergrenze für einen Rang beim Lesen; schützt vor Unsinn in einer von Hand bearbeiteten Datei. */
+/** Obergrenze für einen Rang der entfallenen Steigerungen beim Lesen; schützt vor Unsinn in einer von Hand bearbeiteten Datei. */
 const MAX_STORED_RANK = 99;
 /** Obergrenze für die Plätze, die je Klasse gelesen werden; das Spiel selbst kennt weniger (`CONFIG.items.inventorySize`). */
 const MAX_STORED_SLOTS = 200;
@@ -68,25 +70,32 @@ export interface Savegame {
   version: number;
   /** Gold in der Geldbörse; sie gehört allen Klassen gemeinsam. */
   gold: number;
-  /** Rang jeder Steigerung je Klasse: `ranks[klasse][steigerung]`. */
-  ranks: Record<string, Record<string, number>>;
   /** Seit Fassung 2: die Gegenstände. */
   items: StoredItems;
+  /**
+   * Seit Fassung 6: Das Gold, das die Umstellung für die entfallenen Steigerungen erstattet hat (schon im `gold` enthalten).
+   * Das Spiel zeigt es einmal an und setzt es dann auf 0.
+   */
+  refund: number;
 }
 
 export type SavegameStore = TextStore;
 
 const KEY = 'dao-survivor.spielstand';
+/** Unter diesem Schlüssel liegt die Sicherung des Stands von vor der letzten Hebung (siehe `loadSavegame`). */
+export const BACKUP_KEY = `${KEY}.sicherung`;
 
 let store: SavegameStore = browserTextStore(KEY);
+let backup: SavegameStore | null = browserTextStore(BACKUP_KEY);
 
-/** Ersetzt den Speicher, etwa durch eine Datei in einer Desktop-Hülle. */
-export function useSavegameStore(next: SavegameStore): void {
+/** Ersetzt den Speicher, etwa durch eine Datei in einer Desktop-Hülle; ohne `next`-Sicherung gibt es keine. */
+export function useSavegameStore(next: SavegameStore, nextBackup: SavegameStore | null = null): void {
   store = next;
+  backup = nextBackup;
 }
 
 export function emptySavegame(): Savegame {
-  return { version: SAVEGAME_VERSION, gold: 0, ranks: {}, items: emptyItems() };
+  return { version: SAVEGAME_VERSION, gold: 0, items: emptyItems(), refund: 0 };
 }
 
 function emptyItems(): StoredItems {
@@ -124,23 +133,14 @@ export function parseSavegame(text: string | null): Savegame {
   if (version < 3) raw = von2auf3(raw);
   if (version < 4) raw = von3auf4(raw);
   if (version < 5) raw = von4auf5(raw);
+  if (version < 6) raw = von5auf6(raw);
 
   if (typeof raw.version === 'number' && Number.isFinite(raw.version)) {
     // Ein Stand aus einer neueren Fassung wird so gut gelesen wie möglich, seine Nummer aber nicht zurückgesetzt.
     save.version = Math.max(SAVEGAME_VERSION, Math.floor(raw.version));
   }
   save.gold = wholeNumber(raw.gold, Number.MAX_SAFE_INTEGER);
-  if (isRecord(raw.ranks)) {
-    for (const [classId, perClass] of Object.entries(raw.ranks)) {
-      if (!isRecord(perClass)) continue;
-      const ranks: Record<string, number> = {};
-      for (const [id, rank] of Object.entries(perClass)) {
-        const whole = wholeNumber(rank, MAX_STORED_RANK);
-        if (whole > 0) ranks[id] = whole;
-      }
-      save.ranks[classId] = ranks;
-    }
-  }
+  save.refund = wholeNumber(raw.refund, Number.MAX_SAFE_INTEGER);
   save.items = parseItems(raw.items);
   return save;
 }
@@ -166,6 +166,54 @@ function von3auf4(raw: Record<string, unknown>): Record<string, unknown> {
 function von4auf5(raw: Record<string, unknown>): Record<string, unknown> {
   const items = isRecord(raw.items) ? raw.items : emptyItems();
   return { ...raw, version: 5, items: { ...items, shop: emptyShop() } };
+}
+
+/**
+ * So viel kostete der erste Rang jeder Steigerung, die es bis Fassung 5 gab, und so viele Ränge hatte sie. Die Steigerungen sind
+ * entfallen (Gegenstände ersetzen sie); die Zahlen bleiben hier, damit `von5auf6` das ausgegebene Gold erstatten kann. Es sind
+ * eingefrorene Werte der alten Fassung, keine Stellschrauben.
+ */
+const RETIRED_UPGRADES: Readonly<Record<string, { cost: number; max: number }>> = {
+  'offene-hand': { cost: 35, max: 6 },
+  lehrjahre: { cost: 40, max: 10 },
+  kaufmannsblick: { cost: 60, max: 10 },
+  waffenuebung: { cost: 40, max: 10 },
+  'flinke-hand': { cost: 45, max: 8 },
+  ausdauer: { cost: 45, max: 6 },
+  'sicherer-griff': { cost: 50, max: 8 },
+  weitblick: { cost: 40, max: 6 },
+  abhaertung: { cost: 35, max: 10 },
+  ruestungspflege: { cost: 90, max: 3 },
+  staubfestigkeit: { cost: 50, max: 6 },
+  'heller-schein': { cost: 60, max: 5 },
+};
+/** Jeder weitere Rang einer Steigerung kostete so viel mal mehr als der vorige (bis Fassung 5). */
+const RETIRED_GROWTH = 1.2;
+
+/** Was die Ränge einer Klasse gekostet haben: jeder Rang auf Fünfer gerundet, wie es das Menü der Steigerungen verlangte. */
+function spentOnRanks(ranks: unknown): number {
+  if (!isRecord(ranks)) return 0;
+  let spent = 0;
+  for (const [id, value] of Object.entries(ranks)) {
+    const upgrade = RETIRED_UPGRADES[id];
+    if (!upgrade) continue;
+    const rank = Math.min(upgrade.max, wholeNumber(value, MAX_STORED_RANK));
+    for (let step = 0; step < rank; step++) spent += Math.max(5, Math.round((upgrade.cost * RETIRED_GROWTH ** step) / 5) * 5);
+  }
+  return spent;
+}
+
+/**
+ * Fassung 5 kannte die Steigerungen, Fassung 6 nicht mehr: Alles Gold, das in Ränge geflossen ist, kommt zurück in die Börse
+ * (und wird als `refund` gemerkt, damit das Spiel es einmal erklärt). Ränge, die diese Fassung nicht kennt, bleiben ohne Erstattung.
+ */
+function von5auf6(raw: Record<string, unknown>): Record<string, unknown> {
+  let refund = 0;
+  if (isRecord(raw.ranks)) {
+    for (const perClass of Object.values(raw.ranks)) refund += spentOnRanks(perClass);
+  }
+  const { ranks: _ranks, ...rest } = raw;
+  return { ...rest, version: 6, gold: wholeNumber(raw.gold, Number.MAX_SAFE_INTEGER) + refund, refund };
 }
 
 function parseShop(raw: unknown): StoredShop {
@@ -210,9 +258,28 @@ function parseItems(raw: unknown): StoredItems {
   return items;
 }
 
-/** Liest den gespeicherten Stand; ohne oder mit unbrauchbarem Stand ein leerer. */
+/** Die Fassung eines gespeicherten Textes; `null`, wenn er sich nicht lesen lässt. */
+function storedVersion(text: string): number | null {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!isRecord(parsed)) return null;
+    return typeof parsed.version === 'number' && Number.isFinite(parsed.version) ? parsed.version : 1;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Liest den gespeicherten Stand; ohne oder mit unbrauchbarem Stand ein leerer. Ist der Stand von einer älteren Fassung, wird sein
+ * Text vorher unverändert gesichert (`BACKUP_KEY`), denn das Heben verwirft Daten, die es nicht mehr gibt.
+ */
 export function loadSavegame(): Savegame {
-  return parseSavegame(store.read());
+  const text = store.read();
+  if (text !== null && backup) {
+    const version = storedVersion(text);
+    if (version !== null && version < SAVEGAME_VERSION && backup.read() !== text) backup.write(text);
+  }
+  return parseSavegame(text);
 }
 
 export function writeSavegame(save: Savegame): void {
