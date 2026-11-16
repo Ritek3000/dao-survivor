@@ -40,7 +40,12 @@ Es gibt keine automatischen Tests und keinen Linter. **Bevor ein Pull Request au
 - Die Welt entsteht deterministisch aus einem Seed (`createRandom` in `src/core/random.ts`). Wer die Welt, die Kulisse
   oder das Spawnen ändert, nimmt diesen Zufall und nicht `Math.random`. `Math.random` ist nur für rein Optisches erlaubt.
 - Im Kampf entstehen keine neuen Objekte: Teilchen, Gegner und Geschosse liegen in Pools bzw. Instanznetzen. Neue Effekte
-  folgen diesem Muster, damit die Horde flüssig bleibt.
+  folgen diesem Muster, damit die Horde flüssig bleibt. Das gilt auch für den Unterbau der Fertigkeiten: Zustände der Gegner
+  (`status.ts`), Bodenfelder (`fields.ts`) und zeitweilige Werte der Figur (`buffs.ts`) haben feste Plätze.
+- Fertigkeiten bauen auf diesem Unterbau auf, statt eigene Zustände oder Zähler zu führen: Zustände bringt `applyStatus` an, Schaden
+  läuft über `Enemies.damage` mit einem Urheber (`sourceOf(id)` aus `events.ts`), zeitweilige Werte über `Progression.addBuff`, Orte mit
+  Dauer sind ein `FieldDef`, Rangunterschiede stehen in `WeaponDef.ranks`. Was `Progression.stats` liefert, wird nie von Hand
+  geändert, sondern über `base` (dauerhaft) oder `buffs` (zeitweilig); `__skills` in der Konsole probiert sie aus.
 - Ton und Musik sind Dateien in `public/audio/`, die `public/audio/audio.json` den Ereignissen zuordnet. Im Code stehen keine
   Dateinamen, sondern Ereignisse: `audio.play('treffer.stahl', x, z)` (`src/audio/`; neue Namen kommen in `src/audio/ids.ts`).
   So lässt sich jeder Klang ohne Codeänderung austauschen. Mischregeln (Reichweite, Dämpfung in der Finsternis) stehen in

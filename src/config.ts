@@ -352,6 +352,8 @@ export const CONFIG = {
     sog: { trigger: 7, radius: 8.5, damage: 18, windup: 1.6, cooldown: 11 },
     /** Das Verschlingen: Unter diesem Anteil seines Lebens hüllt er sich zeitweise in Finsternis. */
     verschlingen: { belowHp: 0.5, radius: 10, seconds: 8, cooldown: 22 },
+    /** Auf diesen Anteil seines Tempos lässt er sich höchstens bremsen, wie stark die Verlangsamung auch ist. Festhalten lässt er sich nicht. */
+    slowFloor: 0.7,
   },
   /**
    * Gold: Münzen aus Gegnern, Sold für die überlebte Zeit und die Siegprämie. Es bezahlt zwischen den Nächten beim Händler
@@ -527,6 +529,30 @@ export const CONFIG = {
     },
     /** Farbe je Seltenheit für Stein und Strahl (wie in style.css die Rahmen der Gegenstände). */
     colors: { normal: 0xb9b3a5, selten: 0x6fa8e8, rar: 0xe6c04a, legendaer: 0xff8a3d },
+  },
+  /**
+   * Der Unterbau der Fertigkeiten (game/status.ts, fields.ts, buffs.ts, events.ts): Zustände der Gegner, Bodenfelder und zeitweilige
+   * Werte der Figur. Die Fertigkeiten der Klassen füllen ihn mit Zahlen; hier stehen nur die Grundwerte, die jeder Zustand ohne Angabe hat.
+   */
+  skills: {
+    status: {
+      /** Verlangsamung ohne eigene Angabe: So viel vom Tempo fällt weg (0,5 = halbes Tempo). */
+      slowPower: 0.5,
+      /** Nachteil ohne eigene Angabe: Faktor auf den Schaden, den der Gegner erleidet. */
+      weakFactor: 1.3,
+      /** Blendung: So viel von ihrem Schaden richten Geblendete nicht an. */
+      blindPower: 0.5,
+      /** Schwäche ohne eigene Angabe: So viel von Schaden und Angriffstempo fällt weg. */
+      feeblePower: 0.3,
+      /** Schaden je Sekunde ohne eigene Angabe für Blutung und Brennen. */
+      dotPower: 4,
+      /** Markierung ohne eigene Angabe: So viel Kritchance kommt gegen Markierte dazu (1 = jeder Treffer kritisch). */
+      markPower: 0.25,
+    },
+    /** So viele Bodenfelder liegen höchstens zugleich da; ein weiteres ersetzt das älteste. */
+    maxFields: 24,
+    /** So viele zeitweilige Werte der Figur gibt es höchstens zugleich. */
+    maxBuffs: 16,
   },
   xp: {
     /** Bedarf für die nächste Stufe: base + linear * Stufe + quadratic * Stufe². */

@@ -3,8 +3,10 @@ import { CONFIG, type EnemyStrike, type EnemyType } from '../config';
 import { createRandom, type Random } from '../core/random';
 import { SpatialGrid } from '../core/spatialGrid';
 import { swallowedByFinsternis } from './darkness';
+import type { CombatEvents, Source } from './events';
 import type { HordeClip, HordeModel } from './models';
 import type { Player } from './player';
+import { DOT_KINDS, attackRate, clearStatuses, createStatusSet, dealtFactor, dotAmount, slowFactor, tickStatuses, type StatusSet } from './status';
 import { animatedByTexture, shadowByTexture } from './vat';
 import type { World } from './world';
 
@@ -20,12 +22,10 @@ export interface Enemy {
   flash: number;
   heading: number;
   age: number;
-  /** Restsekunden, in denen er sich nicht rührt: umgeworfen oder verwurzelt. */
-  hold: number;
-  /** Restsekunden mit halbem Tempo. */
-  slow: number;
-  /** Restsekunden, in denen er mehr Schaden erleidet. */
-  weak: number;
+  /** Seine Zustände: festgehalten, verlangsamt, im Nachteil, blutend und mehr (siehe `status.ts`). */
+  status: StatusSet;
+  /** Wer ihm zuletzt Schaden zugefügt hat; er ist der Urheber seines Todes (`CombatEvents.kill`). */
+  lastSource: Source | null;
   /** Wo er in der Schleife ist: 0 bis 1 über einen Durchlauf. Beim Gehen folgt sie der Strecke, beim Schweben der Zeit. */
   stride: number;
   /** Nach dem Tod: 0 bis 1, während er zu Staub zerfällt. */
@@ -107,7 +107,7 @@ export class Enemies {
   /** Der Gegner, für den gerade Nachbarn abgefragt werden. */
   private current: Enemy | null = null;
 
-  constructor() {
+  constructor(private readonly events: CombatEvents) {
     // Platzhalter-Kapseln, solange (oder falls) kein GLB-Modell geladen ist.
     const geometry = new THREE.CapsuleGeometry(0.4, 0.9, 6, 12);
     geometry.translate(0, 0.85, 0);
@@ -184,6 +184,7 @@ export class Enemies {
     for (let i = this.alive.length - 1; i >= 0; i--) {
       const enemy = this.alive[i];
       if (!enemy || enemy.hp > 0) continue;
+      this.events.kill(enemy, enemy.lastSource);
       hooks.death(enemy);
       this.kills++;
       const last = this.alive.pop();
@@ -212,11 +213,20 @@ export class Enemies {
     for (const enemy of this.alive) {
       enemy.age += dt;
       enemy.flash = Math.max(0, enemy.flash - dt * 6);
-      const held = enemy.hold > 0;
-      const speed = enemy.type.speed * (enemy.slow > 0 ? 0.5 : 1);
-      enemy.hold = Math.max(0, enemy.hold - dt);
-      enemy.slow = Math.max(0, enemy.slow - dt);
-      enemy.weak = Math.max(0, enemy.weak - dt);
+      // Was gilt, steht vor dem Abziehen der Zeit fest: Ein Zustand wirkt noch in dem Bild, in dem er abläuft.
+      const status = enemy.status;
+      const held = status.hold.time > 0;
+      const afraid = status.fear.time > 0;
+      const speed = enemy.type.speed * slowFactor(status);
+      const rate = attackRate(status);
+      const silenced = status.silence.time > 0;
+      if (status.live > 0) {
+        for (const kind of DOT_KINDS) {
+          const amount = dotAmount(status, kind, dt);
+          if (amount > 0) this.damage(enemy, amount, 0, 0, status[kind].source, true);
+        }
+        tickStatuses(status, dt);
+      }
       if (enemy.mantle > 0) this.carriers.push(enemy);
 
       enemy.x += enemy.pushX * dt;
@@ -239,9 +249,9 @@ export class Enemies {
           enemy.casting = Math.max(0, enemy.casting - dt);
           walking = false;
         } else {
-          enemy.castIn -= dt;
+          enemy.castIn -= dt * rate;
           if (distance < cast.keep) walking = false;
-          if (!held && enemy.castIn <= 0 && distance < cast.range) {
+          if (!held && !afraid && !silenced && enemy.castIn <= 0 && distance < cast.range) {
             enemy.casting = cast.windup;
             enemy.castIn = cast.cooldown * (0.85 + 0.3 * this.random());
             hooks.cast(enemy, playerX, playerZ);
@@ -268,8 +278,8 @@ export class Enemies {
             if (enemy.striking === 0) enemy.strikeIn = strike.cooldown;
           }
         } else {
-          enemy.strikeIn -= dt;
-          if (!held && enemy.strikeIn <= 0 && distance < strike.reach) {
+          enemy.strikeIn -= dt * rate;
+          if (!held && !afraid && enemy.strikeIn <= 0 && distance < strike.reach) {
             enemy.striking = strikeClip.seconds;
             // Die Fläche gilt ab jetzt: Er blickt dorthin, wo die Spielfigur steht, und dreht sich im Hieb nicht mehr nach.
             enemy.heading = Math.atan2(dx, dz);
@@ -278,10 +288,12 @@ export class Enemies {
           }
         }
       }
-      if (distance > 1e-4 && enemy.striking <= 0) enemy.heading = Math.atan2(dx, dz);
+      // Wer sich fürchtet, läuft von der Figur weg und blickt dabei fort von ihr.
+      const toward = afraid ? -1 : 1;
+      if (distance > 1e-4 && enemy.striking <= 0) enemy.heading = Math.atan2(dx * toward, dz * toward);
       const hovers = enemy.type.model.hover !== undefined;
       if (distance > 1e-4 && walking) {
-        const step = (speed * dt) / distance;
+        const step = (speed * dt * toward) / distance;
         enemy.x += dx * step;
         enemy.z += dz * step;
         // Die Beine laufen so schnell, wie er vorankommt; wer festgehalten wird, erstarrt im Schritt.
@@ -301,7 +313,7 @@ export class Enemies {
       const reach = enemy.type.radius + CONFIG.player.radius;
       if (distance < reach) {
         // Wer zuschlagen kann, verletzt nicht durch Berührung; der Hieb ist sein Angriff.
-        if (!held && !(strike && strikeClip)) player.hurt(enemy.type.damage);
+        if (!held && !afraid && !(strike && strikeClip)) player.hurt(enemy.type.damage * dealtFactor(status), false, false, enemy);
         if (distance > 1e-4) {
           const push = (reach - distance) / distance;
           enemy.x += dx * push;
@@ -321,15 +333,25 @@ export class Enemies {
     const off = Math.abs(Math.atan2(Math.sin(toPlayer - enemy.heading), Math.cos(toPlayer - enemy.heading)));
     // Die Fläche ist nach vorn angekündigt; der halbe Radius der Spielfigur ist Nachsicht, wie beim Hieb des Verschlingers.
     if (Math.hypot(dx, dz) <= strike.reach + CONFIG.player.radius * 0.5 && off <= strike.arc / 2) {
-      player.hurt(enemy.type.damage, false, true);
+      player.hurt(enemy.type.damage * dealtFactor(enemy.status), false, true, enemy);
     }
   }
 
-  damage(enemy: Enemy, amount: number, pushX: number, pushZ: number): void {
+  /**
+   * Fügt einem Gegner Schaden zu. `source` ist der Urheber (siehe `events.ts`); er bleibt am Gegner haften, bis der nächste Schaden
+   * kommt, und gilt als Urheber seines Todes. `dot`: Schaden über Zeit (Blutung, Brennen); er lässt weder aufleuchten noch zurückstoßen.
+   */
+  damage(enemy: Enemy, amount: number, pushX: number, pushZ: number, source: Source | null = null, dot = false): void {
     enemy.hp -= amount;
-    enemy.flash = 1;
-    enemy.pushX += pushX;
-    enemy.pushZ += pushZ;
+    if (!dot) {
+      enemy.flash = 1;
+      enemy.pushX += pushX;
+      enemy.pushZ += pushZ;
+    }
+    if (amount > 0) {
+      enemy.lastSource = source;
+      this.events.hit(enemy, amount, source, dot);
+    }
   }
 
   /** Besucht Gegner in der Nähe eines Kreises; der Aufrufer prüft den genauen Abstand selbst. */
@@ -389,9 +411,8 @@ export class Enemies {
       flash: 0,
       heading: 0,
       age: 0,
-      hold: 0,
-      slow: 0,
-      weak: 0,
+      status: createStatusSet(),
+      lastSource: null,
       stride: 0,
       fade: 0,
       castIn: 0,
@@ -407,9 +428,8 @@ export class Enemies {
     enemy.pushZ = 0;
     enemy.flash = 0;
     enemy.age = 0;
-    enemy.hold = 0;
-    enemy.slow = 0;
-    enemy.weak = 0;
+    clearStatuses(enemy.status);
+    enemy.lastSource = null;
     // Jeder beginnt irgendwo im Schritt, sonst marschiert die Horde im Gleichtakt.
     enemy.stride = this.random();
     enemy.fade = 0;
@@ -534,13 +554,13 @@ export class Enemies {
       pose.scale.setScalar(grow);
       horde.anim.setXY(index, this.frameOf(enemy, horde), enemy.fade);
       tint.copy(WHITE);
-      if (enemy.hold > 0) tint.lerp(HELD, 0.55);
+      if (enemy.status.hold.time > 0) tint.lerp(HELD, 0.55);
       if (enemy.casting > 0) tint.lerp(CASTING, 0.6).multiplyScalar(1.6);
       tint.multiplyScalar(1 + FLASH_GAIN * enemy.flash);
     } else {
       pose.scale.setScalar(enemy.type.scale * grow * (1 - enemy.fade));
       tint.set(enemy.type.color);
-      if (enemy.hold > 0) tint.lerp(HELD, 0.55);
+      if (enemy.status.hold.time > 0) tint.lerp(HELD, 0.55);
       if (enemy.casting > 0) tint.lerp(CASTING, 0.7);
       tint.lerp(WHITE, enemy.flash);
     }

@@ -17,6 +17,7 @@ import { extendShader, swallowedByFinsternis } from './darkness';
 import type { Enemies, Enemy } from './enemies';
 import type { BossModel } from './models';
 import type { Player } from './player';
+import { clearStatus, slowFactor } from './status';
 import type { Threats } from './threats';
 import type { World } from './world';
 
@@ -155,8 +156,8 @@ export class Boss {
     if (this.mode === 'dying') this.updateDying(dt);
     const enemy = this.enemy;
     if (enemy) {
-      // Ihn hält nichts fest; verlangsamen lässt er sich.
-      enemy.hold = 0;
+      // Ihn hält nichts fest; verlangsamen lässt er sich, aber nur bis `CONFIG.boss.slowFloor`.
+      clearStatus(enemy.status, 'hold');
       this.hookIn -= dt;
       this.chargeIn -= dt;
       this.sogIn -= dt;
@@ -285,7 +286,7 @@ export class Boss {
         // Er geht dorthin, wohin er blickt; steht die Spielfigur seitlich, dreht er sich erst.
         const facing = Math.cos(wrap(toPlayer - this.heading));
         const touching = TYPE.radius + CONFIG.player.radius + 0.3;
-        const speed = TYPE.speed * (enemy.slow > 0 ? 0.7 : 1) * Math.max(0, facing);
+        const speed = TYPE.speed * slowFactor(enemy.status, BOSS.slowFloor) * Math.max(0, facing);
         if (distance > touching && speed > 0.3) {
           enemy.x += Math.sin(this.heading) * speed * dt;
           enemy.z += Math.cos(this.heading) * speed * dt;
@@ -325,7 +326,7 @@ export class Boss {
         this.chargeLeft -= step;
         if (!this.chargeHit && distance < TYPE.radius + CONFIG.player.radius + 0.4) {
           this.chargeHit = true;
-          player.hurt(damage, false, true);
+          player.hurt(damage, false, true, enemy);
         }
         if (this.chargeLeft > 0 && Math.hypot(enemy.x, enemy.z) < CONFIG.world.radius - 2) break;
         threats.thud(enemy.x, enemy.z, 2.6);
@@ -367,7 +368,7 @@ export class Boss {
   private strike(enemy: Enemy, player: Player, distance: number, toPlayer: number, threats: Threats): void {
     const { reach, arc, damage } = BOSS.hook;
     const off = Math.abs(wrap(toPlayer - this.heading));
-    if (distance <= reach + CONFIG.player.radius * 0.5 && off <= arc / 2) player.hurt(damage, false, true);
+    if (distance <= reach + CONFIG.player.radius * 0.5 && off <= arc / 2) player.hurt(damage, false, true, enemy);
     audio.play('boss.hieb', enemy.x, enemy.z);
     threats.thud(enemy.x + Math.sin(this.heading) * reach * 0.6, enemy.z + Math.cos(this.heading) * reach * 0.6, 1.8);
   }

@@ -19,6 +19,8 @@ import { finsternisUniforms } from './darkness';
 import { Chest, Drops } from './drops';
 import { Dust } from './dust';
 import { Enemies, type EnemyHooks } from './enemies';
+import { CombatEvents } from './events';
+import { Fields } from './fields';
 import { itemName, RARITIES, RARITY_LABELS, slotLabel, type Item, type Rarity } from './items';
 import { Lager } from './lager';
 import { loadModels, type Models } from './models';
@@ -68,7 +70,9 @@ export class Game {
   private readonly progression = new Progression();
   private readonly world = new World();
   private readonly zones: Zones;
-  private readonly enemies = new Enemies();
+  /** Meldet Treffer, Tode und Verletzte mit Urheber; die Fertigkeiten hören zu (siehe `events.ts`). */
+  private readonly events = new CombatEvents();
+  private readonly enemies = new Enemies(this.events);
   private readonly pickups = new Pickups();
   private readonly coins = new Coins();
   /** Geldbörse und Ränge der Klassen; bleiben über die Nächte hinweg bestehen und werden gespeichert. */
@@ -86,6 +90,8 @@ export class Game {
   /** Sind die Knöpfe und die Taste zum Lager freigeschaltet? */
   private lagerEnabled = false;
   private readonly arsenal: Arsenal;
+  /** Bodenfelder der Fertigkeiten (siehe `fields.ts`). */
+  private readonly fields: Fields;
   private readonly threats = new Threats();
   private readonly boss = new Boss();
   private readonly dust = new Dust();
@@ -143,9 +149,10 @@ export class Game {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.shadowMap.enabled = CONFIG.torch.shadows;
 
-    this.player = new Player(this.progression.stats);
+    this.player = new Player(this.progression.stats, this.events);
     this.zones = new Zones(this.world.islandSites);
     this.arsenal = new Arsenal(this.progression.stats, this.random, this.enemies, this.zones, this.player);
+    this.fields = new Fields(this.enemies, this.player, this.progression);
 
     this.scene.background = this.background;
     // Blendet den fernen Boden in den Hintergrund aus, damit keine Kante sichtbar wird.
@@ -267,6 +274,7 @@ export class Game {
 
     const stats = this.progression.stats;
 
+    this.progression.update(dt);
     this.player.update(dt, this.time, this.input.getMove(this.move), this.world);
     this.syncLight();
     this.zones.update(dt, this.time, position, this.enemies.carriers);
@@ -278,6 +286,7 @@ export class Game {
     this.enemies.update(dt, this.time, this.player, this.world, this.hooks);
     this.callHorde(dt);
     this.boss.update(dt, this.time, this.player, this.enemies, this.threats, this.world, this.random);
+    this.fields.update(dt);
     this.threats.update(dt, this.player, this.zones);
     this.reportBoss();
     if (this.segenIn > 0) {
@@ -643,6 +652,9 @@ export class Game {
     this.player.setClass(playerClass, this.models?.heroes.get(playerClass.id) ?? null);
     this.player.reset();
     this.dust.setLightColor(playerClass.lightColor);
+    this.events.clear();
+    this.fields.reset();
+    this.events.add(this.fields);
     this.enemies.reset();
     this.pickups.reset();
     this.coins.reset();

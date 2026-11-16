@@ -85,7 +85,7 @@ src/
   audio/              Ton und Musik: Engine, Ereignisnamen, Lesen von audio.json
   game/               Spiellogik und Darstellung (siehe unten)
   ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Anleitung, Rückfragen; lagerView.ts: Lager (Ausrüstung, Truhe und Händler)
-  tools/              Entwicklungswerkzeuge: Messlauf und Modell-Prüfer
+  tools/              Entwicklungswerkzeuge: Messlauf, Gegenstände (`__items`), Fertigkeiten-Unterbau (`__skills`) und Modell-Prüfer
 tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten, Gegenstandsbilder freistellen)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
 ```
@@ -96,7 +96,8 @@ Wichtige Teile von `src/game/`:
 | ------------------------------ | ----------------------------------------------------------------------- |
 | `game.ts`                      | Hauptschleife und Phasen (Laden, Startbildschirm, Klassenwahl, Spiel, Pause, Ende) |
 | `classes.ts`, `gear.ts`        | Die drei Klassen mit Werten, Modell und Ausrüstung; die Ausrüstung in den Händen (Axt, Bogen, Buch, Schild des Kämpfers) |
-| `weapons.ts`, `arsenal.ts`     | Alle Angriffe als Daten und ihre Ausführung                             |
+| `weapons.ts`, `arsenal.ts`     | Alle Angriffe als Daten (mit Rangregeln) und ihre Ausführung            |
+| `status.ts`, `events.ts`, `fields.ts`, `buffs.ts` | Unterbau der Fertigkeiten: Zustände der Gegner, Ereignisse mit Urheber, Bodenfelder, zeitweilige Werte (siehe [Fertigkeiten](#fertigkeiten-der-unterbau)) |
 | `effects.ts`, `strips.ts`, `particles.ts`, `props.ts` | Wie die Angriffe aussehen                        |
 | `enemies.ts`, `boss.ts`, `threats.ts` | Horde, Verschlinger und die Zauber der Gegner                    |
 | `progression.ts`               | Stufen, Stärkungen und die Segen der Höheren Mächte                     |
@@ -268,6 +269,35 @@ Name, unmögliche Eigenschaft), wird beim Lesen verworfen, Werte außerhalb des 
 und zählen. `__messlauf.start({ ausruestung: 'rar' })` belegt alle neun Plätze jeder Klasse mit rar gewürfelten Gegenständen
 (`'normal'`, `'selten'` oder `'rar'`); ohne Angabe ist nichts angelegt. Auch das schreibt nichts in den echten Spielstand.
 
+## Fertigkeiten: der Unterbau
+
+Die Fertigkeiten der Klassen kommen in eigenen Paketen (Kämpfer, Wildnisläufer, Magier). Dieses Paket legt nur die Bausteine, die sie gemeinsam brauchen; es hat **keine
+sichtbare Wirkung** im Spiel, außer dass festgehaltene Gegner wie bisher fahl dastehen. Die Angriffe von heute laufen schon über die neuen Bausteine und verhalten sich genau wie vorher
+(in einem festgelegten Lauf über zwölf Minuten Spielzeit stimmen Gegner, Erschlagene, Leben der Horde, Ort der Figur und Ränge der Angriffe bei allen drei Klassen mit dem Stand vor dem Umbau überein).
+
+- **Zustände der Gegner** (`status.ts`): festgehalten (`hold`), verlangsamt (`slow`), im Nachteil (`weak`), blutend (`bleed`), brennend (`burn`), markiert (`mark`), in Furcht (`fear`),
+  geblendet (`blind`), geschwächt (`feeble`) und ohne Zauber (`silence`). Jeder Gegner trägt einen festen Satz davon (Restzeit, Stärke, Urheber); es entsteht nie etwas Neues.
+  Wirkt ein Zustand schon, gilt die längere Dauer und die stärkere Stärke; ein schwächerer Wert verlängert einen stärkeren nicht. Die Stärke bedeutet je nach Zustand etwas anderes
+  (Kopf der Datei): bei `slow` der Anteil des Tempos, der wegfällt, bei `bleed` und `burn` der Schaden je Sekunde, bei `mark` die Kritchance, die gegen den Gegner dazukommt. Wer sich
+  fürchtet, läuft von der Figur weg und greift nicht an; wer geblendet oder geschwächt ist, richtet weniger Schaden an (Geschwächte laden zudem langsamer nach); wer verstummt ist, wirkt keinen Zauber
+  (der Priester). Standardstärken stehen in `CONFIG.skills.status`.
+- **Ereignisse mit Urheber** (`events.ts`): Jeder Treffer, Tod und jede Verletzung der Figur wird mit seinem Urheber gemeldet (`Source`, etwa die Kennung des Angriffs). Fertigkeiten, die
+  auf einen Treffer, einen Tod oder einen eingesteckten Schlag reagieren, hängen sich als `CombatListener` an. Schaden über Zeit (Blutung, Brennen, Felder) meldet sich getrennt (`dot`).
+- **Bodenfelder** (`fields.ts`): ein Ort, eine Form (Kreis oder Streifen), eine Dauer und eine Wirkung je Takt: Schaden und Zustände für Gegner, Leben und zeitweilige Werte für die Figur,
+  Zug zur Mitte, ein Haken beim Tod eines Gegners darin (`onKill`) und beim Ende (`onEnd`). Banner, Sporenwolke, Köderpuppe, Netz, Glutlinie, Erdring und Dornen-Aura sind später alle
+  ein solches Feld. Höchstens `CONFIG.skills.maxFields` liegen zugleich; ein neues ersetzt das älteste.
+- **Zeitweilige Werte** (`buffs.ts`): Tempo-Schübe, Vorteil im Nahkampf, weniger erlittener Schaden. Sie liegen als auslaufende Schicht über den dauerhaften Werten: `Progression.base` hält,
+  was Klasse, Gegenstände, Stärkungen und Segen ergeben, `Progression.stats` ist das Ergebnis, das alle anderen Teile lesen (dasselbe Objekt wie bisher). Derselbe Wert mit derselben Kennung
+  frischt Dauer und Stapel auf; gerechnet wird erst addiert, dann multipliziert, beides je Stapel (`CONFIG.skills.maxBuffs` Plätze). Neu ist der Wert `Stats.taken`, ein Faktor auf den erlittenen Schaden.
+- **Rangregeln als Daten** (`weapons.ts`, `WeaponDef.ranks`): Ein Angriff darf je Rang aufschreiben, was vom Einheitsrang abweicht (Schaden, Abklingzeit, Reichweite, Fläche, Winkel, Zahl der
+  Geschosse, Durchschlag, Rückstoß, Zustände, Schalter für Besonderheiten). Was ein Rang nennt, gilt auch für die folgenden; was nie genannt wird, folgt den alten Regeln (+25 % Schaden und
+  ×0,94 Abklingzeit je Rang). `resolveRank` liefert die fertige Zeile.
+- **Kleine Änderung im Boss:** Die Grenze, bis zu der sich der Verschlinger bremsen lässt (70 % Tempo), steht jetzt als `CONFIG.boss.slowFloor` in der Konfiguration; der Wert ist derselbe.
+
+**Ausprobieren.** Im Dev-Modus steht `__skills` in der Konsole (Beschreibung in `src/tools/skills.ts`), mitten in einer Nacht: `__skills.zustand('bleed', 4, 6)` bringt allen Gegnern im Umkreis einen Zustand an,
+`__skills.feld({ shape: 'circle', radius: 4, damage: 5, pull: 2 })` stellt ein Bodenfeld auf, `__skills.wert('speed', 'mul', 1.5, 6)` setzt einen zeitweiligen Wert, `__skills.hoeren()` und
+`__skills.ereignisse()` zählen Treffer, Tode und Verletzungen mit Urheber, `__skills.raenge('wirbelschlag')` zeigt die aufgelösten Ränge und `__skills.stand()` das, was gerade wirkt.
+
 ## Ton und Musik
 
 Alle Klänge liegen als einzelne Dateien in `public/audio/` (`sfx/` für Töne, `schleifen/` für Dauerklänge, `musik/` für Stücke).
@@ -343,6 +373,8 @@ Dateien mit gleichem Namen. Neu erzeugte OGG-Dateien nur einchecken, wenn sich d
 
 - **Messlauf** (`src/tools/messlauf.ts`): Im Dev-Modus steht `__messlauf` in der Browser-Konsole. Eine Automatik-Figur
   spielt Nächte im Zeitraffer und zeigt grobe Schieflagen im Gleichgewicht, auch beim Gold. Beispiele stehen im Kopf der Datei.
+- **Gegenstände und Fertigkeiten**: `__items` (`src/tools/items.ts`) füllt Ausrüstung, Truhe und Börse und würfelt Beute nach; `__skills` (`src/tools/skills.ts`) bringt Zustände, Bodenfelder und
+  zeitweilige Werte an und zählt Ereignisse mit Urheber (siehe [Fertigkeiten](#fertigkeiten-der-unterbau)).
 - **Ton**: Im Dev-Modus steht `__audio` in der Konsole. `__audio.played` zählt, wie oft jedes Ereignis erklang, `__audio.dropped`, wie viele
   Töne bei Andrang verworfen wurden. Der Messlauf schaltet den Ton für die Dauer des Laufs ab.
 - **Modell-Prüfer**: `http://localhost:5173/modell.html` zeigt eine GLB-Datei im Licht und aus der Kamera des Spiels

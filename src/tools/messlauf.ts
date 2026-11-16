@@ -43,7 +43,7 @@ interface Internals {
     hp: number;
     verstaubung: number;
     lastDamage: string;
-    hurt(amount: number, verstaubt?: boolean, announced?: boolean): void;
+    hurt(amount: number, verstaubt?: boolean, announced?: boolean, attacker?: Enemy | null): void;
   };
   enemies: { alive: Enemy[]; kills: number };
   threats: { sogs: { x: number; z: number; radius: number }[] };
@@ -287,9 +287,9 @@ async function playNight(game: Game, classIndex: number, random: Random, maxSeco
   };
   const player = g.player;
   const hurt = player.hurt;
-  player.hurt = function (amount, verstaubt, announced) {
+  player.hurt = function (amount, verstaubt, announced, attacker) {
     const before = this.hp;
-    hurt.call(this, amount, verstaubt, announced);
+    hurt.call(this, amount, verstaubt, announced, attacker);
     if (this.hp < before) {
       result.erlittenerSchaden += before - this.hp;
       result.treffer++;
