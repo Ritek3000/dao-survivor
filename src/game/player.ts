@@ -508,8 +508,9 @@ export class Player {
    * einem Dhargass-Zauber: Was er an Leben nimmt, verstaubt zugleich und kehrt erst im Licht zurück.
    * `announced`: ein Angriff, der sich angekündigt hat und dem man ausweichen konnte.
    * `attacker`: der Gegner, der trifft; er erfährt `CombatEvents.hurt` (null bei Dingen ohne Gegner).
+   * `ranged`: ein Fernangriff (der Schwarze Sog); dafür gilt zusätzlich `Stats.rangedTaken`.
    */
-  hurt(amount: number, verstaubt = false, announced = false, attacker: Enemy | null = null): void {
+  hurt(amount: number, verstaubt = false, announced = false, attacker: Enemy | null = null, ranged = false): void {
     // Die Schonfrist schützt vor dem Gedränge der Horde. Was sich am Boden angekündigt hat,
     // trifft trotzdem: Sonst machte ein Kratzer gegen den Schwarzen Sog unverwundbar.
     if ((this.invulnerable > 0 && !announced) || !this.alive) return;
@@ -521,7 +522,7 @@ export class Player {
       return;
     }
     // Rüstung kann einen Treffer nicht aufheben: Mindestens ein Viertel (und 1 Schaden) kommt immer durch.
-    const incoming = amount * this.takenFactor * this.stats.taken;
+    const incoming = amount * this.takenFactor * this.stats.taken * (ranged ? this.stats.rangedTaken : 1);
     const taken = Math.max(1, incoming * CONFIG.player.minDamageShare, incoming - this.stats.armor);
     this.hp -= taken;
     if (verstaubt) {

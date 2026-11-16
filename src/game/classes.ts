@@ -194,7 +194,7 @@ export const CLASSES: readonly ClassDef[] = [
       along: [-0.538, -0.068, 0.84],
       toward: [-0.225, 0.95, -0.216],
     },
-    weapons: ['bogenschuss', 'pfeilhagel', 'fangeisen', 'wurfmesser'],
+    weapons: ['bogenschuss', 'pfeilhagel', 'fangeisen', 'wurfmesser', 'sporenfalle', 'koederpuppe', 'netz'],
     swings: {
       bogenschuss: BOW_SHOT,
       pfeilhagel: { ...BOW_SHOT, windup: { clip: DRAW, from: 0.15, to: 1 }, lead: 0.42 },

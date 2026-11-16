@@ -817,6 +817,67 @@ def sfx_angriff_wurfmesser(rng):
     return fade_edges(out, 0.001, 0.08)
 
 
+def sfx_angriff_sporenfalle(rng):
+    # Ein weiches Plopp: die Sporenkapsel setzt auf und faucht kurz.
+    n = n_of(0.45)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    place(out, thump(180, 70, 0.14, 0.04), 0, 0.8)
+    hiss = sweep_filter(white(n, rng), 900 + 1800 * np.exp(-t / 0.12), 'band', q=0.8)
+    out += hiss * smooth(t, 0, 0.02) * np.exp(-t / 0.12) * 0.5
+    place(out, chime(520.0, 0.25, 0.06, ((1, 1), (1.5, 0.4)), rng), 0.01, 0.2)
+    return fade_edges(out, 0.001, 0.08)
+
+
+def sfx_einschlag_sporenfalle(rng):
+    # Die Kapsel platzt: dumpfer Puff, dann ein langes feuchtes Zischen der Sporen.
+    n = n_of(1.1)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    place(out, thump(150, 55, 0.22, 0.06), 0, 0.9)
+    place(out, noise_hit(rng, 300, 2500, 0.18, 0.05), 0, 0.9)
+    hiss = sweep_filter(white(n, rng), 2600 - 1700 * smooth(t, 0, 0.9), 'band', q=0.7)
+    out += hiss * smooth(t, 0, 0.04) * np.exp(-t / 0.45) * 0.55
+    out += crackle(rng, 1.1, 40, lo=800, hi=3500, strength=0.35) * np.exp(-t / 0.4)
+    return fade_edges(out, 0.001, 0.2)
+
+
+def sfx_angriff_koederpuppe(rng):
+    # Der Pfahl wird in den Boden gerammt, Lumpen und Talismane klappern.
+    n = n_of(0.7)
+    out = np.zeros(n)
+    place(out, thump(210, 80, 0.12, 0.03), 0, 0.9)
+    place(out, pluck(98.0, 0.3, rng, brightness=0.6, base_tau=0.05), 0, 0.5)
+    place(out, noise_hit(rng, 800, 4000, 0.06, 0.012), 0.02, 0.5)
+    for index in range(4):
+        place(out, chime(1800.0 + 420 * index + rng.uniform(-60, 60), 0.12, 0.025, ((1, 1), (2.9, 0.3)), rng),
+              0.12 + 0.06 * index, 0.18)
+    return fade_edges(out, 0.001, 0.12)
+
+
+def sfx_einschlag_koederpuppe(rng):
+    # Die Puppe geht in einem Knall auf: Druckstoss, splitterndes Holz.
+    n = n_of(0.9)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    place(out, thump(140, 45, 0.3, 0.08), 0, 1.0)
+    place(out, noise_hit(rng, 200, 5000, 0.12, 0.035), 0, 1.0)
+    out += crackle(rng, 0.9, 90, lo=1200, hi=7000, strength=0.6, pops=0.08) * np.exp(-t / 0.22)
+    return fade_edges(out, 0.001, 0.15)
+
+
+def sfx_angriff_netz(rng):
+    # Das Netz wird geworfen: ein weiches Schwirren, dann das Rascheln der Seile, die sich ausbreiten.
+    n = n_of(0.75)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    place(out, whoosh(rng, 0.45, 600, 2800, peak=0.5, tail=0.18, q=0.9), 0, 0.8)
+    rustle = bandpass(white(n, rng), 1800, 6500) * np.clip(np.sin(2 * np.pi * 17 * t), 0, 1)
+    out += rustle / (np.std(rustle) + 1e-9) * smooth(t, 0.2, 0.3) * np.exp(-(t - 0.2) / 0.25) * 0.12
+    place(out, thump(160, 80, 0.1, 0.03), 0.38, 0.4)
+    return fade_edges(out, 0.001, 0.12)
+
+
 def sfx_angriff_hitze_werfen(rng):
     n = n_of(0.7)
     t = np.arange(n) / SR
@@ -1468,6 +1529,11 @@ def build_catalogue():
     sfx('sfx/angriff-fangeisen', sfx_angriff_fangeisen, -23.0)
     sfx('sfx/einschlag-fangeisen', sfx_einschlag_fangeisen, -20.0)
     sfx('sfx/angriff-wurfmesser', sfx_angriff_wurfmesser)
+    sfx('sfx/angriff-sporenfalle', sfx_angriff_sporenfalle, -23.0)
+    sfx('sfx/einschlag-sporenfalle', sfx_einschlag_sporenfalle, -21.0)
+    sfx('sfx/angriff-koederpuppe', sfx_angriff_koederpuppe, -21.0)
+    sfx('sfx/einschlag-koederpuppe', sfx_einschlag_koederpuppe, -18.0)
+    sfx('sfx/angriff-netz', sfx_angriff_netz, -22.0)
     sfx('sfx/angriff-hitze-werfen', sfx_angriff_hitze_werfen)
     sfx('sfx/angriff-sorlanze', sfx_angriff_sorlanze, -19.0)
     sfx('sfx/angriff-glut-formen', sfx_angriff_glut_formen, -25.0)

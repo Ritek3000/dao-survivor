@@ -114,6 +114,62 @@ export function bannerGeometry(): THREE.BufferGeometry {
   return joined(parts);
 }
 
+/**
+ * Die Köderpuppe des Wildnisläufers: ein hohes Gestell aus Stangen und Knochen mit zerfetzten Umhängen und Staub-Talismanen, dazu
+ * ein Schädel obenauf. Rund drei Meter hoch; die Tücher hängen nach beiden Seiten.
+ */
+export function decoyGeometry(): THREE.BufferGeometry {
+  const BONE = 0xd8d0b8;
+  const CLOTH = 0x4a4137;
+  const parts = [
+    painted(new THREE.CylinderGeometry(0.05, 0.075, 3, 6).translate(0, 1.5, 0), DARK_WOOD),
+    painted(new THREE.BoxGeometry(1.5, 0.07, 0.07).translate(0, 2.35, 0), DARK_WOOD),
+    painted(new THREE.BoxGeometry(0.95, 0.06, 0.06).translate(0, 1.55, 0), DARK_WOOD),
+    painted(new THREE.CylinderGeometry(0.2, 0.26, 0.1, 7).translate(0, 0.05, 0), IRON),
+    // Der Schädel mit zwei dunklen Augenhöhlen.
+    painted(new THREE.SphereGeometry(0.17, 7, 6).scale(1, 1.1, 1.05).translate(0, 2.82, 0), BONE),
+    painted(new THREE.BoxGeometry(0.12, 0.09, 0.1).translate(0, 2.65, 0.03), BONE),
+    painted(new THREE.SphereGeometry(0.045, 5, 4).translate(-0.065, 2.84, 0.15), 0x1c1712),
+    painted(new THREE.SphereGeometry(0.045, 5, 4).translate(0.065, 2.84, 0.15), 0x1c1712),
+  ];
+  // Umhänge: schmale Bahnen verschiedener Länge unter den Querhölzern.
+  const rags: [number, number, number, number][] = [
+    [-0.62, 2.32, 1.0, 0.22],
+    [-0.3, 2.32, 0.7, 0.2],
+    [0.05, 2.32, 1.2, 0.24],
+    [0.38, 2.32, 0.8, 0.2],
+    [0.64, 2.32, 0.95, 0.22],
+    [-0.36, 1.52, 0.6, 0.18],
+    [0.0, 1.52, 0.75, 0.2],
+    [0.36, 1.52, 0.55, 0.18],
+  ];
+  for (const [x, y, length, width] of rags) {
+    parts.push(painted(new THREE.BoxGeometry(width, length, 0.02).translate(x, y - length / 2, 0.01), CLOTH));
+  }
+  // Knochen und Talismane baumeln an kurzen Schnüren.
+  for (const x of [-0.5, 0.2, 0.55]) {
+    parts.push(painted(new THREE.CylinderGeometry(0.018, 0.018, 0.42, 4).translate(x, 2.05, 0.05), BONE));
+  }
+  for (const [x, y] of [[-0.18, 2.1], [0.32, 1.98], [-0.08, 1.3]] as const) {
+    parts.push(painted(new THREE.BoxGeometry(0.1, 0.14, 0.015).translate(x, y, 0.04), 0x8c5a2d));
+  }
+  return joined(parts);
+}
+
+/** Die Pilzkapsel der Sporenfalle: ein kurzer Stiel mit einem grauen, flachen Hut und hellen Sporenpunkten. Rund 0,3 m breit. */
+export function podGeometry(): THREE.BufferGeometry {
+  const cap = new THREE.SphereGeometry(0.2, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.62, 1).translate(0, 0.14, 0);
+  const parts = [
+    painted(new THREE.CylinderGeometry(0.05, 0.07, 0.16, 6).translate(0, 0.08, 0), 0xcfc8b5),
+    painted(cap, 0x8d8a80),
+  ];
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2 + 0.3;
+    parts.push(painted(new THREE.SphereGeometry(0.024, 4, 3).translate(Math.sin(a) * 0.12, 0.2, Math.cos(a) * 0.12), 0xe8e4d6));
+  }
+  return joined(parts);
+}
+
 const TRAP_RADIUS = 0.42;
 
 /** Ein Bügel des Fangeisens: ein halber Ring in der Bodenebene, die Zähne nach oben. */
