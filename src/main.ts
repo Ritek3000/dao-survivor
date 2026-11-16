@@ -17,6 +17,8 @@ try {
     void import('./tools/messlauf').then(({ installMesslauf }) => installMesslauf(game));
     // Gegenstände und Beute zum Ausprobieren.
     void import('./tools/items').then(({ installItemTools }) => installItemTools(game));
+    // Zustände, Bodenfelder und zeitweilige Werte zum Ausprobieren (Unterbau der Fertigkeiten).
+    void import('./tools/skills').then(({ installSkillTools }) => installSkillTools(game));
   }
 } catch (error) {
   const message = document.getElementById('error');

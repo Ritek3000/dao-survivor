@@ -4,6 +4,8 @@ import { CONFIG } from '../config';
 import type { MoveVector } from '../core/input';
 import type { ClassDef, SwingDef } from './classes';
 import { swallowedByFinsternis } from './darkness';
+import type { Enemy } from './enemies';
+import type { CombatEvents } from './events';
 import { clipNamed, type HeroModel, type LayeredClip } from './models';
 import type { Stats } from './progression';
 import type { World } from './world';
@@ -110,7 +112,10 @@ export class Player {
   /** 0 bis 1: wie weit eine Figur ohne Sterbe-Animation schon gefallen ist. */
   private fallen = 0;
 
-  constructor(private readonly stats: Stats) {
+  constructor(
+    private readonly stats: Stats,
+    private readonly events: CombatEvents,
+  ) {
     this.bodyMaterial = swallowedByFinsternis(new THREE.MeshStandardMaterial({ color: 0x6f757d, roughness: 0.7 }));
     this.body = new THREE.Mesh(new THREE.CapsuleGeometry(0.36, 1, 6, 14), this.bodyMaterial);
     this.body.position.y = BODY_CENTER_Y;
@@ -492,8 +497,9 @@ export class Player {
    * Treffer eines Gegners; während der Schonfrist wirkungslos. Mit `verstaubt` stammt er aus
    * einem Dhargass-Zauber: Was er an Leben nimmt, verstaubt zugleich und kehrt erst im Licht zurück.
    * `announced`: ein Angriff, der sich angekündigt hat und dem man ausweichen konnte.
+   * `attacker`: der Gegner, der trifft; er erfährt `CombatEvents.hurt` (null bei Dingen ohne Gegner).
    */
-  hurt(amount: number, verstaubt = false, announced = false): void {
+  hurt(amount: number, verstaubt = false, announced = false, attacker: Enemy | null = null): void {
     // Die Schonfrist schützt vor dem Gedränge der Horde. Was sich am Boden angekündigt hat,
     // trifft trotzdem: Sonst machte ein Kratzer gegen den Schwarzen Sog unverwundbar.
     if ((this.invulnerable > 0 && !announced) || !this.alive) return;
@@ -501,10 +507,11 @@ export class Player {
     if (this.shield) {
       this.shield = false;
       audio.play('schild.faengt', this.position.x, this.position.z);
+      this.events.hurt(attacker, 0, true);
       return;
     }
     // Rüstung kann einen Treffer nicht aufheben: Mindestens ein Viertel (und 1 Schaden) kommt immer durch.
-    const incoming = amount * this.takenFactor;
+    const incoming = amount * this.takenFactor * this.stats.taken;
     const taken = Math.max(1, incoming * CONFIG.player.minDamageShare, incoming - this.stats.armor);
     this.hp -= taken;
     if (verstaubt) {
@@ -516,6 +523,7 @@ export class Player {
     this.hurtGlow = 1;
     this.wasHit = true;
     audio.play(verstaubt ? 'spieler-verstaubt' : 'spieler-treffer', this.position.x, this.position.z);
+    this.events.hurt(attacker, taken, false);
   }
 
   /** Mehr Höchstleben durch eine Verbesserung bringt die Punkte gleich mit. */

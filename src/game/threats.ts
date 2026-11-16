@@ -231,7 +231,7 @@ export class Threats {
     }
 
     const position = player.position;
-    if (Math.hypot(position.x - x, position.z - z) <= radius) player.hurt(sog.damage, true, true);
+    if (Math.hypot(position.x - x, position.z - z) <= radius) player.hurt(sog.damage, true, true, sog.owner);
     if (sog.quench) this.quenched += zones.quench(x, z, radius);
   }
 }

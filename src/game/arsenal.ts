@@ -5,10 +5,12 @@ import type { Random } from '../core/random';
 import type { ClassDef } from './classes';
 import { Effects, type StrikeKind } from './effects';
 import type { Enemies, Enemy } from './enemies';
+import { sourceOf, type Source } from './events';
 import type { Player } from './player';
 import { Projectiles, type Projectile } from './projectiles';
 import { BIG_GAME_SCALE, type Stats } from './progression';
-import { COOLDOWN_PER_RANK, DAMAGE_PER_RANK, MAX_RANK, WEAK_FACTOR, weaponById, type WeaponDef } from './weapons';
+import { applyStatus, markChance, takenFactor } from './status';
+import { MAX_RANK, resolveRank, statusSeconds, weaponById, type ResolvedRank, type WeaponDef } from './weapons';
 import type { Site, Zones } from './zones';
 
 /** Was Klasse und Zone gerade am Kampf verändern. */
@@ -24,6 +26,10 @@ export interface CombatTraits {
 export interface OwnedWeapon {
   def: WeaponDef;
   rank: number;
+  /** Was der Rang festlegt (Schaden, Abklingzeit, Fläche, Zustände ...); wechselt mit dem Rang. */
+  rules: ResolvedRank;
+  /** Der Urheber seiner Treffer in den Ereignissen (`events.ts`). */
+  source: Source;
   cooldown: number;
   /** Die Figur holt für diesen Angriff schon aus. */
   windingUp: boolean;
@@ -36,6 +42,8 @@ interface Placed extends Site {
 }
 
 const TRAP_CAPACITY = 12;
+/** Die Glut der Feuerschalen (Kwests Esse) als Urheber ihres Schadens. */
+const SEAR_SOURCE = sourceOf('kwests-esse');
 const lightAt = new THREE.Vector3();
 
 /** Woran ein Treffer des Angriffs zu erkennen ist. */
@@ -115,8 +123,12 @@ export class Arsenal {
 
   take(def: WeaponDef): void {
     const weapon = this.find(def);
-    if (weapon) weapon.rank++;
-    else this.owned.push({ def, rank: 1, cooldown: 0, windingUp: false });
+    if (weapon) {
+      weapon.rank++;
+      weapon.rules = resolveRank(def, weapon.rank);
+    } else {
+      this.owned.push({ def, rank: 1, rules: resolveRank(def, 1), source: sourceOf(def.id), cooldown: 0, windingUp: false });
+    }
   }
 
   update(dt: number, time: number, traits: CombatTraits): void {
@@ -136,7 +148,7 @@ export class Arsenal {
         continue;
       }
       if (this.fire(weapon, origin)) {
-        weapon.cooldown = weapon.def.cooldown * this.stats.cooldown * COOLDOWN_PER_RANK ** (weapon.rank - 1);
+        weapon.cooldown = weapon.def.cooldown * this.stats.cooldown * weapon.rules.cooldown;
         weapon.windingUp = false;
       }
     }
@@ -159,7 +171,7 @@ export class Arsenal {
   sear(x: number, z: number, radius: number, amount: number): void {
     this.enemies.queryRadius(x, z, radius, (enemy) => {
       if (enemy.hp <= 0 || Math.hypot(enemy.x - x, enemy.z - z) > radius + enemy.type.radius) return;
-      this.enemies.damage(enemy, amount, 0, 0);
+      this.enemies.damage(enemy, amount, 0, 0, SEAR_SOURCE);
       this.effects.strike(enemy.x, bodyHeight(enemy.type.model, 0.5), enemy.z, 'brand');
     });
   }
@@ -183,7 +195,7 @@ export class Arsenal {
     if (!swing || weapon.windingUp) return;
     const seconds = weapon.cooldown / this.traits.haste;
     if (seconds > swing.lead) return;
-    const target = this.enemies.nearest(origin.x, origin.z, weapon.def.range * this.stats.reach);
+    const target = this.enemies.nearest(origin.x, origin.z, weapon.def.range * this.stats.reach * weapon.rules.range);
     if (!target) return;
     weapon.windingUp = true;
     this.player.windUp(swing, Math.atan2(target.x - origin.x, target.z - origin.z), seconds);
@@ -191,8 +203,8 @@ export class Arsenal {
 
   /** Löst einen Angriff aus; gibt false zurück, wenn kein Ziel in Reichweite ist. */
   private fire(weapon: OwnedWeapon, origin: Site): boolean {
-    const { def, rank } = weapon;
-    const range = def.range * this.stats.reach;
+    const { def, rules } = weapon;
+    const range = def.range * this.stats.reach * rules.range;
 
     if (def.kind === 'trap') {
       this.traps.push({ x: origin.x, z: origin.z, weapon, delay: 0 });
@@ -217,7 +229,7 @@ export class Arsenal {
 
     switch (def.kind) {
       case 'arc': {
-        const width = def.arc?.(rank) ?? Math.PI;
+        const width = rules.arc;
         this.sweep(weapon, origin, angle, range, width);
         if (def.look === 'hitze') this.effects.heat(origin.x, origin.z, angle, range, width);
         else this.effects.slash(origin.x, origin.z, angle, range, width, def.look === 'wucht');
@@ -231,7 +243,7 @@ export class Arsenal {
         else if (def.look === 'boee') this.effects.gust(origin.x, origin.z, range);
         break;
       case 'projectile': {
-        const count = def.count?.(rank) ?? 1;
+        const count = rules.count;
         for (let i = 0; i < count; i++) {
           this.projectiles.spawn(
             origin.x,
@@ -239,7 +251,7 @@ export class Arsenal {
             angle + (i - (count - 1) / 2) * (def.spread ?? 0),
             def.speed ?? 15,
             range,
-            def.pierce?.(rank) ?? 0,
+            rules.pierce,
             def.shape ?? 'arrow',
             weapon,
           );
@@ -254,22 +266,22 @@ export class Arsenal {
         const delay = def.delay ?? 0.5;
         this.volleys.push({ x: target.x, z: target.z, weapon, delay });
         // Ein Kreis kündigt den Einschlag an, dann kommen die Pfeile herab.
-        this.effects.hailMark(target.x, target.z, this.area(def), delay, origin.x, origin.z);
+        this.effects.hailMark(target.x, target.z, this.area(weapon), delay, origin.x, origin.z);
         break;
       }
       case 'root':
-        this.burst(weapon, target.x, target.z, this.area(def), def.maxTargets, this.entangle);
+        this.burst(weapon, target.x, target.z, this.area(weapon), def.maxTargets, this.entangle);
         break;
     }
     return true;
   }
 
-  private area(def: WeaponDef): number {
-    return (def.radius ?? 2) * this.stats.reach;
+  private area(weapon: OwnedWeapon): number {
+    return (weapon.def.radius ?? 2) * this.stats.reach * weapon.rules.radius;
   }
 
   private auraRadius(weapon: OwnedWeapon): number {
-    return weapon.def.range * this.stats.reach * (1 + 0.1 * (weapon.rank - 1));
+    return weapon.def.range * this.stats.reach * weapon.rules.radius;
   }
 
   /** Trifft alle Gegner in einem Kegel. */
@@ -312,7 +324,7 @@ export class Arsenal {
 
   /** Um jeden Festgehaltenen wachsen Wurzeln, so lange wie er festsitzt. */
   private readonly entangle = (enemy: Enemy, weapon: OwnedWeapon): void => {
-    this.effects.entangle(enemy.x, enemy.z, enemy.type.radius, weapon.def.hold ?? 2);
+    this.effects.entangle(enemy.x, enemy.z, enemy.type.radius, statusSeconds(weapon.rules, 'hold') || 2);
   };
 
   /** Trifft alle Gegner auf einer geraden Linie. */
@@ -332,18 +344,19 @@ export class Arsenal {
 
   /** Einziger Weg, auf dem ein Angriff Schaden und Wirkungen anbringt. */
   private hit(enemy: Enemy, weapon: OwnedWeapon, fromX: number, fromZ: number): void {
-    const { def } = weapon;
-    let amount = def.damage * (1 + DAMAGE_PER_RANK * (weapon.rank - 1)) * this.stats.damage * this.traits.dealt;
+    const { def, rules } = weapon;
+    let amount = def.damage * rules.damage * this.stats.damage * this.traits.dealt;
     if (amount > 0) {
-      if (this.random() < this.stats.critChance) amount *= this.stats.critDamage;
-      if (enemy.weak > 0) amount *= WEAK_FACTOR;
+      // Gegen Markierte kommt Kritchance dazu (Vorteil); der Zufall wird in jedem Fall einmal gezogen.
+      if (this.random() < this.stats.critChance + markChance(enemy.status)) amount *= this.stats.critDamage;
+      amount *= takenFactor(enemy.status);
       if (this.traits.finsternisDamage !== 1 && this.zones.finsternisAt(enemy.x, enemy.z) > 0.5) {
         amount *= this.traits.finsternisDamage;
       }
       // Die Segen der Höheren Mächte.
       const { litDamage, bigGame, heldDamage } = this.stats;
       if (bigGame !== 1 && enemy.type.scale >= BIG_GAME_SCALE) amount *= bigGame;
-      if (heldDamage !== 1 && enemy.hold > 0) amount *= heldDamage;
+      if (heldDamage !== 1 && enemy.status.hold.time > 0) amount *= heldDamage;
       if (litDamage !== 1) {
         const origin = this.player.position;
         if (Math.hypot(enemy.x - origin.x, enemy.z - origin.z) <= this.player.light) amount *= litDamage;
@@ -359,14 +372,12 @@ export class Arsenal {
       const dx = enemy.x - fromX;
       const dz = enemy.z - fromZ;
       // Große Gegner lassen sich schwerer zurückstoßen.
-      const push = def.knockback / enemy.type.scale / Math.max(Math.hypot(dx, dz), 0.1);
+      const push = (def.knockback * rules.knockback) / enemy.type.scale / Math.max(Math.hypot(dx, dz), 0.1);
       pushX = dx * push;
       pushZ = dz * push;
     }
-    this.enemies.damage(enemy, amount, pushX, pushZ);
-    if (def.hold) enemy.hold = Math.max(enemy.hold, def.hold);
-    if (def.slow) enemy.slow = Math.max(enemy.slow, def.slow);
-    if (def.weak) enemy.weak = Math.max(enemy.weak, def.weak);
+    this.enemies.damage(enemy, amount, pushX, pushZ, weapon.source);
+    for (const apply of rules.statuses) applyStatus(enemy.status, apply.kind, apply.seconds, apply.power, weapon.source);
   }
 
   private readonly onProjectileHit = (enemy: Enemy, projectile: Projectile<OwnedWeapon>): void => {
@@ -378,7 +389,7 @@ export class Arsenal {
     if (this.player.shield) return;
     // Erst nach einem abgefangenen Treffer beginnt das Laden von vorn.
     if (this.shieldCharging <= 0) {
-      this.shieldCharging = weapon.def.cooldown * this.stats.cooldown * COOLDOWN_PER_RANK ** (weapon.rank - 1);
+      this.shieldCharging = weapon.def.cooldown * this.stats.cooldown * weapon.rules.cooldown;
     }
     this.shieldCharging -= dt * this.traits.haste;
     if (this.shieldCharging <= 0) {
@@ -393,7 +404,7 @@ export class Arsenal {
       if (!volley) continue;
       volley.delay -= dt;
       if (volley.delay > 0) continue;
-      const radius = this.area(volley.weapon.def);
+      const radius = this.area(volley.weapon);
       this.burst(volley.weapon, volley.x, volley.z, radius);
       this.effects.hailImpact(volley.x, volley.z, radius);
       audio.play(`einschlag.${volley.weapon.def.id}`, volley.x, volley.z);
@@ -405,7 +416,7 @@ export class Arsenal {
     for (let i = this.traps.length - 1; i >= 0; i--) {
       const trap = this.traps[i];
       if (!trap) continue;
-      const radius = this.area(trap.weapon.def);
+      const radius = this.area(trap.weapon);
       if (!this.enemies.nearest(trap.x, trap.z, radius)) continue;
       this.burst(trap.weapon, trap.x, trap.z, radius);
       this.effects.trapSnap(trap.x, trap.z, radius);

@@ -2,7 +2,13 @@
  * Alle Angriffe als Daten. Einheiten: Meter und Sekunden.
  * Die Zauber des Magiers folgen den Effektfamilien aus den Magie-Vorlagen des Nutzers:
  * nichts schwebt, nichts entsteht aus dem Nichts.
+ *
+ * Was ein höherer Rang ändert, steht entweder in den Einheitsregeln (jeder Rang +25 % Schaden, Abklingzeit auf 94 %) mit den
+ * Feldern `arc`, `count` und `pierce` oder, je Angriff, in einer Tabelle `ranks` (siehe `RankRule`). `resolveRank` macht daraus
+ * für jeden Rang eine fertige Zeile, die der Kampf liest.
  */
+
+import type { StatusApply } from './status';
 
 export type WeaponKind =
   /** Kegel in Richtung des nächsten Gegners. */
@@ -73,6 +79,56 @@ export interface WeaponDef {
   count?: (rank: number) => number;
   /** Wie viele Gegner ein Geschoss zusätzlich durchschlägt. */
   pierce?: (rank: number) => number;
+  /**
+   * Die Regeln je Rang, wo sie von den Einheitsregeln abweichen; der Eintrag an Stelle 0 ist Rang 1. Siehe `RankRule`.
+   * Ohne Tabelle gelten die Einheitsregeln und die Felder `arc`, `count` und `pierce`.
+   */
+  ranks?: readonly RankRule[];
+}
+
+/**
+ * Was ein Rang eines Angriffs festlegt. Ein Feld, das der Rang nennt, gilt von diesem Rang an auch für die folgenden, bis ein späterer
+ * Rang es neu setzt (Rang 3 mit `count: 4` heißt: auf Rang 3, 4 und 5 sind es vier). Ein Feld, das nie genannt wird, folgt den
+ * Einheitsregeln und den Feldern des Angriffs. So schreibt eine Tabelle nur auf, was von der Regel abweicht.
+ */
+export interface RankRule {
+  /** Faktor auf den Schaden des Angriffs. */
+  damage?: number;
+  /** Faktor auf die Abklingzeit; kleiner ist schneller. */
+  cooldown?: number;
+  /** Faktor auf die Reichweite, in der ein Ziel gesucht wird. */
+  range?: number;
+  /** Faktor auf die Fläche (`radius`; bei 'aura' die Reichweite selbst). */
+  radius?: number;
+  /** Öffnungswinkel eines Kegels in Radiant. */
+  arc?: number;
+  /** Zahl der Geschosse eines Fächers. */
+  count?: number;
+  /** Wie viele Gegner ein Geschoss zusätzlich durchschlägt. */
+  pierce?: number;
+  /** Faktor auf den Rückstoß. */
+  knockback?: number;
+  /** Die Zustände, die ein Treffer anbringt; die Liste ersetzt die des vorigen Rangs ganz (leer: keine). */
+  statuses?: readonly StatusApply[];
+  /** Schalter für Besonderheiten dieses Rangs, die der Angriff mit `hasFlag` liest (etwa ein zweiter Hieb); ersetzt die des vorigen Rangs ganz. */
+  flags?: readonly string[];
+}
+
+/** Ein Rang eines Angriffs, fertig aufgelöst: das, was der Kampf liest. */
+export interface ResolvedRank {
+  rank: number;
+  /** Faktor auf den Schaden des Angriffs. */
+  damage: number;
+  /** Faktor auf die Abklingzeit. */
+  cooldown: number;
+  range: number;
+  radius: number;
+  arc: number;
+  count: number;
+  pierce: number;
+  knockback: number;
+  statuses: readonly StatusApply[];
+  flags: readonly string[];
 }
 
 export const MAX_RANK = 5;
@@ -80,8 +136,8 @@ export const MAX_RANK = 5;
 export const DAMAGE_PER_RANK = 0.25;
 /** Jeder Rang über dem ersten verkürzt die Abklingzeit auf diesen Anteil. */
 export const COOLDOWN_PER_RANK = 0.94;
-/** Geschwächte Gegner erleiden so viel mehr Schaden. */
-export const WEAK_FACTOR = 1.3;
+/** Bei Dauerkreisen wächst der Radius mit jedem Rang um so viel des Grundwerts. */
+export const AURA_RADIUS_PER_RANK = 0.1;
 
 const DEFS: readonly WeaponDef[] = [
   // Kämpfer
@@ -278,6 +334,80 @@ const DEFS: readonly WeaponDef[] = [
 ];
 
 const BY_ID = new Map(DEFS.map((def) => [def.id, def]));
+const NO_FLAGS: readonly string[] = [];
+
+/** Die Zustände, die `hold`, `slow` und `weak` eines Angriffs ohne Tabelle anbringen. */
+function legacyStatuses(def: WeaponDef): readonly StatusApply[] {
+  const list: StatusApply[] = [];
+  if (def.hold) list.push({ kind: 'hold', seconds: def.hold });
+  if (def.slow) list.push({ kind: 'slow', seconds: def.slow });
+  if (def.weak) list.push({ kind: 'weak', seconds: def.weak });
+  return list;
+}
+
+/** Ein Rang nach den Einheitsregeln und den Feldern des Angriffs, ohne Tabelle. */
+function ruleRank(def: WeaponDef, rank: number): ResolvedRank {
+  return {
+    rank,
+    damage: 1 + DAMAGE_PER_RANK * (rank - 1),
+    cooldown: COOLDOWN_PER_RANK ** (rank - 1),
+    range: 1,
+    radius: def.kind === 'aura' ? 1 + AURA_RADIUS_PER_RANK * (rank - 1) : 1,
+    arc: def.arc?.(rank) ?? Math.PI,
+    count: def.count?.(rank) ?? 1,
+    pierce: def.pierce?.(rank) ?? 0,
+    knockback: 1,
+    statuses: legacyStatuses(def),
+    flags: NO_FLAGS,
+  };
+}
+
+/** Alle Ränge eines Angriffs, von 1 bis `MAX_RANK`. */
+function resolveAll(def: WeaponDef): readonly ResolvedRank[] {
+  const table = def.ranks ?? [];
+  const named: RankRule = {};
+  const all: ResolvedRank[] = [];
+  for (let rank = 1; rank <= MAX_RANK; rank++) {
+    // Was ein Rang nennt, merkt sich `named` für die folgenden.
+    Object.assign(named, table[rank - 1]);
+    const resolved = ruleRank(def, rank);
+    all.push({
+      rank,
+      damage: named.damage ?? resolved.damage,
+      cooldown: named.cooldown ?? resolved.cooldown,
+      range: named.range ?? resolved.range,
+      radius: named.radius ?? resolved.radius,
+      arc: named.arc ?? resolved.arc,
+      count: named.count ?? resolved.count,
+      pierce: named.pierce ?? resolved.pierce,
+      knockback: named.knockback ?? resolved.knockback,
+      statuses: named.statuses ?? resolved.statuses,
+      flags: named.flags ?? resolved.flags,
+    });
+  }
+  return all;
+}
+
+const RANKS = new Map(DEFS.map((def) => [def.id, resolveAll(def)]));
+
+/** Die fertige Zeile eines Rangs (1 bis `MAX_RANK`) eines Angriffs; sie liegt vorberechnet da, im Kampf entsteht nichts. */
+export function resolveRank(def: WeaponDef, rank: number): ResolvedRank {
+  const all = RANKS.get(def.id) ?? resolveAll(def);
+  const row = all[Math.min(Math.max(rank, 1), MAX_RANK) - 1];
+  if (!row) throw new Error(`Kein Rang ${rank} für ${def.id}`);
+  return row;
+}
+
+/** Hat der Rang diesen Schalter gesetzt? */
+export function hasFlag(rules: ResolvedRank, flag: string): boolean {
+  return rules.flags.includes(flag);
+}
+
+/** Die Sekunden, die ein Rang einen Zustand anbringt; 0, wenn er ihn nicht anbringt. */
+export function statusSeconds(rules: ResolvedRank, kind: StatusApply['kind']): number {
+  for (const entry of rules.statuses) if (entry.kind === kind) return entry.seconds;
+  return 0;
+}
 
 export function weaponById(id: string): WeaponDef {
   const def = BY_ID.get(id);

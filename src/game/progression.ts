@@ -1,4 +1,5 @@
 import { CONFIG } from '../config';
+import { Buffs, type BuffSpec } from './buffs';
 import type { ClassDef } from './classes';
 
 /** Alles, was Verbesserungen verändern können. Faktoren beginnen bei 1. */
@@ -42,6 +43,8 @@ export interface Stats {
   heldDamage: number;
   /** Faktor auf alles Gold, das ein Lauf einbringt. */
   gold: number;
+  /** Faktor auf den Schaden, den die Figur erleidet; die Besonderheit der Klasse kommt als `Player.takenFactor` dazu. */
+  taken: number;
 }
 
 /** Ein Segen einer Höheren Macht: stärker als eine Stärkung, je Nacht nur einmal zu haben. */
@@ -214,6 +217,7 @@ function baseStats(): Stats {
     xp: 1,
     heldDamage: 1,
     gold: 1,
+    taken: 1,
   };
 }
 
@@ -227,8 +231,15 @@ export class Progression {
   level = 1;
   xp = 0;
   needed = xpNeeded(1);
-  /** Bleibt dasselbe Objekt, damit andere Systeme es festhalten können. */
+  /** Was dauerhaft gilt: Klasse, Gegenstände, Stärkungen und Segen. Ändert sich nur durch `reset`, `take` und `bless`. */
+  readonly base: Stats = baseStats();
+  /**
+   * Was gerade gilt: `base` mit den zeitweiligen Werten (`buffs`) darüber. Das lesen alle anderen Teile des Spiels.
+   * Bleibt dasselbe Objekt, damit andere Systeme es festhalten können.
+   */
   readonly stats: Stats = baseStats();
+  /** Tempo-Schübe und Ähnliches, die auslaufen (siehe `buffs.ts`). */
+  readonly buffs = new Buffs();
   private readonly ranks = new Map<string, number>();
   /** Die Segen, die in dieser Nacht schon gewährt wurden. */
   readonly blessed: Segen[] = [];
@@ -241,13 +252,35 @@ export class Progression {
     this.level = 1;
     this.xp = 0;
     this.needed = xpNeeded(1);
-    Object.assign(this.stats, baseStats());
-    this.stats.maxHp = Math.round(CONFIG.player.maxHp * playerClass.hpFactor);
-    this.stats.speed = playerClass.speedFactor;
-    this.stats.verstaubung = playerClass.verstaubungFactor;
-    boost?.(this.stats);
+    Object.assign(this.base, baseStats());
+    this.base.maxHp = Math.round(CONFIG.player.maxHp * playerClass.hpFactor);
+    this.base.speed = playerClass.speedFactor;
+    this.base.verstaubung = playerClass.verstaubungFactor;
+    boost?.(this.base);
     this.ranks.clear();
     this.blessed.length = 0;
+    this.buffs.clear();
+    this.sync();
+  }
+
+  /** Lässt die zeitweiligen Werte ablaufen und rechnet `stats` neu, wenn sich etwas geändert hat. */
+  update(dt: number): void {
+    this.buffs.update(dt);
+    if (this.buffs.changed) this.sync();
+  }
+
+  /** Setzt einen zeitweiligen Wert (siehe `Buffs.add`); er wirkt sofort. Gibt false zurück, wenn alle Plätze belegt sind. */
+  addBuff(spec: BuffSpec, stacks = 1): boolean {
+    const added = this.buffs.add(spec, stacks);
+    if (added) this.sync();
+    return added;
+  }
+
+  /** `stats` ist `base` mit den wirkenden zeitweiligen Werten darüber. */
+  private sync(): void {
+    Object.assign(this.stats, this.base);
+    this.buffs.apply(this.stats);
+    this.buffs.changed = false;
   }
 
   /** Gibt zurück, wie viele Stufen dazugekommen sind. */
@@ -273,8 +306,9 @@ export class Progression {
   }
 
   take(upgrade: Upgrade): void {
-    upgrade.apply(this.stats);
+    upgrade.apply(this.base);
     this.ranks.set(upgrade.id, this.rank(upgrade) + 1);
+    this.sync();
   }
 
   /** Segen, die in dieser Nacht noch nicht gewährt wurden. */
@@ -283,7 +317,8 @@ export class Progression {
   }
 
   bless(segen: Segen): void {
-    segen.apply(this.stats);
+    segen.apply(this.base);
     this.blessed.push(segen);
+    this.sync();
   }
 }
