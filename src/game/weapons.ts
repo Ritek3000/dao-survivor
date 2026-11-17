@@ -238,9 +238,11 @@ const DEFS: readonly WeaponDef[] = [
     name: 'Banner',
     text: 'Ein zerfetztes Banner entzieht Gegnern darin Lebenskraft',
     kind: 'field',
-    cooldown: 11,
+    // Leicht abgeschwächt (vorher 11 s und 5 Schaden): Im Balancing-Test hatte die Evolution des Banners die höchste Siegquote aller Evolutionen
+    // (95 %, Boss in 70 %). Die kleine Kürzung zeigt sich vor allem bei den Boss-Siegen, kaum beim reinen Überleben.
+    cooldown: 12,
     // Schaden je Takt (alle 0,5 s); `range` ist die Entfernung, ab der ein Gegner das Setzen auslöst, `radius` der Kreis des Banners.
-    damage: 5,
+    damage: 4.5,
     range: 7,
     radius: 3.2,
     ranks: [
