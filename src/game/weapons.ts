@@ -494,22 +494,24 @@ const DEFS: readonly WeaponDef[] = [
     ],
   },
   {
-    // Der Schaden ist der Treffer der ganzen Salve; `count` sind die Pfeile (nur für das Bild), sie bestimmen den Faktor auf den Schaden.
+    // Der Schaden ist der Treffer der ganzen Salve auf jeden Gegner im Kreis; `count` sind die Pfeile (nur für das Bild).
+    // Abklingzeit, Radius, Verzögerung und der Anstieg des Schadens sind am Messlauf abgestimmt: Vorher traf die Salve im Schnitt nur
+    // drei Gegner und kam auf 18 Schaden pro Sekunde (die tragenden Angriffe auf über 70); mit diesen Werten ist Rang 5 solide und die Evolution tragend.
     id: 'pfeilhagel',
     name: 'Pfeilhagel',
     text: 'Eine Salve Pfeile regnet auf eine Gruppe von Gegnern',
     kind: 'volley',
-    cooldown: 4.5,
-    damage: 16,
+    cooldown: 3.4,
+    damage: 24,
     range: 13,
-    radius: 3,
-    delay: 0.6,
+    radius: 3.8,
+    delay: 0.45,
     ranks: [
       { damage: 1, count: 6 },
       { damage: 1.5, count: 9, radius: 1.2 },
-      { statuses: [{ kind: 'slow', seconds: 2, power: 0.2 }] },
-      { cooldown: 3.7 / 4.5, statuses: [{ kind: 'slow', seconds: 2, power: 0.2 }, { kind: 'bleed', seconds: 3, power: 3 }] },
-      { flags: ['folgen', 'mitte'] },
+      { damage: 1.75, statuses: [{ kind: 'slow', seconds: 2, power: 0.2 }] },
+      { damage: 2.25, cooldown: 2.8 / 3.4, statuses: [{ kind: 'slow', seconds: 2, power: 0.2 }, { kind: 'bleed', seconds: 3, power: 3 }] },
+      { damage: 2.5, flags: ['folgen', 'mitte'] },
       // Evolution: Kein einzelner Einschlag, sondern ein Schauer, der 2,5 Sekunden anhält (`CONFIG.skills.evolution.laeufer`).
       { count: 14, flags: ['folgen', 'mitte', 'aschesturm'] },
     ],
@@ -521,9 +523,9 @@ const DEFS: readonly WeaponDef[] = [
     rankText: [
       'Eine Salve von 6 Pfeilen schlägt nach kurzer Verzögerung auf eine Gruppe ein',
       '9 Pfeile je Salve, Radius +20 %',
-      'Der aufgewirbelte Boden verlangsamt Gegner im Zielgebiet 2 Sekunden um 20 %',
-      'Kürzere Abklingzeit; Getroffene bluten 3 Sekunden lang',
-      'Die Salve folgt der Gruppe leicht; im Zentrum erleiden Gegner 25 % mehr Schaden',
+      'Mehr Schaden; der aufgewirbelte Boden verlangsamt Gegner im Zielgebiet 2 Sekunden um 20 %',
+      'Mehr Schaden und kürzere Abklingzeit; Getroffene bluten 3 Sekunden lang',
+      'Noch mehr Schaden; die Salve folgt der Gruppe leicht, im Zentrum erleiden Gegner 25 % mehr Schaden',
     ],
   },
   {
