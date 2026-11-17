@@ -643,7 +643,7 @@ const DEFS: readonly WeaponDef[] = [
     // eine Welle schleudern, deren Schaden `damage` ist. `range` ist die Entfernung, ab der ein Gegner das Rammen auslöst.
     id: 'koederpuppe',
     name: 'Köderpuppe',
-    text: 'Ein klapperndes Gestell verlangsamt und verwirrt Gegner in der Nähe',
+    text: 'Ein klapperndes Gestell lockt Gegner an, verlangsamt und verwirrt sie',
     kind: 'field',
     cooldown: 8.5,
     damage: 22,
@@ -663,7 +663,7 @@ const DEFS: readonly WeaponDef[] = [
       { cooldown: 7 / 8.5, flags: ['furcht'] },
       { flags: ['furcht', 'schleier'] },
       { damage: 1.6, flags: ['furcht', 'schleier', 'knall'] },
-      // Evolution: Ein großes, schwebendes Phantom, das Gegner anzieht und in Furcht versetzt.
+      // Evolution: Ein großes, schwebendes Phantom, das Gegner im weiten Umkreis anlockt, anzieht und in Furcht versetzt.
       { radius: 2, duration: 6, flags: ['furcht', 'schleier', 'knall', 'vollstrecker'] },
     ],
     evolution: {
@@ -672,7 +672,7 @@ const DEFS: readonly WeaponDef[] = [
       text: 'Ein riesiges, schwebendes Staub-Phantom zieht Gegner im weiten Umkreis an und versetzt sie in Furcht. Am Ende zerspringt es in einer gewaltigen Schockwelle aus Knochen- und Staubsplittern; wer verlangsamt oder gefesselt ist, erleidet 15 % mehr Schaden.',
     },
     rankText: [
-      'Rammt ein Gestell in den Boden: Gegner in der Nähe sind 20 % langsamer und greifen langsamer an',
+      'Rammt ein Gestell in den Boden: Gegner in der Nähe laufen auf die Puppe zu statt auf dich, sind 20 % langsamer und greifen langsamer an',
       'Bereich +30 %, die Puppe steht 5 Sekunden',
       'Kürzere Abklingzeit; kleine Gegner, die zu lange in ihrem Schatten stehen, geraten in Furcht',
       'Nahe der Puppe erleidest du weniger Schaden aus Fernangriffen',

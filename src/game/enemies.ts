@@ -60,6 +60,13 @@ export interface EnemyHooks {
   strike(enemy: Enemy): void;
 }
 
+/** Ein Köder: Gegner bis `radius` Meter um (x, z) wenden sich ihm zu statt der Spielfigur (siehe `Enemies.lure`). */
+interface Lure {
+  x: number;
+  z: number;
+  radius: number;
+}
+
 /** Alle Gegner einer Art in einem Zeichenaufruf. */
 interface Horde {
   type: EnemyType;
@@ -78,6 +85,8 @@ interface Horde {
 
 const TYPES = CONFIG.enemies.types;
 const LARGEST_RADIUS = Math.max(CONFIG.boss.type.radius, ...TYPES.map((type) => type.radius));
+/** Jedes Bodenfeld kann ein Köder sein, mehr als Felder gibt es nie. */
+const LURE_CAPACITY = CONFIG.skills.maxFields;
 const WHITE = new THREE.Color(0xffffff);
 /** Festgehaltene Gegner wirken fahl. */
 const HELD = new THREE.Color(0x8d99a8);
@@ -113,6 +122,9 @@ export class Enemies {
   private night = 0;
   /** Der Gegner, für den gerade Nachbarn abgefragt werden. */
   private current: Enemy | null = null;
+  /** Die Köder, die gerade locken: feste Plätze, die ersten `lureCount` gelten. */
+  private readonly lures: Lure[] = [];
+  private lureCount = 0;
 
   constructor(private readonly events: CombatEvents) {
     // Platzhalter-Kapseln, solange (oder falls) kein GLB-Modell geladen ist.
@@ -122,6 +134,7 @@ export class Enemies {
     for (const type of TYPES) {
       this.adopt(type, new THREE.InstancedMesh(geometry, material, CONFIG.enemies.max), null, PLACEHOLDER_CLIP, null, null);
     }
+    for (let i = 0; i < LURE_CAPACITY; i++) this.lures.push({ x: 0, z: 0, radius: 0 });
     this.reset();
   }
 
@@ -179,6 +192,7 @@ export class Enemies {
     this.carriers.length = 0;
     this.kills = 0;
     this.spawnBudget = 0;
+    this.lureCount = 0;
     this.random = createRandom(CONFIG.world.seed + 500 + this.night++);
     for (const horde of this.hordes.values()) {
       horde.count = 0;
@@ -248,6 +262,19 @@ export class Enemies {
       let distance = Math.hypot(dx, dz);
       if (distance > CONFIG.enemies.recycleDistance && this.place(enemy, player)) continue;
 
+      // Köder: Wer sich nicht fürchtet und in Reichweite eines Köders steht, richtet sich nach ihm statt nach der Spielfigur: Er läuft
+      // hin, schlägt und zaubert dorthin. Wen die Furcht treibt, läuft von der Figur weg und lässt den Köder liegen.
+      const lure = afraid ? null : this.lureFor(enemy);
+      let aimX = playerX;
+      let aimZ = playerZ;
+      if (lure) {
+        aimX = lure.x;
+        aimZ = lure.z;
+        dx = aimX - enemy.x;
+        dz = aimZ - enemy.z;
+        distance = Math.hypot(dx, dz);
+      }
+
       let walking = !held;
       const cast = enemy.type.cast;
       if (cast) {
@@ -261,7 +288,7 @@ export class Enemies {
           if (!held && !afraid && !silenced && enemy.castIn <= 0 && distance < cast.range) {
             enemy.casting = cast.windup;
             enemy.castIn = cast.cooldown * (0.85 + 0.3 * this.random());
-            hooks.cast(enemy, playerX, playerZ);
+            hooks.cast(enemy, aimX, aimZ);
             walking = false;
           }
         }
@@ -288,7 +315,7 @@ export class Enemies {
           enemy.strikeIn -= dt * rate;
           if (!held && !afraid && enemy.strikeIn <= 0 && distance < strike.reach) {
             enemy.striking = strikeClip.seconds;
-            // Die Fläche gilt ab jetzt: Er blickt dorthin, wo die Spielfigur steht, und dreht sich im Hieb nicht mehr nach.
+            // Die Fläche gilt ab jetzt: Er blickt dorthin, wo sein Ziel steht (die Spielfigur oder ein Köder), und dreht sich im Hieb nicht mehr nach.
             enemy.heading = Math.atan2(dx, dz);
             hooks.strike(enemy);
             walking = false;
@@ -312,6 +339,18 @@ export class Enemies {
       this.current = enemy;
       this.grid.query(enemy.x, enemy.z, enemy.type.radius + LARGEST_RADIUS, this.separate);
       world.resolve(enemy, enemy.type.radius);
+
+      // Wer einem Köder folgt, bleibt an dessen Rand stehen, so wie er es an der Spielfigur täte.
+      if (lure) {
+        const away = enemy.x - lure.x;
+        const awayZ = enemy.z - lure.z;
+        const gap = Math.hypot(away, awayZ);
+        const stand = enemy.type.radius + CONFIG.enemies.lureStand;
+        if (gap < stand && gap > 1e-4) {
+          enemy.x = lure.x + (away / gap) * stand;
+          enemy.z = lure.z + (awayZ / gap) * stand;
+        }
+      }
 
       // Wer die Spielfigur berührt, verletzt sie und bleibt an ihrem Rand stehen.
       dx = enemy.x - playerX;
@@ -359,6 +398,41 @@ export class Enemies {
       enemy.lastSource = source;
       this.events.hit(enemy, amount, source, dot);
     }
+  }
+
+  /**
+   * Meldet einen Köder für das nächste Bild: Gegner bis `radius` Meter um (x, z) wenden sich ihm zu statt der Spielfigur. Die
+   * Bodenfelder melden ihre Köder in jedem Bild neu (`FieldDef.lure`, `Fields.update`), nachdem sie die des letzten Bilds mit
+   * `clearLures` verworfen haben; so endet ein Köder mit seinem Feld, und im Kampf entsteht nichts Neues.
+   */
+  lure(x: number, z: number, radius: number): void {
+    const slot = this.lures[this.lureCount];
+    if (!slot) return;
+    slot.x = x;
+    slot.z = z;
+    slot.radius = radius;
+    this.lureCount++;
+  }
+
+  /** Verwirft alle gemeldeten Köder. */
+  clearLures(): void {
+    this.lureCount = 0;
+  }
+
+  /** Der nächste Köder, in dessen Reichweite der Gegner steht, sonst null. */
+  private lureFor(enemy: Enemy): Lure | null {
+    let best: Lure | null = null;
+    let bestDistance = Infinity;
+    for (let i = 0; i < this.lureCount; i++) {
+      const lure = this.lures[i];
+      if (!lure) continue;
+      const distance = Math.hypot(lure.x - enemy.x, lure.z - enemy.z);
+      if (distance <= lure.radius + enemy.type.radius && distance < bestDistance) {
+        best = lure;
+        bestDistance = distance;
+      }
+    }
+    return best;
   }
 
   /** Besucht Gegner in der Nähe eines Kreises; der Aufrufer prüft den genauen Abstand selbst. */

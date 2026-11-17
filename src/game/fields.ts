@@ -8,7 +8,7 @@
  *
  * Was ein Feld bewirkt:
  * - Jeden Takt (`every`): Schaden und Zustände bei jedem Gegner darin; Leben und zeitweilige Werte für die Figur, solange sie darin steht.
- * - In jedem Bild: Zug zur Mitte (`pull`).
+ * - In jedem Bild: Zug zur Mitte (`pull`) und der Köder (`lure`): Gegner in der Nähe laufen auf die Mitte zu statt auf die Figur.
  * - Nach jedem Takt (`onTick`), wenn ein Gegner darin stirbt (`onKill`) und wenn das Feld endet (`onEnd`): was die Fertigkeit daraus macht,
  *   steht in ihrer Funktion.
  */
@@ -44,6 +44,12 @@ export interface FieldDef {
   statuses?: readonly StatusApply[];
   /** Zug zur Mitte in Metern je Sekunde, in jedem Bild (bei einem Streifen: zur Linie). */
   pull?: number;
+  /**
+   * Köder: Gegner bis zu diesem Vielfachen des Radius (Meter von der Mitte; nur bei einem Kreis) wenden sich der Mitte des Felds zu statt
+   * der Figur, solange das Feld liegt. Sie laufen dorthin, schlagen und zaubern dorthin und bleiben am Rand der Mitte stehen (siehe
+   * `Enemies.lure`); die Figur verletzen sie nur, wenn sie ihr dabei in den Weg geraten. Wer sich fürchtet, folgt dem Köder nicht.
+   */
+  lure?: number;
   /** Leben für die Figur im Feld je Takt, vor dem Faktor `scale`. */
   heal?: number;
   /** Zeitweilige Werte für die Figur im Feld; sie werden jeden Takt erneuert, ihre Dauer sollte also etwas über `every` liegen. */
@@ -190,6 +196,8 @@ export class Fields implements CombatListener {
   }
 
   update(dt: number): void {
+    // Die Köder des letzten Bilds sind vorbei; wer noch liegt, meldet sich unten neu (so verschwindet ein Köder mit seinem Feld).
+    this.enemies.clearLures();
     for (const field of this.pool) {
       if (!field.active) continue;
       const { def } = field;
@@ -209,6 +217,8 @@ export class Fields implements CombatListener {
       if (field.life <= 0) {
         field.active = false;
         def.onEnd?.(field, this);
+      } else if (def.lure && def.shape === 'circle') {
+        this.enemies.lure(field.x, field.z, field.radius * def.lure);
       }
     }
   }

@@ -1185,7 +1185,8 @@ export class Arsenal {
     const { def, rules } = weapon;
     let field = this.decoyFields.get(rules);
     if (!field) {
-      // Das Phantom (Rang 6) zieht Gegner zu sich, versetzt sie sofort in Furcht und zerspringt am Ende mit einer größeren Welle.
+      // Die Puppe ist ein Köder: Gegner in ihrer Nähe laufen auf sie zu statt auf die Figur. Das Phantom (Rang 6) lockt weiter, zieht
+      // Gegner zu sich, versetzt sie sofort in Furcht und zerspringt am Ende mit einer größeren Welle.
       const phantom = hasFlag(rules, 'vollstrecker');
       field = {
         id: phantom ? PHANTOM_ID : def.id,
@@ -1196,6 +1197,7 @@ export class Arsenal {
         statuses: rules.statuses.length > 0 ? rules.statuses : undefined,
         buffs: hasFlag(rules, 'schleier') ? [SHELTER] : undefined,
         pull: phantom ? EVOLUTION.laeufer.phantomPull : undefined,
+        lure: phantom ? EVOLUTION.laeufer.phantomLure : LAEUFER.decoyLure,
         onTick: phantom ? this.laeufer.phantomTick : hasFlag(rules, 'furcht') ? this.decoyTick : undefined,
         onEnd: phantom ? this.laeufer.phantomEnd : hasFlag(rules, 'knall') ? this.decoyEnd : undefined,
       };
