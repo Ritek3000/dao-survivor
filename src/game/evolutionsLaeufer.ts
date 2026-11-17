@@ -11,6 +11,7 @@
 import { audio } from '../audio';
 import { CONFIG } from '../config';
 import type { OwnedWeapon } from './arsenal';
+import { Crowd } from './crowd';
 import type { Enemy } from './enemies';
 import { BAG_CAPACITY, JAW_CAPACITY, type BagSite, type JawSite } from './evolutionEffectsLaeufer';
 import type { EvolutionHost } from './evolutions';
@@ -29,9 +30,7 @@ const JAW_ARC = 3.4;
 const BAG_ARC = 2.6;
 /** Die Eisen des Bündels liegen so weit (Radius der Zeichnung) auseinander, bezogen auf den Radius, den `area` ihnen gibt. */
 const JAW_DRAW = 0.78;
-/** So viele Gegner prüft die Suche nach der dichtesten Gruppe höchstens als Mitte; mehr Gegner zählen als Nachbarn. */
-const CROWD_SLOTS = 48;
-/** Die Staubwolke einer Evolution ist so breit, wie der Pfeil sie macht, höchstens aber dieser Faktor mal der Mitte. */
+/** Zur dichtesten Gruppe zählen die Gegner in diesem Umkreis (Meter). */
 const GROUP_RADIUS = 3;
 /** So langsam rückt der Schauer der Aschenfedern der Gruppe nach (Meter je Sekunde). */
 const ASH_FOLLOW = 1.6;
@@ -209,18 +208,12 @@ export class LaeuferEvolutions {
     onTick: (field) => this.host.effects.laeufer.crush(field.x, field.z, field.radius),
   };
 
-  // Die Gruppe, in deren Mitte etwas geworfen wird.
-  private readonly crowd: (Enemy | null)[] = Array.from({ length: CROWD_SLOTS }, () => null);
-  private crowdCount = 0;
-  private crowdX = 0;
-  private crowdZ = 0;
-  private crowdRange = 0;
-  private crowdAround = 0;
-  private crowdNear = 0;
-  private crowdSumX = 0;
-  private crowdSumZ = 0;
+  /** Die dichteste Gruppe: der Ort, auf den Bündel, Beutel, Phantom und Netz zielen. */
+  private readonly crowd: Crowd;
 
-  constructor(private readonly host: LaeuferHost) {}
+  constructor(private readonly host: LaeuferHost) {
+    this.crowd = new Crowd(host.enemies);
+  }
 
   /** Neue Nacht: Was lief, ist vorbei, ohne dass sein Ende wirkt. */
   reset(): void {
@@ -252,54 +245,15 @@ export class LaeuferEvolutions {
 
   // ------------------------------------------------------------- Gruppe suchen
 
-  /** Merkt sich Gegner in Reichweite als mögliche Mitte einer Gruppe. */
-  private readonly collectEach = (enemy: Enemy): void => {
-    if (enemy.hp <= 0 || enemy.driven || this.crowdCount >= CROWD_SLOTS) return;
-    if (Math.hypot(enemy.x - this.crowdX, enemy.z - this.crowdZ) > this.crowdRange + enemy.type.radius) return;
-    this.crowd[this.crowdCount++] = enemy;
-  };
-
-  private readonly neighbourEach = (enemy: Enemy): void => {
-    if (enemy.hp <= 0 || enemy.driven) return;
-    if (Math.hypot(enemy.x - this.siteX, enemy.z - this.siteZ) > this.crowdAround) return;
-    this.crowdNear++;
-    this.crowdSumX += enemy.x;
-    this.crowdSumZ += enemy.z;
-  };
-
   /**
    * Die Mitte der dichtesten Gruppe (die meisten Gegner im Umkreis `around`) in `range` Metern um (x, z); das Ergebnis liegt in
    * `siteX` und `siteZ`. Ohne Gegner in Reichweite ist es false.
    */
   densest(x: number, z: number, range: number, around: number): boolean {
-    this.crowdCount = 0;
-    this.crowdX = x;
-    this.crowdZ = z;
-    this.crowdRange = range;
-    this.crowdAround = around;
-    this.host.enemies.queryRadius(x, z, range, this.collectEach);
-    let best = 0;
-    let bestX = 0;
-    let bestZ = 0;
-    for (let i = 0; i < this.crowdCount; i++) {
-      const candidate = this.crowd[i];
-      if (!candidate) continue;
-      this.siteX = candidate.x;
-      this.siteZ = candidate.z;
-      this.crowdNear = 0;
-      this.crowdSumX = 0;
-      this.crowdSumZ = 0;
-      this.host.enemies.queryRadius(candidate.x, candidate.z, around, this.neighbourEach);
-      if (this.crowdNear > best) {
-        best = this.crowdNear;
-        // Die Mitte der Gruppe, nicht der eine Gegner, von dem aus gezählt wurde.
-        bestX = this.crowdSumX / this.crowdNear;
-        bestZ = this.crowdSumZ / this.crowdNear;
-      }
-    }
-    this.siteX = bestX;
-    this.siteZ = bestZ;
-    return best > 0;
+    const found = this.crowd.find(x, z, range, around);
+    this.siteX = this.crowd.siteX;
+    this.siteZ = this.crowd.siteZ;
+    return found;
   }
 
   // ------------------------------------------------------------------ Pfeilfächer

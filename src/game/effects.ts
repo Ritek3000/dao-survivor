@@ -14,6 +14,7 @@ import { createRandom } from '../core/random';
 import { ShieldDome } from './dome';
 import { EvolutionEffects } from './evolutionEffects';
 import { LaeuferEffects } from './evolutionEffectsLaeufer';
+import { MagierEffects } from './evolutionEffectsMagier';
 import { Particles, type Particle } from './particles';
 import { arrowGeometry, bannerGeometry, decoyGeometry, podGeometry, propMaterial, rockGeometry, rootsGeometry, shardGeometry, trapGeometry } from './props';
 import { Strips, type Strip } from './strips';
@@ -152,6 +153,8 @@ export class Effects {
   readonly evolution: EvolutionEffects;
   /** Das Bild der Evolutionen des Wildnisläufers. */
   readonly laeufer: LaeuferEffects;
+  /** Das Bild der Evolutionen des Magiers. */
+  readonly magier: MagierEffects;
 
   private fireRing: Strip | null = null;
   private fireCoals: Strip | null = null;
@@ -216,6 +219,7 @@ export class Effects {
     };
     this.evolution = new EvolutionEffects(tools);
     this.laeufer = new LaeuferEffects(tools);
+    this.magier = new MagierEffects(tools);
 
     this.group.add(
       this.strips.group,
@@ -235,6 +239,7 @@ export class Effects {
       this.podMesh,
       this.evolution.group,
       this.laeufer.group,
+      this.magier.group,
     );
   }
 
@@ -256,6 +261,7 @@ export class Effects {
     this.dome.reset();
     this.evolution.reset();
     this.laeufer.reset();
+    this.magier.reset();
     for (const mesh of [this.hailMesh, this.rockMesh, this.shardMesh, this.rootMesh, this.openTraps, this.shutTraps, this.bannerMesh, this.decoyMesh, this.podMesh]) mesh.count = 0;
   }
 

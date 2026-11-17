@@ -749,7 +749,25 @@ const DEFS: readonly WeaponDef[] = [
       },
       { arc: 0.95 },
       { flags: ['asche'] },
+      // Evolution: Ein Hitzesturm im weiten Halbkreis; wer brennend stirbt, entzündet den Staub um sich (`CONFIG.skills.evolution.magier`).
+      // Der Schaden ist ausdrücklich höher als die +25 % je Rang: Der Messlauf zeigte beim Standardwert (2,25) keinen Vorsprung vor Rang 5.
+      {
+        damage: 2.9,
+        arc: 2.4,
+        flags: ['asche', 'sonnenstich'],
+        statuses: [
+          { kind: 'burn', seconds: 2, power: 5 },
+          { kind: 'weak', seconds: 2, power: 1.2 },
+          { kind: 'slow', seconds: 1.5, power: 0.15 },
+          { kind: 'blind', seconds: 1.5, power: 0.5 },
+        ],
+      },
     ],
+    evolution: {
+      name: 'Atem der Verblassenden Sor',
+      item: 'Foliant der Glut',
+      text: 'Der Hitzestoß bricht als gewaltiger, fast unsichtbarer Sturm im weiten Halbkreis durch den Staub. Getroffene fangen Feuer und sind geblendet; wer brennend stirbt, entzündet den Staub um sich herum.',
+    },
     rankText: [
       'Ein unsichtbarer Hitzestoß durchdringt alle Gegner in einer Linie und entzündet sie 2 Sekunden lang',
       'Reichweite und Breite +25 %; Entzündete erleiden Nachteil: Ihre Rüstung wird spröde',
@@ -773,7 +791,23 @@ const DEFS: readonly WeaponDef[] = [
       { cooldown: 0.8, statuses: [{ kind: 'blind', seconds: 2.5, power: 0.4 }] },
       { flags: ['glutspur'] },
       { flags: ['glutspur', 'doppel', 'treffsicher'] },
+      // Evolution: Ein Lichtspeer fällt aus dem Himmel in die dichteste Gruppe und teilt sich in vier Strahlen. Die Abklingzeit bleibt die von
+      // Rang 3 (Faktor 0,8): Mit dem Faktor 1 wäre der Speer langsamer als die zwei Lanzen von Rang 5. Der Schaden ist ausdrücklich 3 statt 2,25:
+      // Die zwei durchbohrenden Lanzen von Rang 5 sind stark, und der Speer lag im Messlauf bei den Standardwerten nicht über ihnen.
+      {
+        damage: 3,
+        flags: ['treffsicher', 'sonnenspeer'],
+        statuses: [
+          { kind: 'blind', seconds: 2.5, power: 0.4 },
+          { kind: 'burn', seconds: 3, power: 5 },
+        ],
+      },
     ],
+    evolution: {
+      name: 'Speer der Verschwundenen Sonne',
+      item: 'Zorn der Sonne',
+      text: 'Ein grell leuchtender Lichtspeer bricht aus dem Himmel in die dichteste Gruppe. Beim Aufprall teilt er sich in vier Strahlen, die sternförmig über den Boden fegen, den Staub wegbrennen und alles entzünden.',
+    },
     rankText: [
       'Ein schmaler Lichtspeer durchbohrt bis zu drei Gegner in einer Linie, jeder weitere erleidet weniger',
       'Die Lanze durchschlägt alle Gegner auf ihrer ganzen, längeren Bahn ohne Schadensverlust',
@@ -797,7 +831,21 @@ const DEFS: readonly WeaponDef[] = [
       { statuses: [{ kind: 'feeble', seconds: 0.8, power: 0.15 }] },
       { flags: ['entzuenden'] },
       { flags: ['entzuenden', 'puls'] },
+      // Evolution: Ein weißglühendes Aschefeld; die Hitze wächst, je länger einer darin steht.
+      {
+        radius: 1.7,
+        flags: ['entzuenden', 'puls', 'krone'],
+        statuses: [
+          { kind: 'feeble', seconds: 0.8, power: 0.15 },
+          { kind: 'weak', seconds: 1.2, power: 1.2 },
+        ],
+      },
     ],
+    evolution: {
+      name: 'Krone der Erloschenen Sor',
+      item: 'Zorn des Phönix',
+      text: 'Der Glutkreis weitet sich zu einem weißglühenden Aschefeld. Wer darin steht, verliert seine Rüstung und leidet unter immer stärkerer Hitze; wer darin stirbt, zerfällt zu Glut und löst eine Hitzewelle aus.',
+    },
     rankText: [
       'Ein dauerhafter Kreis aus glühender Asche um dich: Wer darin steht, erleidet jede Sekunde Schaden',
       'Radius +30 %, mehr Schaden je Sekunde',
@@ -822,7 +870,14 @@ const DEFS: readonly WeaponDef[] = [
       { cooldown: 0.82, statuses: [{ kind: 'slow', seconds: 2, power: 0.25 }] },
       { flags: ['welle'] },
       { flags: ['welle', 'ring'] },
+      // Evolution: Drei Ringe rollen hinaus, danach liegt ein Trümmerfeld.
+      { radius: 2, knockback: 1.6, flags: ['beben'], statuses: [{ kind: 'slow', seconds: 2, power: 0.25 }] },
     ],
+    evolution: {
+      name: 'Beben der Alten Ordnung',
+      item: 'Herz des Berges',
+      text: 'Eine dreistufige Ringwelle rollt über das Sichtfeld, bricht Zacken aus dem Boden und schleudert selbst Große weit zurück. Ein zerrissenes Trümmerfeld bleibt, in dem Feinde taumeln und verwundbar sind.',
+    },
     rankText: [
       'Der Stab schlägt auf den Boden: eine Druckwelle um dich verletzt und stößt zurück',
       'Radius +30 %, stärkerer Rückstoß',
@@ -860,7 +915,22 @@ const DEFS: readonly WeaponDef[] = [
         ],
       },
       { flags: ['trocken', 'nachwuchs'] },
+      // Evolution: Ein Netz aus Wurzeln in einer langen Bahn zieht Gegner in die Mitte und hält sie fest.
+      {
+        flags: ['trocken', 'nachwuchs', 'tiefe'],
+        statuses: [
+          { kind: 'hold', seconds: 2.5 },
+          { kind: 'bleed', seconds: 2.5, power: 3 },
+          { kind: 'weak', seconds: 2.5, power: 1.2 },
+          { kind: 'blind', seconds: 2.5, power: 0.4 },
+        ],
+      },
     ],
+    evolution: {
+      name: 'Griff der Alten Tiefe',
+      item: 'Zorn des Tiefwalds',
+      text: 'Ein Netz aus versteinerten Wurzeln bricht in einer langen Bahn aus dem Staub, zieht Getroffene in die Mitte, hält sie 2,5 Sekunden fest und zehrt sie aus, während Staub ihnen die Sicht nimmt.',
+    },
     rankText: [
       'Wurzeln brechen unter einer kleinen Gruppe hervor und halten sie 1,8 Sekunden fest',
       'Radius +30 %, sie halten 2,2 Sekunden',
@@ -885,7 +955,23 @@ const DEFS: readonly WeaponDef[] = [
       { cooldown: 0.82, flags: ['schub', 'zerstreuen'] },
       { range: 1.3, arc: 0.65, statuses: [{ kind: 'slow', seconds: 2, power: 0.2 }] },
       { flags: ['schub', 'zerstreuen', 'spur'] },
+      // Evolution: Alle 2 Sekunden eine Doppel-Sturmböe; ein dauerhafter Luftstrom macht die Figur schneller.
+      {
+        cooldown: 0.91,
+        arc: 0.85,
+        knockback: 1.8,
+        flags: ['schub', 'zerstreuen', 'spur', 'orkan'],
+        statuses: [
+          { kind: 'slow', seconds: 2, power: 0.2 },
+          { kind: 'blind', seconds: 1.2, power: 0.4 },
+        ],
+      },
     ],
+    evolution: {
+      name: 'Orkan der Alten Ordnung',
+      item: 'Zorn des Nordwinds',
+      text: 'Ein dauerhafter Luftstrom macht dich schneller. Alle 2 Sekunden entlädt sich eine Doppel-Sturmböe, die Gegner weit zurückwirft, feindliche Zauber zerreibt und mit scharfem Staub blendet.',
+    },
     rankText: [
       'Eine schneidende Windschneise nach vorn drängt Gegner zurück und verletzt sie',
       'Nach jeder Böe läufst du 2 Sekunden lang schneller',
@@ -908,7 +994,14 @@ const DEFS: readonly WeaponDef[] = [
       { count: 2 },
       { flags: ['impuls'] },
       { flags: ['impuls', 'staub'] },
+      // Evolution: Drei kreisende Runen fangen je einen Treffer ab.
+      { count: 3, flags: ['impuls', 'staub', 'kuppel'] },
     ],
+    evolution: {
+      name: 'Kuppel der Alten Ordnung',
+      item: 'Das Arkane Herz',
+      text: 'Drei kreisende Staub-Runen fangen je einen Treffer ab. Solange eine steht, werden feindliche Fernzauber an der Aura zu Staub zerrieben; jede zerbrechende Rune schickt eine Staub-Druckwelle in Blickrichtung.',
+    },
     rankText: [
       'Eine Hülle aus Staub fängt den nächsten Treffer ganz ab und bildet sich nach 10 Sekunden neu',
       'Die Neubildung dauert 1,5 Sekunden weniger',

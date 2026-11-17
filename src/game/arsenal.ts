@@ -12,6 +12,7 @@ import type { Pickups } from './pickups';
 import type { Player } from './player';
 import { Evolutions } from './evolutions';
 import { LaeuferEvolutions, type LaeuferHost } from './evolutionsLaeufer';
+import { MagierEvolutions, type MagierHost } from './evolutionsMagier';
 import { Projectiles, type Projectile, type ProjectileOptions } from './projectiles';
 import { BIG_GAME_SCALE, type Progression, type Stats } from './progression';
 import { applyStatus, markChance, takenFactor } from './status';
@@ -51,7 +52,7 @@ interface FollowUp {
   active: boolean;
   weapon: OwnedWeapon;
   delay: number;
-  kind: 'rueckhand' | 'wirbel' | 'echo' | 'welle' | 'lanze';
+  kind: 'rueckhand' | 'wirbel' | 'echo' | 'welle' | 'lanze' | 'boee';
   angle: number;
 }
 
@@ -197,6 +198,9 @@ export class Arsenal {
   onEvolve: ((weapon: OwnedWeapon) => void) | null = null;
   private readonly evolutions: Evolutions;
   private readonly laeufer: LaeuferEvolutions;
+  private readonly magier: MagierEvolutions;
+  /** Zerreibt feindliche Zauber im Umkreis (das Spiel setzt es: Es kennt die Bedrohungen); ohne Spiel gibt es keine. */
+  dissolveSogs: ((x: number, z: number, reach: number) => number) | null = null;
   /** Die Phantome der Vollstrecker, die gerade stehen, für die Zeichnung. */
   private readonly phantomSites: Site[] = [];
   private phantomCount = 0;
@@ -227,7 +231,7 @@ export class Arsenal {
     for (let i = 0; i < DECOY_CAPACITY; i++) this.decoySites.push({ x: 0, z: 0 });
     for (let i = 0; i < DECOY_CAPACITY; i++) this.phantomSites.push({ x: 0, z: 0 });
     const arsenal = this;
-    const host: LaeuferHost = {
+    const host: LaeuferHost & MagierHost = {
       stats,
       enemies,
       player,
@@ -241,11 +245,14 @@ export class Arsenal {
         return arsenal.now;
       },
       strike: (enemy, weapon, fromX, fromZ, factor, push = true) => {
+        // Ein Treffer mitten in einem anderen Schlag (die Krone schlägt im Puls der Glut) lässt dessen Faktor unberührt.
+        const outer = this.factor;
+        const outerPushless = this.pushless;
         this.factor = factor;
         this.pushless = !push;
         this.hit(enemy, weapon, fromX, fromZ);
-        this.factor = 1;
-        this.pushless = false;
+        this.factor = outer;
+        this.pushless = outerPushless;
       },
       range: (weapon) => weapon.def.range * this.stats.reach * weapon.rules.range,
       projectileOptions: (weapon) => this.projectileOptions(weapon),
@@ -256,9 +263,11 @@ export class Arsenal {
       area: (weapon) => this.area(weapon),
       sporeKill: (field, enemy) => this.sporeKill(field, enemy),
       weaponBySource: (source) => this.owned.find((candidate) => candidate.source === source),
+      dissolve: (x, z, reach) => this.dissolveSogs?.(x, z, reach) ?? 0,
     };
     this.evolutions = new Evolutions(host);
     this.laeufer = new LaeuferEvolutions(host);
+    this.magier = new MagierEvolutions(host);
   }
 
   /**
@@ -272,6 +281,7 @@ export class Arsenal {
     this.relicSeen = null;
     this.evolutions.reset();
     this.laeufer.reset();
+    this.magier.reset();
     this.swings = playerClass.swings;
     this.owned.length = 0;
     this.traps.length = 0;
@@ -364,6 +374,7 @@ export class Arsenal {
     this.now = time;
     const origin = this.player.position;
     let aura: OwnedWeapon | null = null;
+    let gale: OwnedWeapon | null = null;
 
     for (const weapon of this.owned) {
       if (weapon.def.kind === 'shield') {
@@ -381,6 +392,7 @@ export class Arsenal {
         continue;
       }
       if (weapon.def.kind === 'aura') aura = weapon;
+      if (weapon.rank === EVOLUTION_RANK && hasFlag(weapon.rules, 'orkan')) gale = weapon;
       weapon.cooldown -= dt * traits.haste;
       if (weapon.cooldown > 0) {
         this.announce(weapon, origin);
@@ -400,6 +412,7 @@ export class Arsenal {
 
     this.evolutions.update(dt);
     this.laeufer.update(dt);
+    this.magier.update(dt);
     this.updateFollowUps(dt);
     this.updateVolleys(dt);
     this.updateTraps();
@@ -408,6 +421,12 @@ export class Arsenal {
     this.projectiles.update(dt, this.enemies, this.onProjectileHit, origin, this.trail);
     this.showFields();
     this.effects.embers(aura !== null, origin.x, origin.z, aura ? this.auraRadius(aura) : 0, time, dt);
+    // Evolutionen des Magiers, die dauernd da sind: die weiße Krone um die Glut, der Wind des Orkans, die Runen der Kuppel.
+    const crown = aura !== null && hasFlag(aura.rules, 'krone') ? aura : null;
+    this.magier.crownVisual(crown, origin.x, origin.z, aura ? this.auraRadius(aura) : 0);
+    this.magier.keepGale(gale, origin.x, origin.z, dt);
+    const dome = this.shielder !== null && this.shielder.rank === EVOLUTION_RANK && hasFlag(this.shielder.rules, 'kuppel') ? this.shielder : null;
+    this.magier.runes(dome, this.player.shieldCharges, origin.x, origin.z, dt);
     // Wer den Schild getroffen hat, ist meist der nächste Gegner; von dort aus zerfällt die Kuppel oder stieben die Splitter.
     const charges = this.player.shieldCharges;
     const absorbed = charges < this.shieldSeen;
@@ -536,6 +555,11 @@ export class Arsenal {
         break;
       }
       case 'beam': {
+        // Speer der Verschwundenen Sonne: Statt der Lanze fällt ein Speer auf die dichteste Gruppe.
+        if (rules.flags.length > 0 && hasFlag(rules, 'sonnenspeer')) {
+          this.magier.spear(weapon, origin.x, origin.z, target, range);
+          break;
+        }
         // Rang 5: zwei Lanzen kurz nacheinander, die erste ein wenig links, die zweite rechts der Mitte.
         const twice = rules.flags.length > 0 && hasFlag(rules, 'doppel');
         this.shoot(weapon, origin.x, origin.z, angle, range, twice ? -MAGIER.lanceOffset / 2 : 0);
@@ -560,6 +584,7 @@ export class Arsenal {
           if (rules.flags.length > 0 && hasFlag(rules, 'schlinge')) this.laeufer.drag(weapon, origin.x, origin.z, target);
           else this.net(weapon, target);
         }
+        else if (rules.flags.length > 0 && hasFlag(rules, 'tiefe')) this.magier.grip(weapon, origin.x, origin.z, target, range);
         else this.burst(weapon, target.x, target.z, this.area(weapon), def.maxTargets, this.entangle);
         break;
     }
@@ -582,6 +607,8 @@ export class Arsenal {
     else if (def.look === 'boee') this.effects.gustLane(origin.x, origin.z, angle, range, width);
     else this.effects.slash(origin.x, origin.z, angle, range, width, def.look === 'wucht');
     if (rules.flags.length === 0 && rules.statuses.length === 0) return;
+    // Orkan der Alten Ordnung: Beide Böen zerreiben feindliche Zauber in der Nähe.
+    if (hasFlag(rules, 'orkan')) this.magier.galeGust(origin.x, origin.z, angle, range, width, !first);
     // Der Staub des Wuchthiebs ab Rang 3: Er blendet und betäubt, und man sieht ihn.
     if (first && statusSeconds(rules, 'blind') > 0) this.effects.cloud(origin.x + Math.sin(angle) * range * 0.7, origin.z + Math.cos(angle) * range * 0.7, range * 0.7);
     if (!first) return;
@@ -601,6 +628,9 @@ export class Arsenal {
       }
     }
     if (hasFlag(rules, 'asche')) this.ashLine(weapon, origin, angle, range, width);
+    // Evolutionen des Magiers (Rang 6): Atem der Verblassenden Sor; Orkan der Alten Ordnung (die zweite Böe folgt gleich).
+    if (hasFlag(rules, 'sonnenstich')) this.magier.sunBreath(weapon, origin.x, origin.z, angle, range, width);
+    if (hasFlag(rules, 'orkan')) this.later(weapon, EVOLUTION.magier.galeAgain, 'boee', angle);
     // Evolutionen (Rang 6): Henkersbeil und Spalter von Ghen.
     if (hasFlag(rules, 'sichel')) this.evolutions.sickle(weapon, origin.x, origin.z, angle);
     if (hasFlag(rules, 'spalter')) this.evolutions.cleave(weapon, origin.x, origin.z, angle);
@@ -609,6 +639,11 @@ export class Arsenal {
   /** Eine Wirkung rundum (Wirbelschlag, Kriegsschrei, Erdstoß, Sturmböe) mit dem Radius `radius`. */
   private strikeNova(weapon: OwnedWeapon, origin: Site, angle: number, radius: number, factor: number, first: boolean): void {
     const { def, rules } = weapon;
+    if (rules.flags.length > 0 && hasFlag(rules, 'beben')) {
+      // Beben der Alten Ordnung: Statt eines Stoßes laufen drei Ringe hinaus (Bild und Wirkung in `evolutionsMagier.ts`).
+      this.magier.quake(weapon, origin.x, origin.z, radius);
+      return;
+    }
     if (rules.flags.length > 0 && hasFlag(rules, 'donner')) {
       // Donner der Alten Ordnung: Der Schrei fährt als Kegel in Blickrichtung hinaus.
       this.factor = factor;
@@ -715,6 +750,13 @@ export class Arsenal {
         if (swing) this.player.strike(swing, angle);
         audio.play(`angriff.${def.id}`, origin.x, origin.z);
         this.strikeArc(weapon, origin, angle, range, KAEMPFER.backhandDamage, false);
+      } else if (followUp.kind === 'boee') {
+        // Die zweite Böe des Orkans richtet sich nach dem Gegner, der jetzt am nächsten steht.
+        const range = def.range * this.stats.reach * rules.range;
+        const target = this.enemies.nearest(origin.x, origin.z, range);
+        const angle = target ? Math.atan2(target.x - origin.x, target.z - origin.z) : followUp.angle;
+        audio.play(`angriff.${def.id}`, origin.x, origin.z);
+        this.strikeArc(weapon, origin, angle, range, EVOLUTION.magier.galeAgainFactor, false);
       } else if (followUp.kind === 'lanze') {
         // Die zweite Lanze richtet sich nach dem Gegner, der jetzt am nächsten steht.
         const range = def.range * this.stats.reach * rules.range;
@@ -854,11 +896,16 @@ export class Arsenal {
   readonly listener: CombatListener = {
     hurt: (attacker, _taken, absorbed) => {
       this.sting(attacker);
-      if (absorbed) this.shieldBroke();
+      if (absorbed) {
+        this.shieldBroke();
+        this.magier.runeBroke();
+      }
     },
     kill: (enemy, source) => {
       this.trapKill(enemy);
       this.rootKill(enemy);
+      this.magier.sunKill(enemy);
+      this.magier.crownKill(enemy);
       if (this.primed) this.shieldKill(source);
     },
     hit: (enemy, _amount, source, dot) => {
@@ -1212,6 +1259,8 @@ export class Arsenal {
       enemy.scorchAt = this.now;
       if (enemy.scorch >= MAGIER.scorchAfter) applyStatus(enemy.status, 'burn', MAGIER.scorchSeconds, MAGIER.scorchPower, weapon.source);
     }
+    // Krone der Erloschenen Sor: Je länger einer im Kreis steht, desto härter brennt es.
+    if (hasFlag(weapon.rules, 'krone')) this.magier.crownHit(enemy, weapon, this.glowX, this.glowZ, this.glowRadius);
     if (!this.pulsing || enemy.driven || enemy.type.cast || enemy.type.scale >= BIG_GAME_SCALE) return;
     const dx = enemy.x - this.glowX;
     const dz = enemy.z - this.glowZ;

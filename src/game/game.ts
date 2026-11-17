@@ -158,6 +158,7 @@ export class Game {
       pickups: this.pickups,
     });
     this.beute.rankOf = (id) => this.arsenal.rankOf(id);
+    this.arsenal.dissolveSogs = (x, z, reach) => this.threats.dissolve(x, z, reach);
     this.arsenal.onEvolve = (weapon) => this.hud.announce(`Evolution · ${weapon.def.evolution?.name ?? weapon.def.name}`);
 
     this.scene.background = this.background;
