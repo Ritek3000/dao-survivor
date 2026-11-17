@@ -84,7 +84,7 @@ src/
   core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Gegenstände)
   audio/              Ton und Musik: Engine, Ereignisnamen, Lesen von audio.json
   game/               Spiellogik und Darstellung (siehe unten)
-  ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Anleitung, Rückfragen; lagerView.ts: Lager (Ausrüstung, Truhe und Händler)
+  ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Anleitung, Rückfragen; lagerView.ts und lager.css: Lager (Ausrüstung, Truhe und Händler)
   tools/              Entwicklungswerkzeuge: Messlauf, Gegenstände (`__items`), Fertigkeiten-Unterbau (`__skills`) und Modell-Prüfer
 tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten, Gegenstandsbilder freistellen)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
@@ -202,6 +202,15 @@ Ansichten, die man mit **Tab** oder den Knöpfen oben wechselt:
 - *Truhe:* links das Inventar der Klasse, daneben die Truhe, eine für alle Klassen, in Reitern zu je 25 Plätzen (siehe unten).
 - *Händler:* links sein Angebot und der Rückkauf, rechts der eigene Besitz (siehe unten).
 
+**Gestaltung des Lagers.** Jedes Feld (Angelegt, Inventar, Truhe, Händler) hat denselben Aufbau: Kopf, eine Zeile für Füllstand oder Reiter, darunter das Raster.
+Ein Platz misst 64 px (in niedrigen oder schmalen Fenstern weniger) und alle Breiten und Höhen folgen daraus (Maße am Anfang von `src/ui/lager.css`), also stehen
+die Raster beim Wechsel der Ansicht am selben Ort, und beim Händler stehen Angebot, Befehle und Rückkauf den fünf Zeilen des eigenen Besitzes gegenüber. Die Seltenheit
+zeigen Rand, Glanz und Rauten in der Ecke des Platzes (Selten eine, Rar zwei, Legendär drei; so ist sie auch ohne Farbunterscheidung zu lesen), der Zeiger ist ein
+weißer Ring ohne Seltenheitsfarbe. Preise stehen mit Münze am Platz, reicht das Gold nicht, in Rot und auf der Karte auch im Text. **Nichts darf wandern**, wenn der
+Zeiger über die Plätze läuft: Der Ring liegt in einem Pseudoelement, die Karte steht in einer eigenen Spalte neben den Feldern und die Summe der Ausrüstung unter ihnen
+(Begründung und Regeln im Kommentar am Anfang von `src/ui/lager.css`). Wer die Oberfläche ändert, lässt den Zeiger durch alle Plätze der drei Ansichten
+laufen und prüft, dass sich kein Feld bewegt.
+
 **Gegenstände bewegen.** Enter oder Klick *nimmt einen Gegenstand auf*, der nächste Druck legt ihn auf einen anderen Platz (liegt dort einer, tauschen beide).
 Ziehen mit der Maus oder dem Finger tut dasselbe in einem Zug. Aufgenommen ist ein Gegenstand nur gemerkt: Erst das Ablegen ändert etwas, Esc legt ihn
 zurück, und ein Neuladen mitten im Zug verliert nichts. Die Aufnahme bleibt beim Wechsel der Ansicht und der Klasse bestehen; so wandert ein Gegenstand
@@ -218,7 +227,7 @@ aus der obersten Reihe der Truhe nach oben in die Leiste der Reiter und Befehle 
 mit einem Gegenstand in der Hand legt Enter ihn in den Reiter). Der Name eines Reiters lässt sich tippen: `core/input.ts` ignoriert die Tasten, solange ein
 Textfeld den Fokus hat. Die Truhe ist `src/game/truhe.ts` (Form, Namen, Preise) und `Ausruestung` (Speicherung, `move`); das Menü
 `src/game/lager.ts` (Bedienung) und `src/ui/lagerView.ts` (Oberfläche); die Zeichen der Gegenstände sind selbst gezeichnete Platzhalter
-(`src/ui/itemIcons.ts`).
+(`src/ui/itemIcons.ts`; die kleinen Zeichen der Oberfläche in `src/ui/glyphs.ts`).
 
 **Händler.** Alle Zahlen stehen in `CONFIG.items.shop` und `CONFIG.items.price`; Form und Würfeln des Angebots stehen in `src/game/haendler.ts`, der Handel selbst
 in `Ausruestung` (er ändert Gold, Gegenstände und Angebot in einem Zug), die Bedienung in `lager.ts`.

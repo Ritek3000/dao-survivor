@@ -239,47 +239,80 @@
     </div>
 
     <div id="lager" class="overlay" hidden>
-      <!-- Die Seite hat eine feste Mindesthöhe und der Fuß klebt unten: Wechselt die Karte des Gegenstands die Höhe, bleibt alles andere stehen. -->
+      <!--
+        Aufbau: Kopf (Titel, Gold), Leiste (Klasse und Ansicht), Körper (zwei Felder, rechts die Karte, darunter die Summe), Fuß.
+        Die Seite hat eine feste Mindesthöhe und der Fuß klebt unten: Wechselt die Karte des Gegenstands die Höhe, bleibt alles
+        andere stehen. Jedes Feld (`.panel`) hat denselben Aufbau: Kopf, Zeile für Reiter oder Füllstand, Raster.
+      -->
       <div id="lager-page">
-        <h1>Lager</h1>
-        <p id="lager-gold"></p>
-        <div id="lager-tabs"></div>
-        <div id="lager-modes"></div>
+        <header id="lager-head">
+          <h1>Lager</h1>
+          <p id="lager-gold" role="status" aria-live="polite">
+            <span id="lager-gold-coin" class="coin" aria-hidden="true"></span>
+            <span id="lager-gold-value"></span>
+            <span class="unit">Gold</span>
+          </p>
+        </header>
+        <div id="lager-bar">
+          <div id="lager-tabs" role="tablist" aria-label="Klasse"></div>
+          <div id="lager-modes" role="tablist" aria-label="Ansicht"></div>
+        </div>
         <div id="lager-body">
-          <div id="lager-equipment" class="slots" aria-label="Angelegt"></div>
-          <div id="lager-inventory" class="slots" aria-label="Inventar"></div>
-          <section id="lager-haendler" aria-label="Händler" data-zone="angebot" data-index="-1" hidden>
-            <h2>Angebot</h2>
+          <section id="lager-equipment" class="panel" aria-labelledby="equipment-title">
+            <header class="panel-head"><h2 id="equipment-title">Angelegt</h2></header>
+            <div class="panel-bar"><div id="equipment-meter" class="meter"></div></div>
+            <div id="equipment-slots" class="slots" aria-label="Angelegt"></div>
+          </section>
+          <section id="lager-inventory" class="panel" aria-labelledby="inventory-title">
+            <header class="panel-head"><h2 id="inventory-title">Inventar</h2></header>
+            <div class="panel-bar"><div id="inventory-meter" class="meter"></div></div>
+            <div id="inventory-slots" class="slots" aria-label="Inventar"></div>
+          </section>
+          <section id="lager-haendler" class="panel" aria-labelledby="haendler-title" data-zone="angebot" data-index="-1" hidden>
+            <header class="panel-head"><h2 id="haendler-title">Händler</h2></header>
+            <div class="panel-bar"><span class="section-label">Angebot</span></div>
             <div id="haendler-stock" class="slots" aria-label="Angebot"></div>
             <div id="haendler-commands"></div>
-            <h2>Rückkauf</h2>
+            <div class="panel-bar sub"><span class="section-label">Rückkauf</span><span class="section-note">zum Verkaufspreis</span></div>
             <div id="haendler-buyback" class="slots" aria-label="Rückkauf"></div>
           </section>
-          <section id="lager-truhe" aria-label="Truhe" hidden>
-            <div id="truhe-tabs"></div>
-            <div id="truhe-rename" hidden>
-              <input id="truhe-name" type="text" autocomplete="off" spellcheck="false" aria-label="Name des Reiters" />
-              <button id="truhe-name-ok" class="rcmd" type="button">OK</button>
-            </div>
-            <div id="truhe-ask" hidden>
-              <p id="truhe-ask-text"></p>
-              <div class="buttons">
-                <button id="truhe-ask-no" class="rcmd" type="button"></button>
-                <button id="truhe-ask-yes" class="rcmd" type="button"></button>
+          <section id="lager-truhe" class="panel" aria-labelledby="truhe-title" hidden>
+            <header class="panel-head">
+              <h2 id="truhe-title">Truhe</h2>
+              <div id="truhe-commands"></div>
+            </header>
+            <div class="panel-bar">
+              <div id="truhe-tabs" role="tablist" aria-label="Reiter"></div>
+              <div id="truhe-rename" hidden>
+                <input id="truhe-name" type="text" autocomplete="off" spellcheck="false" aria-label="Name des Reiters" />
+                <button id="truhe-name-ok" class="action" type="button">OK</button>
               </div>
             </div>
-            <div id="truhe-slots" class="slots" aria-label="Truhe"></div>
+            <div class="panel-body">
+              <div id="truhe-slots" class="slots" aria-label="Truhe"></div>
+              <div id="truhe-ask" role="alertdialog" aria-labelledby="truhe-ask-text" hidden>
+                <p id="truhe-ask-text"></p>
+                <div class="choices">
+                  <button id="truhe-ask-no" class="action" type="button"></button>
+                  <button id="truhe-ask-yes" class="action" type="button"></button>
+                </div>
+              </div>
+            </div>
           </section>
-          <aside id="lager-side">
+          <aside id="lager-side" aria-label="Gegenstand" aria-live="polite">
             <div id="lager-detail"></div>
-            <div id="lager-summary"></div>
           </aside>
+          <section id="lager-summary" aria-label="Ausrüstung gesamt"></section>
         </div>
         <div id="lager-foot">
-          <p id="lager-hand" hidden></p>
-          <p id="lager-note"></p>
-          <button id="lager-back" class="button" type="button">Zurück (Esc)</button>
-          <p id="lager-keys" class="keys"></p>
+          <div id="lager-status">
+            <p id="lager-hand" hidden></p>
+            <p id="lager-note" aria-live="polite"></p>
+          </div>
+          <div id="lager-foot-row">
+            <button id="lager-back" class="button" type="button">Zurück <kbd>Esc</kbd></button>
+            <p id="lager-keys"></p>
+          </div>
         </div>
       </div>
     </div>

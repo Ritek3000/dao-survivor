@@ -1,19 +1,34 @@
 import type { Rarity } from '../game/items';
+import './lager.css';
 import { element, span } from './dom';
+import { glyphElement, type GlyphId } from './glyphs';
 import { iconElement, itemImageElement, type ItemIconId, type ItemImage } from './itemIcons';
+
+/** Eine Eigenschaft auf der Karte: Name und Wert getrennt, damit der Wert in eigener Spalte stehen kann. */
+export interface PropertyView {
+  name: string;
+  /** Der gewürfelte Wert mit Vorzeichen und Einheit, etwa „+5 %“. */
+  value: string;
+  /** Der Bereich, aus dem der Wert kommt, etwa „3–9 %“. */
+  range: string;
+  /** Wo der Wurf im Bereich liegt, 0 (schwächster) bis 1 (stärkster). */
+  quality: number;
+}
 
 /** Ein Gegenstand, wie ihn die Oberfläche zeigt; den Text und die Zahlen bereitet `game/lager.ts` auf. */
 export interface ItemView {
   name: string;
   rarity: Rarity;
-  /** Zweite Zeile unter dem Namen, etwa „Rar · Ring“. */
-  subtitle: string;
+  /** „Rar“, „Legendär“ …: das Schild auf der Karte. */
+  rarityLabel: string;
+  /** Der Platz des Gegenstands, etwa „Ring“ oder „Axt“. */
+  slotLabel: string;
   /** Das Umrisszeichen des Gegenstands; es tritt an die Stelle des Bildes, falls das nicht geladen werden kann. */
   icon: ItemIconId;
   /** Das Bild des Gegenstands: sein Platz im Stil einer Klasse. */
   image: ItemImage;
-  props: readonly { text: string; range: string; quality: number }[];
-  /** Hinweis zur Bindung an eine Klasse („Nur für den Magier“), sonst `null`. */
+  props: readonly PropertyView[];
+  /** Hinweis zur Bindung an eine Klasse („Gehört zur Klasse Magier“), sonst `null`. */
   bound: string | null;
   /** Die Evolution eines legendären Rings: ihr Name, was sie freischaltet und was sie bewirkt; sonst `null`. */
   evolution: { title: string; requirement: string; text: string } | null;
@@ -21,7 +36,9 @@ export interface ItemView {
 
 /** Ein Preis in Gold, wie ihn der Händler an einen Gegenstand schreibt; `poor`: Das Gold in der Börse reicht dafür nicht. */
 export interface PriceView {
-  text: string;
+  /** Was der Preis meint: „Preis“, „Rückkauf“ oder „Verkauf“ (auf dem Platz selbst nicht zu sehen). */
+  label: string;
+  amount: number;
   poor: boolean;
 }
 
@@ -35,6 +52,18 @@ export interface SlotView {
   price?: PriceView | null;
 }
 
+/** Ein Befehl in der Truhe (Zeichen im Kopf des Feldes) oder beim Händler (Knopf zwischen Angebot und Rückkauf). */
+export interface CommandView {
+  label: string;
+  /** Zusatz am Knopf, etwa „gratis“ oder „500 Gold“. */
+  note?: string;
+  /** Erklärung beim Verweilen des Zeigers. */
+  title: string;
+  icon: GlyphId;
+  /** Das Gold reicht dafür nicht. */
+  poor?: boolean;
+}
+
 /** Ein Reiter der Truhe in der Leiste. */
 export interface ReiterView {
   name: string;
@@ -45,19 +74,21 @@ export interface ReiterView {
 }
 
 export interface TruheModel {
+  /** Die Überschrift des Feldes: „Truhe“, beim Händler „Dein Besitz“. */
+  title: string;
   tabs: readonly ReiterView[];
   /** Der geöffnete Reiter. */
   active: number;
   slots: readonly SlotView[];
   /** Die Befehle hinter den Reitern, in der Reihenfolge: neuer Reiter, umbenennen, Farbe, löschen. */
-  commands: readonly { label: string; title: string }[];
+  commands: readonly CommandView[];
 }
 
 /** Der Händler: sein Angebot, der Rückkauf und die Befehle dazwischen (Angebot erneuern, Normale verkaufen). */
 export interface HaendlerModel {
   stock: readonly SlotView[];
   buyback: readonly SlotView[];
-  commands: readonly { label: string; title: string; poor: boolean }[];
+  commands: readonly CommandView[];
 }
 
 /**
@@ -75,6 +106,18 @@ export interface Mark {
   index: number;
 }
 
+/** Ein Hinweis auf die Tasten unten: die Tasten als Kappen, dahinter, was sie tun. */
+export interface KeyHint {
+  keys: readonly string[];
+  text: string;
+}
+
+/** Was die Figur in der Hand hält: der Gegenstand und was man damit tun kann. */
+export interface HandView {
+  item: ItemView;
+  hint: string;
+}
+
 export interface LagerModel {
   gold: number;
   classes: readonly { name: string; note: string }[];
@@ -83,17 +126,17 @@ export interface LagerModel {
   equipment: readonly SlotView[];
   inventory: readonly SlotView[];
   /** Die Summe der Eigenschaften der angelegten Gegenstände; `capped`: der Höchstwert ist erreicht. */
-  summary: readonly { text: string; capped: boolean }[];
+  summary: readonly { name: string; value: string; capped: boolean }[];
   truhe: TruheModel;
   haendler: HaendlerModel;
   /** Der Platz des Gegenstands, den die Figur in der Hand hält, wenn er gerade zu sehen ist. */
   held: Mark | null;
-  /** Zeile über den Tasten: was in der Hand liegt und was man damit tun kann. */
-  hand: string;
+  /** Der Gegenstand in der Hand, solange einer aufgenommen ist. */
+  hand: HandView | null;
   /** Rückmeldung zur letzten Handlung, etwa warum etwas nicht ging (`noteBad`: dann rot, sonst golden). */
   note: string;
   noteBad: boolean;
-  keys: string;
+  keys: readonly KeyHint[];
 }
 
 export interface DetailView {
@@ -101,7 +144,7 @@ export interface DetailView {
   item: ItemView | null;
   emptyText: string;
   /** Unterschied zum angelegten Gegenstand desselben Platzes; `null`, wenn es nichts zu vergleichen gibt. */
-  compare: readonly { text: string; better: boolean }[] | null;
+  compare: readonly { name: string; value: string; better: boolean }[] | null;
   compareTitle: string;
   /** Beim Händler: Was der Gegenstand kostet oder einbringt. */
   price?: PriceView | null;
@@ -117,9 +160,18 @@ const DRAG_DISTANCE = 8;
 
 const MODE_LABELS: Readonly<Record<LagerMode, string>> = { ausruestung: 'Ausrüstung', truhe: 'Truhe', haendler: 'Händler' };
 
+/** Wie viele Rauten eine Seltenheit auf dem Platz trägt: ein zweites Merkmal neben der Farbe, für alle, die Farben schlecht unterscheiden. */
+const PIPS: Readonly<Record<Rarity, number>> = { normal: 0, selten: 1, rar: 2, legendaer: 3 };
+
+/** Ein Element der Leiste, das ein Platz ist (Reiter, Befehl, Knopf des Händlers). */
+type ButtonCell = HTMLButtonElement;
+
 /**
  * Die Oberfläche des Lagers: die Ansichten Ausrüstung, Truhe und Händler, die Karte des markierten Gegenstands und die Übersicht.
  * Hält keinen Spielzustand; Klicks, Ziehen und Eingaben gehen als Rückrufe an `game/lager.ts`.
+ *
+ * Nichts darf wandern, wenn der Zeiger sich bewegt: Der markierte Platz zeigt sich nur über einen Ring aus einem Pseudoelement
+ * (`.selected::after`), der keinen Platz braucht, und die Karte sitzt in einer Spalte, die Raster und Summe nicht verschiebt (siehe `lager.css`).
  */
 export class LagerView {
   onClass: (index: number) => void = () => {};
@@ -136,17 +188,24 @@ export class LagerView {
   onAsk: (yes: boolean) => void = () => {};
   onBack: () => void = () => {};
   private readonly root = element('lager');
-  private readonly gold = element('lager-gold');
+  private readonly goldChip = element('lager-gold');
+  private readonly goldValue = element('lager-gold-value');
   private readonly tabs = element('lager-tabs');
   private readonly modes = element('lager-modes');
-  private readonly equipment = element('lager-equipment');
-  private readonly inventory = element('lager-inventory');
+  private readonly equipmentPanel = element('lager-equipment');
+  private readonly equipment = element('equipment-slots');
+  private readonly equipmentMeter = element('equipment-meter');
+  private readonly inventoryPanel = element('lager-inventory');
+  private readonly inventory = element('inventory-slots');
+  private readonly inventoryMeter = element('inventory-meter');
   private readonly truhe = element('lager-truhe');
+  private readonly truheTitle = element('truhe-title');
   private readonly haendler = element('lager-haendler');
   private readonly stock = element('haendler-stock');
   private readonly buyback = element('haendler-buyback');
   private readonly haendlerCommands = element('haendler-commands');
   private readonly reiter = element('truhe-tabs');
+  private readonly truheCommands = element('truhe-commands');
   private readonly truheSlots = element('truhe-slots');
   private readonly rename = element('truhe-rename');
   private readonly nameField = element<HTMLInputElement>('truhe-name');
@@ -171,6 +230,8 @@ export class LagerView {
   private pressed: { from: Mark; item: ItemView; x: number; y: number } | null = null;
   private dragging = false;
   private ghost: HTMLElement | null = null;
+  /** Das Feld, über dem ein gezogener Gegenstand gerade schwebt; es zeigt, dass er dort abgelegt würde. */
+  private dropTarget: HTMLElement | null = null;
   /** Nach dem Ziehen löst das Loslassen noch einen Klick aus; der soll nicht noch einmal ablegen. */
   private suppressClick = false;
 
@@ -181,6 +242,7 @@ export class LagerView {
       back.blur();
       this.onBack();
     });
+    element('lager-gold-coin').replaceChildren(glyphElement('coin'));
 
     this.nameField.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') this.finishRename(true);
@@ -196,6 +258,17 @@ export class LagerView {
       });
     }
 
+    // Viele Reiter laufen über die Leiste hinaus: Das Rad schiebt sie seitwärts (ein Rad kennt sonst nur „auf“ und „ab“).
+    this.reiter.addEventListener(
+      'wheel',
+      (event) => {
+        if (this.reiter.scrollWidth <= this.reiter.clientWidth || event.deltaX !== 0) return;
+        event.preventDefault();
+        this.reiter.scrollLeft += event.deltaY;
+      },
+      { passive: false },
+    );
+
     // Ziehen: Das Drücken merkt sich den Platz, Bewegen und Loslassen verfolgt das Fenster, denn der Zeiger verlässt den Knopf.
     window.addEventListener('pointermove', (event) => this.onPointerMove(event));
     window.addEventListener('pointerup', (event) => this.onPointerUp(event));
@@ -204,13 +277,17 @@ export class LagerView {
 
   /** Zeigt das Lager oder baut es nach einer Änderung neu auf. */
   show(model: LagerModel): void {
-    this.gold.textContent = `Gold: ${model.gold}`;
+    this.goldValue.textContent = String(model.gold);
     this.tabs.replaceChildren(
       ...model.classes.map((entry, index) => {
         const tab = document.createElement('button');
         tab.type = 'button';
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-selected', String(index === model.active));
         tab.className = index === model.active ? 'tab selected' : 'tab';
-        tab.append(span('name', entry.name), span('note', entry.note));
+        const key = document.createElement('kbd');
+        key.textContent = String(index + 1);
+        tab.append(key, span('name', entry.name), span('note', entry.note));
         tab.addEventListener('click', () => {
           tab.blur();
           this.onClass(index);
@@ -218,27 +295,30 @@ export class LagerView {
         return tab;
       }),
     );
-    this.modes.replaceChildren(
-      ...(Object.keys(MODE_LABELS) as LagerMode[]).map((mode) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = mode === model.mode ? 'mode selected' : 'mode';
-        button.textContent = MODE_LABELS[mode];
-        button.addEventListener('click', () => {
-          button.blur();
-          this.onMode(mode);
-        });
-        return button;
-      }),
-    );
+    const modeButtons = (Object.keys(MODE_LABELS) as LagerMode[]).map((mode) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-selected', String(mode === model.mode));
+      button.className = mode === model.mode ? 'mode selected' : 'mode';
+      button.textContent = MODE_LABELS[mode];
+      button.addEventListener('click', () => {
+        button.blur();
+        this.onMode(mode);
+      });
+      return button;
+    });
+    const tabKey = document.createElement('kbd');
+    tabKey.textContent = 'Tab';
+    tabKey.title = 'Nächste Ansicht';
+    this.modes.replaceChildren(...modeButtons, tabKey);
+    const reiterTabs = model.truhe.tabs.map((tab, index) => this.reiterTab(index, tab, index === model.truhe.active));
+    const reiterCommands = model.truhe.commands.map((command, index) => this.iconCommand(model.truhe.tabs.length + index, command));
     this.cells = {
       ausruestung: model.equipment.map((slot, index) => this.cell('ausruestung', index, slot)),
       inventar: model.inventory.map((slot, index) => this.cell('inventar', index, slot)),
       truhe: model.truhe.slots.map((slot, index) => this.cell('truhe', index, slot)),
-      reiter: [
-        ...model.truhe.tabs.map((tab, index) => this.reiterTab(index, tab, index === model.truhe.active)),
-        ...model.truhe.commands.map((command, index) => this.reiterCommand(model.truhe.tabs.length + index, command)),
-      ],
+      reiter: [...reiterTabs, ...reiterCommands],
       angebot: model.haendler.stock.map((slot, index) => this.cell('angebot', index, slot)),
       befehle: model.haendler.commands.map((command, index) => this.haendlerCommand(index, command)),
       rueckkauf: model.haendler.buyback.map((slot, index) => this.cell('rueckkauf', index, slot)),
@@ -246,26 +326,33 @@ export class LagerView {
     this.equipment.replaceChildren(...this.cells.ausruestung);
     this.inventory.replaceChildren(...this.cells.inventar);
     this.truheSlots.replaceChildren(...this.cells.truhe);
-    this.reiter.replaceChildren(...this.cells.reiter);
+    this.reiter.replaceChildren(...reiterTabs);
+    this.truheCommands.replaceChildren(...reiterCommands);
+    this.truheTitle.textContent = model.truhe.title;
     this.stock.replaceChildren(...this.cells.angebot);
     this.haendlerCommands.replaceChildren(...this.cells.befehle);
     this.buyback.replaceChildren(...this.cells.rueckkauf);
+    this.fillMeter(this.equipmentMeter, 'Belegt', model.equipment);
+    this.fillMeter(this.inventoryMeter, 'Belegt', model.inventory);
     // Ausrüstung und Inventar zeigen nur die Ansicht Ausrüstung; Inventar gibt es in der Truhe links, beim Händler in der Leiste.
-    this.equipment.hidden = model.mode !== 'ausruestung';
-    this.inventory.hidden = model.mode === 'haendler';
+    this.equipmentPanel.hidden = model.mode !== 'ausruestung';
+    this.inventoryPanel.hidden = model.mode === 'haendler';
     this.truhe.hidden = model.mode === 'ausruestung';
     this.haendler.hidden = model.mode !== 'haendler';
+    // Die Zeile der Reiter läuft über, wenn es viele sind; dann blendet sie an den Rändern aus.
+    this.reiter.classList.toggle('overflowing', this.reiter.scrollWidth > this.reiter.clientWidth);
     if (model.held) this.cells[model.held.zone][model.held.index]?.classList.add('held');
-    this.summary.replaceChildren(
-      span('title', 'Ausrüstung gesamt'),
-      ...(model.summary.length > 0
-        ? model.summary.map((line) => span(line.capped ? 'line capped' : 'line', line.capped ? `${line.text} (Höchstwert)` : line.text))
-        : [span('line empty', 'Nichts angelegt.')]),
-    );
-    this.hand.textContent = model.hand;
-    this.hand.hidden = model.hand === '';
+    this.showSummary(model.summary);
+    this.showHand(model.hand);
     this.setNote(model.note, model.noteBad);
-    this.keys.textContent = model.keys;
+    this.keys.replaceChildren(
+      ...model.keys.map((hint) => {
+        const node = document.createElement('span');
+        node.className = 'hint';
+        node.append(...hint.keys.map((key) => kbd(key)), span('text', hint.text));
+        return node;
+      }),
+    );
     this.root.hidden = false;
   }
 
@@ -275,24 +362,34 @@ export class LagerView {
       for (const [cellIndex, cell] of cells.entries()) {
         const selected = name === zone && cellIndex === index;
         cell.classList.toggle('selected', selected);
-        if (selected) cell.scrollIntoView({ block: 'nearest' });
+        if (selected) cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       }
     }
   }
 
   showDetail(view: DetailView): void {
     if (!view.item) {
-      this.detail.replaceChildren(span('empty', view.emptyText));
+      this.detail.replaceChildren(view.emptyText === '' ? '' : this.plainCard(view.emptyText));
       return;
     }
     const { item } = view;
     const card = document.createElement('div');
     card.className = `item-card rarity-${item.rarity}`;
+
     const head = document.createElement('div');
     head.className = 'head';
+    const frame = document.createElement('span');
+    frame.className = 'frame';
+    frame.append(itemImageElement(item.image, item.icon));
     const title = document.createElement('div');
-    title.append(span('name', item.name), span('sub', item.subtitle));
-    head.append(itemImageElement(item.image, item.icon), title);
+    title.className = 'title';
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.append(span('badge', item.rarityLabel), span('kind', item.slotLabel));
+    title.append(span('name', item.name), meta);
+    head.append(frame, title);
+    card.append(head);
+
     const props = document.createElement('ul');
     props.className = 'props';
     for (const prop of item.props) {
@@ -300,27 +397,54 @@ export class LagerView {
       const bar = document.createElement('i');
       bar.className = 'bar';
       const fill = document.createElement('b');
-      fill.style.width = `${Math.round(prop.quality * 100)}%`;
+      fill.style.width = `${Math.max(3, Math.round(prop.quality * 100))}%`;
       bar.append(fill);
-      row.append(span('text', prop.text), span('range', prop.range), bar);
+      row.append(span('pname', prop.name), span('pvalue', prop.value), bar, span('range', prop.range));
       props.append(row);
     }
-    card.append(head, props);
+    card.append(props);
+
     if (item.evolution) {
       const evolution = document.createElement('div');
       evolution.className = 'evolution';
       evolution.append(span('title', item.evolution.title), span('requirement', item.evolution.requirement), span('text', item.evolution.text));
       card.append(evolution);
     }
-    if (item.bound) card.append(span('bound', item.bound));
-    if (view.price) card.append(span(view.price.poor ? 'price poor' : 'price', view.price.text));
+    if (item.bound) {
+      const bound = document.createElement('p');
+      bound.className = 'bound';
+      bound.append(glyphElement('lock'), span('text', item.bound));
+      card.append(bound);
+    }
     if (view.compare) {
       const compare = document.createElement('div');
       compare.className = 'compare';
       compare.append(span('title', view.compareTitle));
-      if (view.compare.length === 0) compare.append(span('line', 'Keine Änderung.'));
-      for (const line of view.compare) compare.append(span(line.better ? 'line better' : 'line worse', line.text));
+      const lines = document.createElement('ul');
+      if (view.compare.length === 0) {
+        const none = document.createElement('li');
+        none.className = 'same';
+        none.append(span('cname', 'Keine Änderung.'));
+        lines.append(none);
+      }
+      for (const line of view.compare) {
+        const row = document.createElement('li');
+        row.className = line.better ? 'better' : 'worse';
+        row.append(span('arrow', line.better ? 'besser' : 'schlechter'), span('cname', line.name), span('cvalue', line.value));
+        lines.append(row);
+      }
+      compare.append(lines);
       card.append(compare);
+    }
+    if (view.price) {
+      const price = document.createElement('div');
+      price.className = view.price.poor ? 'price poor' : 'price';
+      const amount = document.createElement('span');
+      amount.className = 'amount';
+      amount.append(glyphElement('coin'), span('number', String(view.price.amount)), span('unit', 'Gold'));
+      price.append(span('plabel', view.price.label), amount);
+      if (view.price.poor) price.append(span('short', 'Dein Gold reicht nicht.'));
+      card.append(price);
     }
     this.detail.replaceChildren(card);
   }
@@ -329,13 +453,14 @@ export class LagerView {
   setNote(text: string, bad = false): void {
     this.note.textContent = text;
     this.note.classList.toggle('bad', bad);
+    this.note.hidden = text === '';
   }
 
   /** Lässt die Geldbörse kurz aufleuchten; für Handlungen, die nicht gehen. */
   deny(): void {
-    this.gold.classList.remove('deny');
-    void this.gold.offsetWidth;
-    this.gold.classList.add('deny');
+    this.goldChip.classList.remove('deny');
+    void this.goldChip.offsetWidth;
+    this.goldChip.classList.add('deny');
   }
 
   /** Öffnet das Feld, in dem der Name des Reiters geändert wird. */
@@ -387,25 +512,100 @@ export class LagerView {
     this.onRename(commit ? text : null);
   }
 
+  /** Eine Karte ohne Gegenstand: ein leerer Platz oder die Erklärung eines Befehls. */
+  private plainCard(text: string): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'item-card plain';
+    card.append(span('text', text));
+    return card;
+  }
+
+  /** Füllstand eines Feldes: Beschriftung, Balken und „belegt / Plätze“. */
+  private fillMeter(target: HTMLElement, label: string, slots: readonly SlotView[]): void {
+    const used = slots.filter((slot) => slot.item).length;
+    const track = document.createElement('span');
+    track.className = 'track';
+    const fill = document.createElement('i');
+    fill.style.width = `${slots.length > 0 ? Math.round((used / slots.length) * 100) : 0}%`;
+    track.append(fill);
+    target.classList.toggle('full', slots.length > 0 && used >= slots.length);
+    target.replaceChildren(span('label', label), track, span('count', `${used} / ${slots.length}`));
+  }
+
+  /** Die Summe der angelegten Gegenstände als Streifen unter den Feldern. */
+  private showSummary(lines: LagerModel['summary']): void {
+    const list = document.createElement('ul');
+    list.className = 'lines';
+    if (lines.length === 0) list.append(this.summaryLine('Nichts angelegt.', '', false, true));
+    for (const line of lines) list.append(this.summaryLine(line.name, line.value, line.capped, false));
+    this.summary.replaceChildren(span('title', 'Ausrüstung gesamt'), list);
+  }
+
+  private summaryLine(name: string, value: string, capped: boolean, empty: boolean): HTMLLIElement {
+    const row = document.createElement('li');
+    row.className = empty ? 'line empty' : capped ? 'line capped' : 'line';
+    row.append(span('lname', name));
+    if (value !== '') row.append(span('lvalue', value));
+    if (capped) row.append(span('cap', 'Höchstwert'));
+    return row;
+  }
+
+  private showHand(hand: HandView | null): void {
+    this.hand.hidden = hand === null;
+    if (!hand) {
+      this.hand.replaceChildren();
+      return;
+    }
+    this.hand.className = `rarity-${hand.item.rarity}`;
+    const picture = document.createElement('span');
+    picture.className = 'thumb';
+    picture.append(itemImageElement(hand.item.image, hand.item.icon));
+    this.hand.replaceChildren(picture, span('label', 'In der Hand'), span('name', hand.item.name), span('hint', hand.hint));
+  }
+
   private cell(zone: LagerZone, index: number, slot: SlotView): HTMLButtonElement {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = slot.item ? `slot rarity-${slot.item.rarity}` : 'slot empty';
-    button.title = slot.item ? slot.item.name : slot.label;
-    if (slot.item) button.append(itemImageElement(slot.item.image, slot.item.icon));
-    else if (slot.icon) button.append(iconElement(slot.icon));
-    if (zone === 'ausruestung') button.append(span('label', slot.label));
-    if (slot.item && slot.price) {
-      button.append(span(slot.price.poor ? 'price poor' : 'price', slot.price.text));
-      button.title = `${slot.item.name}: ${slot.price.text}`;
+    const { item } = slot;
+    button.className = item ? `slot rarity-${item.rarity}` : 'slot empty';
+    // Die Karte rechts sagt alles über den Gegenstand; ein Hinweis des Browsers darüber wäre doppelt (und träfe die Karte).
+    button.setAttribute(
+      'aria-label',
+      item
+        ? `${item.name}, ${item.rarityLabel}, ${item.slotLabel}${slot.price ? `, ${slot.price.amount} Gold` : ''}`
+        : slot.label !== ''
+          ? `${slot.label}: leer`
+          : 'Leerer Platz',
+    );
+    if (item) {
+      const pips = PIPS[item.rarity];
+      if (pips > 0) {
+        const mark = document.createElement('span');
+        mark.className = 'pips';
+        for (let pip = 0; pip < pips; pip++) mark.append(document.createElement('i'));
+        button.append(mark);
+      }
+      button.append(itemImageElement(item.image, item.icon));
+    } else if (slot.icon) {
+      button.append(iconElement(slot.icon));
     }
-    this.wire(button, { zone, index }, slot.item);
+    if (zone === 'ausruestung') button.append(span('label', slot.label));
+    if (item && slot.price) {
+      button.classList.add('priced');
+      const price = document.createElement('span');
+      price.className = slot.price.poor ? 'price poor' : 'price';
+      price.append(glyphElement('coin'), span('number', String(slot.price.amount)));
+      button.append(price);
+    }
+    this.wire(button, { zone, index }, item);
     return button;
   }
 
   private reiterTab(index: number, tab: ReiterView, active: boolean): HTMLButtonElement {
     const button = document.createElement('button');
     button.type = 'button';
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-selected', String(active));
     button.className = active ? 'rtab current' : 'rtab';
     button.style.setProperty('--tab', tab.color);
     button.title = `${tab.name}: ${tab.count} von ${tab.size} Plätzen belegt`;
@@ -416,22 +616,26 @@ export class LagerView {
     return button;
   }
 
-  private reiterCommand(index: number, command: { label: string; title: string }): HTMLButtonElement {
+  /** Ein Befehl der Truhe: nur das Zeichen, der Name steht beim Verweilen (und auf der Karte rechts). */
+  private iconCommand(index: number, command: CommandView): ButtonCell {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'rcmd';
-    button.textContent = command.label;
-    button.title = command.title;
+    button.className = command.poor ? 'icon-btn poor' : 'icon-btn';
+    const text = command.note ? `${command.label} (${command.note})` : command.label;
+    button.title = text;
+    button.setAttribute('aria-label', text);
+    button.append(glyphElement(command.icon));
     this.wire(button, { zone: 'reiter', index }, null);
     return button;
   }
 
-  private haendlerCommand(index: number, command: { label: string; title: string; poor: boolean }): HTMLButtonElement {
+  private haendlerCommand(index: number, command: CommandView): ButtonCell {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = command.poor ? 'rcmd poor' : 'rcmd';
-    button.textContent = command.label;
+    button.className = command.poor ? 'action poor' : 'action';
     button.title = command.title;
+    button.append(glyphElement(command.icon), span('label', command.label));
+    if (command.note) button.append(span('note', command.note));
     this.wire(button, { zone: 'befehle', index }, null);
     return button;
   }
@@ -464,8 +668,11 @@ export class LagerView {
       this.dragging = true;
       this.ghost = this.makeGhost(pressed.item);
       this.root.append(this.ghost);
+      this.root.classList.add('dragging');
+      this.cells[pressed.from.zone][pressed.from.index]?.classList.add('lifted');
     }
-    if (this.ghost) this.ghost.style.transform = `translate(${event.clientX - 30}px, ${event.clientY - 30}px)`;
+    if (this.ghost) this.ghost.style.transform = `translate(${event.clientX - 32}px, ${event.clientY - 32}px) rotate(-4deg)`;
+    this.markDropTarget(document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-zone]') ?? null);
   }
 
   private onPointerUp(event: PointerEvent): void {
@@ -487,6 +694,17 @@ export class LagerView {
     this.dragging = false;
     this.ghost?.remove();
     this.ghost = null;
+    this.markDropTarget(null);
+    this.root.classList.remove('dragging');
+    for (const lifted of this.root.querySelectorAll('.lifted')) lifted.classList.remove('lifted');
+  }
+
+  /** Zeigt, wohin der gezogene Gegenstand fiele: der Platz unter dem Zeiger, beim Händler dessen ganzes Feld (verkaufen). */
+  private markDropTarget(target: HTMLElement | null): void {
+    if (target === this.dropTarget) return;
+    this.dropTarget?.classList.remove('drop');
+    this.dropTarget = target;
+    target?.classList.add('drop');
   }
 
   private makeGhost(item: ItemView): HTMLElement {
@@ -495,4 +713,11 @@ export class LagerView {
     ghost.append(itemImageElement(item.image, item.icon));
     return ghost;
   }
+}
+
+/** Eine Taste als Kappe. */
+function kbd(text: string): HTMLElement {
+  const node = document.createElement('kbd');
+  node.textContent = text;
+  return node;
 }
