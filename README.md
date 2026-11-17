@@ -440,7 +440,9 @@ Wie das gebaut ist:
 - Wurzelgriff, Rang 3: „kontinuierlicher Schaden“ ist **Blutung** (3 je Sekunde, solange der Gegner festsitzt); Rang 4: die 20 % mehr gelten für Treffer von Feuer- und Lichtzaubern auf Gefesselte *dieses* Wurzelgriffs (Hitze werfen, Glut formen, Sorlanze).
 - Schild: „fängt den nächsten Treffer ab“ gilt für jeden Treffer eines Gegners, auch den eines Fernangriffs. Rang 5: „Zauber“ sind die sechs Angriffszauber des Magiers; „Elite oder Boss“ ist Großwild (Gegner ab Größe 1,5, also Troll und Verschlinger).
 - Die Grundwerte folgen den Rangtabellen der Vorlage und weichen von den alten ab: Hitze werfen 1,2 s statt 0,95 s; Sorlanze 2,5 s und 26 Schaden statt 2,4 s und 22; Erdstoß 3,8 s statt 5 s, dafür kein Festhalten mehr, nur Rückstoß;
-  Wurzelgriff 3,8 s statt 4,5 s, Rang 1 hält 1,8 s statt 3 s; Schild 10 s statt 12 s. Aus der Sturmböe, früher ein Rundumstoß alle 6 s, ist eine Windschneise nach vorn alle 2,2 s geworden (Schaden 6, Rückstoß, Tempo-Schub ab Rang 2).
+  Wurzelgriff 3,8 s statt 4,5 s, Rang 1 hält 1,8 s statt 3 s; Schild 10 s statt 12 s. Aus der Sturmböe, früher ein Rundumstoß alle 6 s, ist eine Windschneise nach vorn alle 2,2 s geworden (Schaden 14, Rückstoß, Tempo-Schub ab Rang 2). Der Grundschaden war zuerst 6; damit kam die Böe im Messlauf auf rund 14 Schaden pro Sekunde und trug nichts bei.
+  Mit 14 überlebt die Automatik-Figur mit der Böe auf Rang 5 im Mittel 746 s statt 644 s, die Evolution bekommt zusätzlich den Faktor 4,2 statt des Standardanstiegs (×2,25) und kommt auf 842 s statt 737 s (Siege 72 % statt 28 %; je 40 Nächte, gleiche Saatwerte; die Streuung liegt bei rund 20 s).
+  Mehr Schaden als etwa 14 hilft auf Rang 5 nicht mehr, kürzere Abklingzeit, weniger Rückstoß und ein breiterer Kegel brachten im Messlauf nichts Messbares.
   Im Messlauf (zwölf Nächte, zwei Saatwerte, 24 Läufe je Stand) überlebt die Automatik-Figur des Magiers damit im Mittel 450 s gegen 384 s vorher (die Streuung liegt bei 130 bis 190 s); eine Feinjustierung der Zahlen war nicht nötig.
 - Kein Savegame- und kein Plattform-Eingriff: `SAVEGAME_VERSION` bleibt, Pfade und Eingabe sind unverändert.
 

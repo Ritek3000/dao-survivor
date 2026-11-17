@@ -948,7 +948,9 @@ const DEFS: readonly WeaponDef[] = [
     kind: 'arc',
     look: 'boee',
     cooldown: 2.2,
-    damage: 6,
+    // Der Schaden ist am Messlauf abgestimmt: Mit 6 kam die Böe auf rund 14 Schaden pro Sekunde und trug nichts bei; ab etwa 14 flacht der Gewinn auf Rang 5 ab.
+    // Die Ränge 1 bis 5 steigen mit dem Standardanstieg (×1 bis ×2).
+    damage: 14,
     range: 7,
     knockback: 16,
     ranks: [
@@ -957,8 +959,9 @@ const DEFS: readonly WeaponDef[] = [
       { cooldown: 0.82, flags: ['schub', 'zerstreuen'] },
       { range: 1.3, arc: 0.65, statuses: [{ kind: 'slow', seconds: 2, power: 0.2 }] },
       { flags: ['schub', 'zerstreuen', 'spur'] },
-      // Evolution: Alle 2 Sekunden eine Doppel-Sturmböe; ein dauerhafter Luftstrom macht die Figur schneller.
+      // Evolution: Alle 2 Sekunden eine Doppel-Sturmböe; ein dauerhafter Luftstrom macht die Figur schneller. Der Schaden steigt über den Standardanstieg (×2,25) hinaus auf ×4,2.
       {
+        damage: 4.2,
         cooldown: 0.91,
         arc: 0.85,
         knockback: 1.8,
