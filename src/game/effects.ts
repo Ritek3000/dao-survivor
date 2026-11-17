@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { createRandom } from '../core/random';
 import { ShieldDome } from './dome';
 import { EvolutionEffects } from './evolutionEffects';
+import { LaeuferEffects } from './evolutionEffectsLaeufer';
 import { Particles, type Particle } from './particles';
 import { arrowGeometry, bannerGeometry, decoyGeometry, podGeometry, propMaterial, rockGeometry, rootsGeometry, shardGeometry, trapGeometry } from './props';
 import { Strips, type Strip } from './strips';
@@ -149,6 +150,8 @@ export class Effects {
   private readonly lightTint = new THREE.Color();
   /** Das Bild der Evolutionen (Rang 6); es nutzt Flächen und Teilchen von hier. */
   readonly evolution: EvolutionEffects;
+  /** Das Bild der Evolutionen des Wildnisläufers. */
+  readonly laeufer: LaeuferEffects;
 
   private fireRing: Strip | null = null;
   private fireCoals: Strip | null = null;
@@ -198,18 +201,21 @@ export class Effects {
     this.bannerMesh = instanced(bannerGeometry(), propMaterial(0.85), BANNER_CAPACITY, true);
     this.decoyMesh = instanced(decoyGeometry(), propMaterial(0.9), DECOY_CAPACITY, true);
     this.podMesh = instanced(podGeometry(), propMaterial(0.8), POD_CAPACITY, false);
-    this.evolution = new EvolutionEffects({
+    const tools = {
       strips: this.strips,
       glow: this.glow,
       dust: this.dust,
       random: this.random,
       particle: this.particle,
-      after: (seconds, run) => this.after(seconds, run),
-      groundWave: (x, z, radius, color, opacity) => this.groundWave(x, z, radius, color, opacity),
-      puff: (x, z, angle, speed, color, alpha) => this.puff(x, z, angle, speed, color, alpha),
-      sparks: (x, y, z, count, color, speed) => this.sparks(x, y, z, count, color, speed),
-      flash: (x, y, z, color, intensity, distance, seconds) => this.flash(x, y, z, color, intensity, distance, seconds),
-    });
+      after: (seconds: number, run: () => void) => this.after(seconds, run),
+      groundWave: (x: number, z: number, radius: number, color: number, opacity: number) => this.groundWave(x, z, radius, color, opacity),
+      puff: (x: number, z: number, angle: number, speed: number, color: number, alpha?: number) => this.puff(x, z, angle, speed, color, alpha),
+      sparks: (x: number, y: number, z: number, count: number, color: number, speed: number) => this.sparks(x, y, z, count, color, speed),
+      flash: (x: number, y: number, z: number, color: number, intensity: number, distance: number, seconds: number) => this.flash(x, y, z, color, intensity, distance, seconds),
+      hailArrows: (x: number, z: number, radius: number, delay: number, fromX: number, fromZ: number, arrows: number) => this.hailArrows(x, z, radius, delay, fromX, fromZ, arrows),
+    };
+    this.evolution = new EvolutionEffects(tools);
+    this.laeufer = new LaeuferEffects(tools);
 
     this.group.add(
       this.strips.group,
@@ -228,6 +234,7 @@ export class Effects {
       this.decoyMesh,
       this.podMesh,
       this.evolution.group,
+      this.laeufer.group,
     );
   }
 
@@ -248,6 +255,7 @@ export class Effects {
     this.fireSurge = 0;
     this.dome.reset();
     this.evolution.reset();
+    this.laeufer.reset();
     for (const mesh of [this.hailMesh, this.rockMesh, this.shardMesh, this.rootMesh, this.openTraps, this.shutTraps, this.bannerMesh, this.decoyMesh, this.podMesh]) mesh.count = 0;
   }
 
@@ -434,6 +442,11 @@ export class Effects {
       opacity: 0.4,
       life: delay + 0.15,
     });
+    this.hailArrows(x, z, radius, delay, fromX, fromZ, arrows);
+  }
+
+  /** Die Pfeile des Hagels allein: Sie gehen nach `delay` Sekunden auf dem Kreis nieder (der Sturm der Aschenfedern ruft sie im Takt). */
+  hailArrows(x: number, z: number, radius: number, delay: number, fromX: number, fromZ: number, arrows = HAIL_ARROWS): void {
     // Die Pfeile kommen aus der Richtung des Schützen, steil von oben.
     const away = Math.atan2(x - fromX, z - fromZ);
     const shown = Math.min(arrows, HAIL_ARROWS);

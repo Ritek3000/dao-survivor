@@ -477,7 +477,14 @@ const DEFS: readonly WeaponDef[] = [
       { cooldown: 0.7, statuses: [{ kind: 'slow', seconds: 1.5, power: 0.15 }] },
       { count: 2, flags: ['abfall', 'vorteil'] },
       { range: 1.3, speed: 1.3, flags: ['abfall', 'vorteil', 'ruestung'] },
+      // Evolution: Ein schneller Fächer aus fünf schweren Pfeilen; jeder dritte Schuss trägt einen Staub-Pfeil.
+      { count: 5, spread: 1.7, damage: 1.3, flags: ['abfall', 'vorteil', 'ruestung', 'faecher'] },
     ],
+    evolution: {
+      name: 'Pfeilfächer der Alten Ordnung',
+      item: 'Pfauenfeder',
+      text: 'Der Bogen feuert einen schnellen Fächer aus fünf schweren Eisenpfeilen. Jeder dritte Schuss trägt einen Staub-Pfeil: Er lässt beim ersten Aufprall eine Staubwolke zurück, die nachfolgende Pfeile auf Ziele im Inneren lenkt.',
+    },
     rankText: [
       'Schwerer Pfeil auf den nächsten Gegner, stößt kleine Gegner leicht zurück',
       'Der Pfeil durchbohrt das erste Ziel und trifft einen zweiten dahinter, mit weniger Schaden',
@@ -503,7 +510,14 @@ const DEFS: readonly WeaponDef[] = [
       { statuses: [{ kind: 'slow', seconds: 2, power: 0.2 }] },
       { cooldown: 3.7 / 4.5, statuses: [{ kind: 'slow', seconds: 2, power: 0.2 }, { kind: 'bleed', seconds: 3, power: 3 }] },
       { flags: ['folgen', 'mitte'] },
+      // Evolution: Kein einzelner Einschlag, sondern ein Schauer, der 2,5 Sekunden anhält (`CONFIG.skills.evolution.laeufer`).
+      { count: 14, flags: ['folgen', 'mitte', 'aschesturm'] },
     ],
+    evolution: {
+      name: 'Sturm der Aschenfedern',
+      item: 'Schatten der Tausend',
+      text: 'Der Pfeilhagel geht 2,5 Sekunden lang als anhaltender Schauer nieder. Die Aschepfeile nehmen Gegnern darin die Sicht (Fernkämpfer können nicht mehr zaubern) und lassen ein dichtes Staubfeld zurück, das Nachrückende weiter verlangsamt.',
+    },
     rankText: [
       'Eine Salve von 6 Pfeilen schlägt nach kurzer Verzögerung auf eine Gruppe ein',
       '9 Pfeile je Salve, Radius +20 %',
@@ -535,7 +549,14 @@ const DEFS: readonly WeaponDef[] = [
         ],
       },
       { flags: ['splitter'] },
+      // Evolution: Ein Bündel aus drei verketteten Riesen-Fangeisen, das auf die größte Gruppe zufliegt.
+      { count: 3, radius: 1.6, cooldown: 4 / 3.5, flags: ['splitter', 'kiefer'] },
     ],
+    evolution: {
+      name: 'Kiefer der Ödnis',
+      item: 'Der Eiserne Kiefer',
+      text: 'Alle paar Sekunden fliegt ein Bündel aus drei verketteten Riesen-Fangeisen auf die größte Gruppe zu. Schnappt das erste zu, reißen die Ketten bis zu drei weitere Gegner in die Mitte, wo sie festgehalten und zerrissen werden.',
+    },
     rankText: [
       'Ein verdecktes Eisen liegt, bis ein Gegner darauftritt: Schaden, dann 1,5 Sekunden festgehalten',
       'Zwei Fangeisen zugleich, leicht versetzt',
@@ -561,7 +582,14 @@ const DEFS: readonly WeaponDef[] = [
       { cooldown: 1.3 / 1.6, statuses: [{ kind: 'bleed', seconds: 2, power: 2 }] },
       { count: 5, flags: ['vorteil'] },
       { pierce: 1, flags: ['vorteil', 'abfall'] },
+      // Evolution: Zwei versetzte Wellen aus je sieben Messern im weiten Halbkreis.
+      { count: 7, spread: 2.4, damage: 1.35, flags: ['vorteil', 'abfall', 'klingenfaecher'] },
     ],
+    evolution: {
+      name: 'Klingen-Fächer der Ödnis',
+      item: 'Tausend Schnitte',
+      text: 'Zwei versetzte Wellen aus je sieben Messern fliegen kurz nacheinander im weiten Halbkreis. Die äußeren Messer wirbeln Staub auf und biegen nach kurzem Flug nach innen ab, um Flüchtende an den Flanken zu fangen.',
+    },
     rankText: [
       'Drei Messer im Fächer, jedes trifft das erste Ziel auf seiner Bahn',
       'Vier Messer, breiterer Fächer',
@@ -594,7 +622,14 @@ const DEFS: readonly WeaponDef[] = [
       },
       { damage: 2.2, count: 2 },
       { flags: ['platzen'] },
+      // Evolution: Ein dicker Beutel fliegt in die Gruppe; die Wolke ist eine breite, wandernde Nebelwand.
+      { count: 1, radius: 1.7, duration: 7, flags: ['platzen', 'schattenpilz'] },
     ],
+    evolution: {
+      name: 'Atem der Schattenpilze',
+      item: 'Herz des Myzels',
+      text: 'Dicke Sporenbeutel fliegen in dichte Gegnergruppen. Beim Aufprall kriecht eine breite Nebelwand aus Sporen und Staub mit dem Wind weiter, macht Gegner darin blind und langsam und zersetzt ihre Rüstung.',
+    },
     rankText: [
       'Lässt Pilzkapseln fallen; platzt eine, hüllt eine Wolke Gegner 3,5 Sekunden in Sporen: 20 % langsamer, Schaden über Zeit',
       'Radius +30 %, die Wolke hält 1 Sekunde länger',
@@ -628,7 +663,14 @@ const DEFS: readonly WeaponDef[] = [
       { cooldown: 7 / 8.5, flags: ['furcht'] },
       { flags: ['furcht', 'schleier'] },
       { damage: 1.6, flags: ['furcht', 'schleier', 'knall'] },
+      // Evolution: Ein großes, schwebendes Phantom, das Gegner anzieht und in Furcht versetzt.
+      { radius: 2, duration: 6, flags: ['furcht', 'schleier', 'knall', 'vollstrecker'] },
     ],
+    evolution: {
+      name: 'Vollstrecker der Ödnis',
+      item: 'Der Falsche König',
+      text: 'Ein riesiges, schwebendes Staub-Phantom zieht Gegner im weiten Umkreis an und versetzt sie in Furcht. Am Ende zerspringt es in einer gewaltigen Schockwelle aus Knochen- und Staubsplittern; wer verlangsamt oder gefesselt ist, erleidet 15 % mehr Schaden.',
+    },
     rankText: [
       'Rammt ein Gestell in den Boden: Gegner in der Nähe sind 20 % langsamer und greifen langsamer an',
       'Bereich +30 %, die Puppe steht 5 Sekunden',
@@ -659,7 +701,14 @@ const DEFS: readonly WeaponDef[] = [
         ],
       },
       { flags: ['zug', 'staub'] },
+      // Evolution: Ein Schleppnetz, das als Welle über den Boden fegt und am Ende ein Bündel schnürt.
+      { damage: 2, flags: ['zug', 'staub', 'schlinge'] },
     ],
+    evolution: {
+      name: 'Schlinge der Alten Ordnung',
+      item: 'Arachnes Zorn',
+      text: 'Ein gewaltiges Schleppnetz fegt als Welle über den Boden, reißt kleine und mittlere Gegner mit, schnürt sie am Ende zu einem engen Bündel und hält sie 3 Sekunden fest, während Eisengewichte sie zerquetschen.',
+    },
     rankText: [
       'Ein Fangnetz auf die nächste Gruppe: leichter Schaden, 2,5 Sekunden um 40 % langsamer',
       'Radius +30 %, Verlangsamung 50 %',
