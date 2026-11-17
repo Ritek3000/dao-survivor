@@ -11,6 +11,7 @@ import type { Field, FieldDef, Fields } from './fields';
 import type { Pickups } from './pickups';
 import type { Player } from './player';
 import { Evolutions } from './evolutions';
+import { LaeuferEvolutions, type LaeuferHost } from './evolutionsLaeufer';
 import { Projectiles, type Projectile, type ProjectileOptions } from './projectiles';
 import { BIG_GAME_SCALE, type Progression, type Stats } from './progression';
 import { applyStatus, markChance, takenFactor } from './status';
@@ -82,6 +83,8 @@ const SHOUT_CRIT: BuffSpec = { id: 'kriegsschrei-krit', stat: 'critChance', mode
 const SHELTER: BuffSpec = { id: 'koederpuppe-schleier', stat: 'rangedTaken', mode: 'mul', amount: LAEUFER.decoyShelter, seconds: 0.8 };
 /** Der Urheber der Wolke, die ein Gestorbener hinterlässt (Sporenfalle, Rang 5). */
 const REST_ID = 'sporenfalle-rest';
+/** Das Feld des Phantoms (Vollstrecker der Ödnis, Rang 6): Es wird anders gezeichnet als die Köderpuppe. */
+const PHANTOM_ID = 'koederpuppe-phantom';
 /** Der Schub nach der Sturmböe (Rang 2). */
 const BOOST: BuffSpec = { id: 'sturmboee-tempo', stat: 'speed', mode: 'mul', amount: MAGIER.boostSpeed, seconds: MAGIER.boostSeconds };
 /** Die Zauber des Magiers: Nur ihre Tode und Treffer zählen für den Schild (Rang 5). */
@@ -95,6 +98,8 @@ const ASH_COLOR = 0xff6a24;
 /** Die Nahkampfangriffe des Kämpfers: Nur sie erleiden die Mehrung durch den Donner der Alten Ordnung. */
 const MELEE: ReadonlySet<string> = new Set(['axthieb', 'wirbelschlag', 'wuchthieb', 'kriegsschrei', 'dornenschild']);
 const NO_EVOLUTIONS: ReadonlySet<string> = new Set();
+/** Pfeile und Messer der Läufer-Evolutionen melden sich in jedem Bild (Lenkung, Staub, Abknicken). */
+const FLY: ProjectileOptions = { fly: true };
 /** Die Glut der Feuerschalen (Kwests Esse) als Urheber ihres Schadens. */
 const SEAR_SOURCE = sourceOf('kwests-esse');
 const lightAt = new THREE.Vector3();
@@ -191,6 +196,10 @@ export class Arsenal {
   /** Das Spiel erfährt, wenn ein Angriff sich entwickelt (Meldung auf dem Bildschirm). */
   onEvolve: ((weapon: OwnedWeapon) => void) | null = null;
   private readonly evolutions: Evolutions;
+  private readonly laeufer: LaeuferEvolutions;
+  /** Die Phantome der Vollstrecker, die gerade stehen, für die Zeichnung. */
+  private readonly phantomSites: Site[] = [];
+  private phantomCount = 0;
   /** Das Feld des schwebenden Banners (Reliquie der Nimmersatten), wenn eines liegt. */
   private relic: Field | null = null;
   private relicSeen: Field | null = null;
@@ -216,8 +225,9 @@ export class Arsenal {
     }
     for (let i = 0; i < BANNER_CAPACITY; i++) this.bannerSites.push({ x: 0, z: 0 });
     for (let i = 0; i < DECOY_CAPACITY; i++) this.decoySites.push({ x: 0, z: 0 });
+    for (let i = 0; i < DECOY_CAPACITY; i++) this.phantomSites.push({ x: 0, z: 0 });
     const arsenal = this;
-    this.evolutions = new Evolutions({
+    const host: LaeuferHost = {
       stats,
       enemies,
       player,
@@ -243,7 +253,12 @@ export class Arsenal {
         const swing = this.swings[weapon.def.id];
         if (swing) this.player.strike(swing, angle);
       },
-    });
+      area: (weapon) => this.area(weapon),
+      sporeKill: (field, enemy) => this.sporeKill(field, enemy),
+      weaponBySource: (source) => this.owned.find((candidate) => candidate.source === source),
+    };
+    this.evolutions = new Evolutions(host);
+    this.laeufer = new LaeuferEvolutions(host);
   }
 
   /**
@@ -256,6 +271,7 @@ export class Arsenal {
     this.relic = null;
     this.relicSeen = null;
     this.evolutions.reset();
+    this.laeufer.reset();
     this.swings = playerClass.swings;
     this.owned.length = 0;
     this.traps.length = 0;
@@ -383,6 +399,7 @@ export class Arsenal {
     }
 
     this.evolutions.update(dt);
+    this.laeufer.update(dt);
     this.updateFollowUps(dt);
     this.updateVolleys(dt);
     this.updateTraps();
@@ -453,7 +470,13 @@ export class Arsenal {
     const range = def.range * this.stats.reach * rules.range;
 
     if (def.kind === 'trap' || def.kind === 'pod') {
-      this.lay(weapon, origin);
+      // Kiefer der Ödnis und Atem der Schattenpilze: Statt zu legen, fliegt ein Bündel bzw. ein Beutel auf die dichteste Gruppe.
+      if (rules.flags.length > 0 && hasFlag(rules, def.kind === 'trap' ? 'kiefer' : 'schattenpilz')) {
+        const thrown = def.kind === 'trap' ? this.laeufer.jaws(weapon, origin.x, origin.z) : this.laeufer.bag(weapon, origin.x, origin.z);
+        if (!thrown) return false;
+      } else {
+        this.lay(weapon, origin);
+      }
       audio.play(`angriff.${def.id}`, origin.x, origin.z);
       return true;
     }
@@ -487,8 +510,15 @@ export class Arsenal {
           this.evolutions.storm(weapon, origin.x, origin.z);
           break;
         }
+        // Klingen-Fächer: zwei versetzte Wellen aus Messern, die äußeren stäuben und knicken ab.
+        if (rules.flags.length > 0 && hasFlag(rules, 'klingenfaecher')) {
+          this.laeufer.knives(weapon, origin.x, origin.z, angle, range);
+          break;
+        }
         const count = rules.count;
         const options = this.projectileOptions(weapon);
+        // Pfeilfächer: Jeder dritte Schuss trägt in der Mitte einen Staub-Pfeil (Marke 1).
+        const dust = rules.flags.length > 0 && hasFlag(rules, 'faecher') && this.laeufer.dustShot(weapon);
         for (let i = 0; i < count; i++) {
           this.projectiles.spawn(
             origin.x,
@@ -500,6 +530,7 @@ export class Arsenal {
             def.shape ?? 'arrow',
             weapon,
             options,
+            dust && i === Math.floor((count - 1) / 2) ? 1 : 0,
           );
         }
         break;
@@ -512,6 +543,11 @@ export class Arsenal {
         break;
       }
       case 'volley': {
+        // Sturm der Aschenfedern: Statt eines Einschlags geht ein Schauer nieder, der mehrere Sekunden anhält.
+        if (rules.flags.length > 0 && hasFlag(rules, 'aschesturm')) {
+          this.laeufer.ashStorm(weapon, target.x, target.z, origin.x, origin.z);
+          break;
+        }
         const delay = def.delay ?? 0.5;
         this.volleys.push({ x: target.x, z: target.z, weapon, delay });
         // Ein Kreis kündigt den Einschlag an, dann kommen die Pfeile herab.
@@ -519,7 +555,11 @@ export class Arsenal {
         break;
       }
       case 'root':
-        if (def.look === 'netz') this.net(weapon, target);
+        if (def.look === 'netz') {
+          // Schlinge der Alten Ordnung: Ein Schleppnetz fegt über den Boden, statt auf die Gruppe zu fallen.
+          if (rules.flags.length > 0 && hasFlag(rules, 'schlinge')) this.laeufer.drag(weapon, origin.x, origin.z, target);
+          else this.net(weapon, target);
+        }
         else this.burst(weapon, target.x, target.z, this.area(weapon), def.maxTargets, this.entangle);
         break;
     }
@@ -784,6 +824,13 @@ export class Arsenal {
         site.x = field.x;
         site.z = field.z;
       }
+    } else if (field.def.id === PHANTOM_ID) {
+      if (this.phantomCount >= DECOY_CAPACITY) return;
+      const site = this.phantomSites[this.phantomCount++];
+      if (site) {
+        site.x = field.x;
+        site.z = field.z;
+      }
     }
   };
 
@@ -791,12 +838,14 @@ export class Arsenal {
   private showFields(): void {
     this.bannerCount = 0;
     this.decoyCount = 0;
+    this.phantomCount = 0;
     this.relicSeen = null;
     this.support.fields.eachActive(this.showField);
     const relic = this.relicSeen as Field | null;
     this.effects.evolution.relic(relic !== null, relic?.x ?? 0, relic?.z ?? 0, relic?.radius ?? 0, EVOLUTION.kaempfer.relicLift, this.now);
     this.effects.showBanners(this.bannerSites, this.bannerCount);
     this.effects.showDecoys(this.decoySites, this.decoyCount);
+    this.effects.laeufer.showPhantoms(this.phantomSites, this.phantomCount, this.now);
   }
 
   // ---------------------------------------------------------------- Dornenschild
@@ -1071,10 +1120,16 @@ export class Arsenal {
   /** Rammt die Köderpuppe an die Stelle der Figur, wenn ein Gegner nah genug ist. */
   private plantDecoy(weapon: OwnedWeapon, origin: Site): boolean {
     const { def, rules } = weapon;
-    if (!this.enemies.nearest(origin.x, origin.z, def.range * this.stats.reach * rules.range)) return false;
+    const range = def.range * this.stats.reach * rules.range;
+    if (!this.enemies.nearest(origin.x, origin.z, range)) return false;
     const radius = this.area(weapon);
-    this.support.fields.spawn(this.decoyField(weapon), origin.x, origin.z, { radius, duration: rules.duration, source: weapon.source });
-    this.effects.decoy(origin.x, origin.z, radius, rules.duration);
+    // Vollstrecker der Ödnis: Das Phantom steht dort, wo die Horde am dichtesten ist, nicht an der Figur (sonst zöge es sie auf sie zu).
+    const phantom = rules.flags.length > 0 && hasFlag(rules, 'vollstrecker') && this.laeufer.densest(origin.x, origin.z, range, radius);
+    const x = phantom ? this.laeufer.siteX : origin.x;
+    const z = phantom ? this.laeufer.siteZ : origin.z;
+    this.support.fields.spawn(this.decoyField(weapon), x, z, { radius, duration: rules.duration, source: weapon.source });
+    this.effects.decoy(x, z, radius, rules.duration);
+    if (phantom) this.effects.laeufer.phantomRise(x, z, radius, rules.duration);
     audio.play(`angriff.${def.id}`, origin.x, origin.z);
     return true;
   }
@@ -1083,16 +1138,19 @@ export class Arsenal {
     const { def, rules } = weapon;
     let field = this.decoyFields.get(rules);
     if (!field) {
+      // Das Phantom (Rang 6) zieht Gegner zu sich, versetzt sie sofort in Furcht und zerspringt am Ende mit einer größeren Welle.
+      const phantom = hasFlag(rules, 'vollstrecker');
       field = {
-        id: def.id,
+        id: phantom ? PHANTOM_ID : def.id,
         shape: 'circle',
         duration: rules.duration,
         every: 0.5,
         instant: true,
         statuses: rules.statuses.length > 0 ? rules.statuses : undefined,
         buffs: hasFlag(rules, 'schleier') ? [SHELTER] : undefined,
-        onTick: hasFlag(rules, 'furcht') ? this.decoyTick : undefined,
-        onEnd: hasFlag(rules, 'knall') ? this.decoyEnd : undefined,
+        pull: phantom ? EVOLUTION.laeufer.phantomPull : undefined,
+        onTick: phantom ? this.laeufer.phantomTick : hasFlag(rules, 'furcht') ? this.decoyTick : undefined,
+        onEnd: phantom ? this.laeufer.phantomEnd : hasFlag(rules, 'knall') ? this.decoyEnd : undefined,
       };
       this.decoyFields.set(rules, field);
     }
@@ -1349,7 +1407,7 @@ export class Arsenal {
   /** Was die Äxte können: stecken bleiben, eine Staubspur ziehen, zurückkehren. Je Rang einmal angelegt. */
   private projectileOptions(weapon: OwnedWeapon): ProjectileOptions | undefined {
     const { def, rules } = weapon;
-    if (def.shape !== 'axe') return undefined;
+    if (def.shape !== 'axe') return rules.flags.length > 0 && (hasFlag(rules, 'faecher') || hasFlag(rules, 'klingenfaecher')) ? FLY : undefined;
     let options = this.options.get(rules);
     if (!options) {
       const returning = hasFlag(rules, 'kehrtwende');
@@ -1364,6 +1422,11 @@ export class Arsenal {
 
   /** Die Staubspur: Wer in der Nähe der Axt ist, wird für einen Augenblick langsamer. */
   private readonly trail = (projectile: Projectile<OwnedWeapon>): void => {
+    // Pfeile und Messer der Läufer-Evolutionen: Lenkung, Staub, Abknicken.
+    if (projectile.shape !== 'axe') {
+      this.laeufer.fly(projectile);
+      return;
+    }
     this.trailOf = projectile;
     this.enemies.queryRadius(projectile.x, projectile.z, KAEMPFER.trailRadius, this.slowOnTrail);
   };
@@ -1567,6 +1630,8 @@ export class Arsenal {
     if (first && rules.flags.length > 0 && hasFlag(rules, 'ruestung')) {
       applyStatus(enemy.status, 'weak', LAEUFER.armorSeconds, LAEUFER.armorFactor, weapon.source);
     }
+    // Pfeilfächer: Der Staub-Pfeil lässt beim ersten Aufprall eine Wolke zurück.
+    if (first && projectile.tag === 1) this.laeufer.dustBurst(enemy.x, enemy.z);
   };
 
   private updateShield(dt: number, weapon: OwnedWeapon): void {

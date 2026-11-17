@@ -25,6 +25,8 @@ export interface EffectTools {
   puff(x: number, z: number, angle: number, speed: number, color: number, alpha?: number): void;
   sparks(x: number, y: number, z: number, count: number, color: number, speed: number): void;
   flash(x: number, y: number, z: number, color: number, intensity: number, distance: number, seconds: number): void;
+  /** Pfeile gehen auf einen Kreis nieder (ohne den Ring des Pfeilhagels), von der Seite des Schützen aus gesehen. */
+  hailArrows(x: number, z: number, radius: number, delay: number, fromX: number, fromZ: number, arrows: number): void;
 }
 
 /** Wo eine kreisende Axt gerade ist und wohin sie zeigt (Radiant, Richtung ihres Flugs). */

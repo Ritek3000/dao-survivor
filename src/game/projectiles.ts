@@ -47,6 +47,8 @@ export interface Projectile<T> {
   host: Enemy | null;
   /** Vom Aufrufer mitgegeben, etwa der Angriff, der das Geschoss abgefeuert hat. */
   payload: T;
+  /** Eine Marke des Aufrufers für dieses eine Geschoss (der Staub-Pfeil, die äußeren Messer eines Fächers); 0 ohne. */
+  tag: number;
 }
 
 const HEIGHT = 1.1;
@@ -160,6 +162,7 @@ export class Projectiles<T> {
     shape: ProjectileShape,
     payload: T,
     options: ProjectileOptions = NO_OPTIONS,
+    tag = 0,
   ): void {
     if (this.flying.length >= TRAIL_CAPACITY) return;
     this.flying.push({
@@ -179,6 +182,7 @@ export class Projectiles<T> {
       rest: 0,
       host: null,
       payload,
+      tag,
     });
   }
 

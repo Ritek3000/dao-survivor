@@ -953,6 +953,97 @@ def sfx_evolution_donner(rng):
     return fade_edges(out, 0.002, 0.4)
 
 
+def sfx_evolution_faecher(rng):
+    """Pfeilfaecher: der Staub-Pfeil schlaegt ein, eine Wolke platzt auf und raunt."""
+    n = n_of(1.2)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    place(out, thump(170, 60, 0.25, 0.07), 0.0, 0.8)
+    place(out, noise_hit(rng, 600, 4200, 0.35, 0.09), 0.0, 0.9)
+    hiss = sweep_filter(white(n, rng), 3200 - 2200 * smooth(t, 0, 1.0), 'band', q=0.6)
+    out += hiss * smooth(t, 0, 0.05) * np.exp(-t / 0.5) * 0.5
+    place(out, chime(1250.0, 0.4, 0.07, ((1, 1), (2.4, 0.3)), rng), 0.02, 0.3)
+    return fade_edges(out, 0.002, 0.25)
+
+
+def sfx_evolution_aschesturm(rng):
+    """Sturm der Aschenfedern: ein trockenes Rieseln und Prasseln, viele Pfeile schwirren herab."""
+    n = n_of(2.4)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    rain = bandpass(white(n, rng), 1500, 7500) * (0.55 + 0.45 * np.sin(2 * np.pi * 9 * t + 1.0))
+    out += rain / (np.std(rain) + 1e-9) * smooth(t, 0, 0.25) * (1 - smooth(t, 1.9, 2.4)) * 0.2
+    for i in range(9):
+        at = 0.05 + 0.24 * i
+        place(out, whoosh(rng, 0.22, 4200, 1800, peak=0.2, tail=0.06, q=1.4), at, 0.55)
+        place(out, noise_hit(rng, 900, 5000, 0.07, 0.015), at + 0.14, 0.4)
+    place(out, thump(110, 50, 0.4, 0.1), 0.0, 0.5)
+    return fade_edges(out, 0.003, 0.4)
+
+
+def sfx_evolution_kiefer_wurf(rng):
+    """Kiefer der Oednis, Wurf: ein schweres Buendel Eisen schlaegt auf den Boden, Ketten klirren."""
+    out = np.zeros(n_of(0.9))
+    place(out, thump(120, 45, 0.5, 0.13), 0.0, 1.0)
+    place(out, noise_hit(rng, 0, 2400, 0.4, 0.09), 0.0, 0.8)
+    for i in range(5):
+        place(out, chime(1700.0 + 330 * i, 0.3, 0.05, ((1, 1), (2.7, 0.4), (4.9, 0.2)), rng), 0.03 + 0.045 * i, 0.3)
+    return fade_edges(out, 0.001, 0.2)
+
+
+def sfx_evolution_kiefer(rng):
+    """Kiefer der Oednis: die Riesen-Eisen schnappen zu, Ketten reissen, dumpfes Zerren."""
+    out = np.zeros(n_of(1.4))
+    place(out, noise_hit(rng, 1800, 10000, 0.07, 0.01), 0.0, 1.0)
+    place(out, chime(620.0, 1.0, 0.22, ((1, 1), (2.32, 0.9), (3.9, 0.6), (6.1, 0.3)), rng), 0.0, 0.9)
+    place(out, thump(150, 38, 0.6, 0.15), 0.0, 1.1)
+    place(out, noise_hit(rng, 0, 1800, 0.6, 0.18), 0.05, 0.6)
+    place(out, crackle(rng, 0.8, 55, 600, 4200, 0.5, 0.005, 0.2), 0.15, 0.5)
+    place(out, whoosh(rng, 0.3, 800, 3200, peak=0.1, tail=0.1), 0.0, 0.5)
+    return fade_edges(out, 0.001, 0.3)
+
+
+def sfx_evolution_nebel(rng):
+    """Atem der Schattenpilze: der Beutel platzt, ein langes, tiefes Hauchen kriecht weiter."""
+    n = n_of(1.9)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    place(out, thump(130, 48, 0.3, 0.09), 0.0, 0.9)
+    place(out, noise_hit(rng, 300, 2600, 0.3, 0.08), 0.0, 0.9)
+    hiss = sweep_filter(white(n, rng), 2400 - 1700 * smooth(t, 0, 1.6), 'band', q=0.6)
+    out += hiss * smooth(t, 0, 0.08) * np.exp(-t / 0.9) * 0.6
+    out += crackle(rng, 1.9, 30, lo=600, hi=2600, strength=0.3) * np.exp(-t / 0.8)
+    place(out, whoosh(rng, 1.2, 300, 900, peak=0.3, tail=0.5, q=0.7), 0.05, 0.4)
+    return fade_edges(out, 0.002, 0.45)
+
+
+def sfx_evolution_phantom(rng):
+    """Vollstrecker der Oednis: das Phantom zerspringt, Knochen klappern, eine schrille Welle faehrt hinaus."""
+    out = np.zeros(n_of(1.8))
+    place(out, thump(110, 32, 1.0, 0.26), 0.0, 1.2)
+    place(out, noise_hit(rng, 0, 3200, 0.7, 0.15), 0.0, 0.9)
+    place(out, noise_hit(rng, 2500, 9000, 0.3, 0.05), 0.0, 0.8)
+    for i in range(7):
+        place(out, chime(1100.0 + 190 * i, 0.35, 0.05, ((1, 1), (3.1, 0.5), (5.6, 0.3)), rng), 0.04 + 0.05 * i, 0.3)
+    place(out, whoosh(rng, 1.0, 600, 4200, peak=0.2, tail=0.45, q=1.4), 0.02, 0.5)
+    return fade_edges(out, 0.002, 0.4)
+
+
+def sfx_evolution_schlinge(rng):
+    """Schlinge der Alten Ordnung: ein schweres Netz peitscht ueber den Boden, Seile knarren, Gewichte schlagen."""
+    n = n_of(1.7)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    place(out, whoosh(rng, 0.8, 300, 2400, peak=0.4, tail=0.25, q=1.0), 0.0, 0.9)
+    rustle = bandpass(white(n, rng), 1400, 6000) * np.clip(np.sin(2 * np.pi * 15 * t), 0, 1)
+    out += rustle / (np.std(rustle) + 1e-9) * smooth(t, 0, 0.1) * np.exp(-t / 0.6) * 0.14
+    place(out, thump(95, 40, 0.5, 0.12), 0.75, 1.0)
+    for i in range(4):
+        place(out, chime(480.0 + 70 * i, 0.5, 0.09, ((1, 1), (2.4, 0.7), (4.1, 0.4)), rng), 0.75 + 0.05 * i, 0.35)
+    place(out, noise_hit(rng, 0, 1900, 0.3, 0.07), 0.75, 0.7)
+    return fade_edges(out, 0.003, 0.3)
+
+
 def sfx_angriff_hitze_werfen(rng):
     n = n_of(0.7)
     t = np.arange(n) / SR
@@ -1622,6 +1713,13 @@ def build_catalogue():
     sfx('sfx/evolution-mahlstrom-ende', sfx_evolution_mahlstrom_ende, -17.0)
     sfx('sfx/evolution-spalter', sfx_evolution_spalter, -16.0)
     sfx('sfx/evolution-donner', sfx_evolution_donner, -16.0)
+    sfx('sfx/evolution-faecher', sfx_evolution_faecher, -18.0)
+    sfx('sfx/evolution-aschesturm', sfx_evolution_aschesturm, -19.0)
+    sfx('sfx/evolution-kiefer-wurf', sfx_evolution_kiefer_wurf, -18.0)
+    sfx('sfx/evolution-kiefer', sfx_evolution_kiefer, -16.0)
+    sfx('sfx/evolution-nebel', sfx_evolution_nebel, -19.0)
+    sfx('sfx/evolution-phantom', sfx_evolution_phantom, -16.0)
+    sfx('sfx/evolution-schlinge', sfx_evolution_schlinge, -18.0)
 
     many('sfx/treffer-stahl', sfx_treffer_stahl, 3, -21.0)
     many('sfx/treffer-staub', sfx_treffer_staub, 3, -22.0)

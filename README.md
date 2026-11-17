@@ -338,7 +338,7 @@ Wie das gebaut ist:
 ## Fertigkeiten des Wildnisläufers
 
 Auch der Wildnisläufer hat sieben Fertigkeiten mit je fünf Rängen (Vorlage: „Klassen, Fertigkeiten & Evolutionen“, Abschnitt Wildnisläufer), und auch sie sind **Daten** in `weapons.ts`. Die Zahlen für Balancing
-stehen in `CONFIG.skills.laeufer`. Die Auswahlkarte nennt wie beim Kämpfer, was der **nächste** Rang tut (`WeaponDef.rankText`). Die **Evolutionen** (Rang 6) kommen in einem eigenen Paket.
+stehen in `CONFIG.skills.laeufer`. Die Auswahlkarte nennt wie beim Kämpfer, was der **nächste** Rang tut (`WeaponDef.rankText`). Die **Evolutionen** (Rang 6) stehen im Abschnitt [Evolutionen](#evolutionen).
 
 | Fertigkeit       | Art                       | Was die Ränge bringen                                                                                                                         |
 | ---------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -433,17 +433,17 @@ Wie das gebaut ist:
 ## Evolutionen
 
 Jede Fertigkeit hat eine **Evolution**: einen sechsten Rang, der aus dem Angriff etwas Neues macht (Vorlage: „Klassen, Fertigkeiten & Evolutionen“). Das Paket kommt in drei Teilen; **dieser Stand
-bringt die Grundlage und die sieben Evolutionen des Kämpfers**, die des Wildnisläufers und des Magiers folgen.
+bringt die Grundlage und die Evolutionen des Kämpfers und des Wildnisläufers (je sieben)**, die des Magiers folgen.
 
 **Wie man sie bekommt.** Die Vorlage verlangt den Angriff auf Rang 5 und ein passives Item. Das Spiel hat keine passiven Gegenstände (das Talentbaum-Paket entfällt), also trägt der **legendäre Ring** die Evolution:
-Jeder legendäre Ring gehört zu einer Fertigkeit seiner Klasse (Feld `evolution` am Gegenstand; die Karte nennt Namen und Wirkung, und der Ring trägt den Gegenstandsnamen der Vorlage: Henkerswerk, Nimmersatt, Sturmklinge, Wirbelsturm,
-Weltenspalter, Donneraxt, Stachelbeil). Eine Klasse trägt nur einen Ring, also zugleich nur eine Evolution. Ist der Ring angelegt, wird der Angriff beim Schritt auf Rang 5 sofort zur Evolution (Rang 6); die Karte für Rang 5 sagt schon, wozu er wird. Die Evolution ersetzt die Fertigkeit und ist kein zusätzlicher
+Jeder legendäre Ring gehört zu einer Fertigkeit seiner Klasse (Feld `evolution` am Gegenstand; die Karte nennt Namen und Wirkung, und der Ring trägt den Gegenstandsnamen der Vorlage: beim Kämpfer Henkerswerk, Nimmersatt, Sturmklinge, Wirbelsturm,
+Weltenspalter, Donneraxt, Stachelbeil; beim Wildnisläufer Pfauenfeder, Schatten der Tausend, Der Eiserne Kiefer, Tausend Schnitte, Herz des Myzels, Der Falsche König, Arachnes Zorn). Eine Klasse trägt nur einen Ring, also zugleich nur eine Evolution. Ist der Ring angelegt, wird der Angriff beim Schritt auf Rang 5 sofort zur Evolution (Rang 6); die Karte für Rang 5 sagt schon, wozu er wird. Die Evolution ersetzt die Fertigkeit und ist kein zusätzlicher
 Angriff, und was Rang 5 brachte, bleibt. Ohne Ring bleibt Rang 5 der letzte Rang, und das Spiel verhält sich wie vor diesem Paket.
 
 **Gebaut** ist es als ein weiterer Rang derselben `WeaponDef` (`EVOLUTION_RANK = 6`, `WeaponDef.evolution` mit Name, Gegenstand und Text; die Zeile für Rang 6 trägt Schalter wie `sichel` oder `bollwerk`, die einen Rang
 vollständig ersetzen, alles andere folgt dem Rang davor). `Arsenal.unlockEvolutions` bekommt beim Start der Nacht die Evolutionen der angelegten Ringe (`Ausruestung.evolutionsOf`); `Arsenal.take` macht aus Rang 5 dann Rang 6.
-Das Verhalten steht in `src/game/evolutions.ts` (`Evolutions`; der Treffer läuft weiter über `Arsenal.hit`, also mit Krits, Zuständen und Gegenständen), die Bilder in `src/game/evolutionEffects.ts`. Alle Zahlen stehen in
-`CONFIG.skills.evolution`. Die Evolutionen benutzen die Bausteine des Unterbaus (Bodenfelder, zeitweilige Werte, Zustände, Ereignisse mit Urheber) und legen im Kampf nichts Neues an.
+Das Verhalten steht in `src/game/evolutions.ts` (Kämpfer) und `src/game/evolutionsLaeufer.ts` (Wildnisläufer; der Treffer läuft weiter über `Arsenal.hit`, also mit Krits, Zuständen und Gegenständen), die Bilder in
+`src/game/evolutionEffects.ts` und `src/game/evolutionEffectsLaeufer.ts`. Alle Zahlen stehen in `CONFIG.skills.evolution` (`laeufer` für den Wildnisläufer). Die Evolutionen benutzen die Bausteine des Unterbaus (Bodenfelder, zeitweilige Werte, Zustände, Ereignisse mit Urheber) und legen im Kampf nichts Neues an.
 
 | Angriff       | Evolution                          | Was sie tut                                                                                                                                           |
 | ------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -454,11 +454,18 @@ Das Verhalten steht in `src/game/evolutions.ts` (`Evolutions`; der Treffer läuf
 | Wuchthieb     | Spalter von Ghen                   | Beim Ausholen zieht die Axt Gegner zum Einschlagpunkt; der Niederschlag spaltet den Boden 13 m weit (×2,4 Schaden) und betäubt die Kleinen kurz                         |
 | Kriegsschrei  | Donner der Alten Ordnung           | Der Schrei fährt als Kegel in Blickrichtung mit doppelter Reichweite; Getroffene werden 1,5 s um 30 % verlangsamt und erleiden 4 s lang 15 % mehr Schaden aus deinen Nahkampfangriffen |
 | Dornenschild  | Bollwerk der Stacheln              | Eine dauerhafte, enge Dornen-Aura vor der Figur (2,6 m lang): Wer sie berührt, wird alle 0,3 s gestochen und leicht zurückgedrängt; der Stich bei Treffern auf die Figur bleibt |
+| Bogenschuss   | Pfeilfächer der Alten Ordnung      | Ein Fächer aus fünf schweren Eisenpfeilen (mit Abfall, Vorteil und Rüstungsverlust des Rangs 5); jeder dritte Schuss trägt einen Staub-Pfeil: Beim ersten Aufprall bleibt eine Staubwolke (2,6 m, 4,5 s, höchstens drei), in der nachfolgende Pfeile auf Ziele im Inneren abbiegen |
+| Pfeilhagel    | Sturm der Aschenfedern             | Der Hagel geht 2,5 s lang als Schauer nieder (alle 0,25 s ein Takt mit 30 % des Schadens, er folgt der Mitte der Gruppe und trifft dort härter); Getroffene sind blind und verstummen (Fernkämpfer zaubern nicht), danach bleibt ein Staubfeld, das 5 s verlangsamt |
+| Fangeisen     | Kiefer der Ödnis                   | Ein Bündel aus drei verketteten Riesen-Fangeisen fliegt auf die größte Gruppe in 12 m und liegt, bis ein Eisen berührt wird (höchstens drei Bündel); dann schnappt es zu (×1,4), und die Ketten reißen bis zu drei weitere Gegner in die Mitte, die 2,5 s festgehalten und zerrissen werden (nicht das Großwild) |
+| Wurfmesser    | Klingen-Fächer der Ödnis           | Zwei Wellen aus je sieben Messern fliegen 0,16 s nacheinander im weiten Halbkreis, die zweite um eine halbe Lücke versetzt; die äußeren Messer wirbeln Staub auf und knicken nach 0,16 s nach innen ab, um die Flanken zu fangen |
+| Sporenfalle   | Atem der Schattenpilze             | Dicke Sporenbeutel fliegen in die dichteste Gruppe in 11 m; beim Aufprall steht eine Nebelwand quer zur Wurfrichtung, die mit 0,7 m/s weiterzieht, Gegner blind, verlangsamt und schwach macht und 1,6-mal so hart zuschlägt wie eine Kapsel (höchstens zwei Wände); wer darin stirbt, platzt weiter |
+| Köderpuppe    | Vollstrecker der Ödnis             | Ein riesiges Staub-Phantom (2 m Radius, 6 s) steigt über der dichtesten Gruppe auf, zieht Gegner mit 2,2 m/s an und versetzt die Kleinen in Furcht; am Ende zerspringt es in einer Schockwelle (1,5facher Radius, ×1,8 Schaden), Verlangsamte und Gefesselte erleiden 15 % mehr |
+| Netz          | Schlinge der Alten Ordnung         | Ein Schleppnetz (4,4 m breit) fegt mit 15 m/s 11 m weit über den Boden, nimmt bis zu 18 kleine und mittlere Gegner mit und schnürt sie am Ende zu einem Bündel; dort halten Eisengewichte sie 3 s fest und zerquetschen sie alle 0,5 s |
 
 **Dev-Werkzeuge.** `__skills.entwickeln('axthieb')` schaltet die Evolution mitten in einer Nacht frei und hebt den Angriff auf Rang 6; `__skills.raenge('axthieb')` zeigt nun sechs Ränge. `__items.geben(0, 'ring', 'legendaer', 'wuchthieb')` legt einen
-legendären Ring mit der genannten Evolution ins Inventar. `__messlauf.start({ evolution: 'axthieb', classes: [0] })` lässt die Figur den Ring tragen und die Nacht mit dem Angriff auf Rang 4 beginnen (er erreicht sonst selten Rang 5); `fokus: 'axthieb'` tut dasselbe ohne Ring und liefert
-den Vergleichswert, so lässt sich messen, was eine Evolution leistet. Neue Klänge: `evolution` (die Wandlung) sowie `evolution.sichel`, `evolution.sturm`, `evolution.mahlstrom`, `evolution.mahlstrom-ende`, `evolution.spalter`, `evolution.donner`
-(`audio.json`, erzeugt von `tools/audio-erzeugen.py`).
+legendären Ring mit der genannten Evolution ins Inventar. `__messlauf.start({ evolution: 'axthieb', classes: [0] })` (Wildnisläufer: `{ evolution: 'bogenschuss', classes: [1] }`) lässt die Figur den Ring tragen und die Nacht mit dem Angriff auf Rang 4 beginnen (er erreicht sonst selten Rang 5); `fokus: 'axthieb'` tut dasselbe ohne Ring und liefert
+den Vergleichswert, so lässt sich messen, was eine Evolution leistet. Neue Klänge: `evolution` (die Wandlung) sowie `evolution.sichel`, `evolution.sturm`, `evolution.mahlstrom`, `evolution.mahlstrom-ende`, `evolution.spalter`, `evolution.donner` (Kämpfer) und `evolution.faecher`,
+`evolution.aschesturm`, `evolution.kiefer-wurf`, `evolution.kiefer`, `evolution.nebel`, `evolution.phantom`, `evolution.schlinge` (Wildnisläufer; `audio.json`, erzeugt von `tools/audio-erzeugen.py`).
 
 **Abweichungen von der Vorlage** (die Vorlage ist ein Leitfaden, siehe [Lore](#lore)):
 
@@ -471,6 +478,14 @@ den Vergleichswert, so lässt sich messen, was eine Evolution leistet. Neue Klä
 - Donner: Das Plus von 15 % gilt nur für **Nahkampf** (Axthieb, Wirbelschlag, Wuchthieb, Kriegsschrei, Dornenschild) und wirkt **4 s** (die Vorlage nennt keine Dauer); Fernkämpfer und Zauber profitieren nicht.
 - Spalter: Die Linie betäubt nur Kleine, nicht das Großwild und nicht den Verschlinger; sie zieht auch den Verschlinger nicht heran.
 - Bollwerk: Die Eisenstangen sind eine gerade Aura vor der Figur (kein Kreis), damit sie sich vom Dornenschild unterscheiden; die Stiche tragen die Kennung des Dornenschilds.
+- Pfeilfächer: Der Staub-Pfeil lenkt nur Pfeile, die in der Wolke fliegen, mit einer festen Drehgeschwindigkeit (9 rad/s); höchstens drei Wolken zugleich, die älteste weicht.
+- Sturm der Aschenfedern: „nimmt die Sicht“ ist der Zustand `blind`, „können nicht zaubern“ der Zustand `silence`. Der Schauer fällt erst nach der Vorwarnung des Hagels (0,6 s), damit man das Zeichen am Boden sieht; der Schaden kommt aus den Takten, die fallenden Pfeile sind Zierde.
+- Kiefer: Das Bündel bleibt liegen, bis ein Gegner ein Eisen berührt (statt ein festes Ziel zu treffen), und es liegen höchstens drei Bündel zugleich. „Bis zu drei weitere Gegner“ sind die nächsten im Umkreis von 7 m; das Großwild und der Verschlinger werden nicht gezogen.
+- Klingen-Fächer: Die äußeren Messer knicken nicht erst am Ende der Bahn ab, sondern biegen nach 0,16 s im Flug langsam nach innen (2,6 rad/s); ein hartes Abknicken am Ende ließe sich nicht lesen. Die Messer sehen aus wie die gewöhnlichen (die „geschwärzte“ Optik der Vorlage ist nicht umgesetzt).
+- Atem der Schattenpilze: Ein „Wind“ gibt es im Spiel nicht, die Nebelwand zieht in Wurfrichtung weiter. „Zersetzt die Rüstung“ ist der Zustand `weak` (wie beim „Rüstungsverlust“ des Bogens). Der Schlag der Wand ist 1,6-fach (`fogDamage`), weil die Evolution im Messlauf sonst kaum stärker war als Rang 5.
+- Vollstrecker: Das Phantom steht über der dichtesten Gruppe in Sichtweite und nicht über der Figur (sonst zöge es die Horde auf sie zu). Furcht trifft nur Kleine; „gefesselt“ ist der Zustand `hold`.
+- Schlinge: Das Netz zielt auf die dichteste Gruppe, sonst auf den nächsten Gegner; es nimmt nur kleine und mittlere Gegner mit (höchstens 18), nie das Großwild und den Verschlinger.
+- Kein Plattform- und kein Savegame-Eingriff in diesem Teil: `SAVEGAME_VERSION` bleibt 7, Pfade, Eingabe und Speicherschicht sind unverändert. Ringe aus Fassung 6 bekommen beim Lesen eine Evolution (siehe oben), auch beim Wildnisläufer.
 - Kein Plattform-Eingriff: Pfade, Eingabe und Speicherschicht bleiben; neu ist nur das Format des Spielstands (Fassung 7), das `parseSavegame` aus Fassung 6 hebt.
 
 ## Ton und Musik
