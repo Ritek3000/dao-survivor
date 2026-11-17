@@ -1044,6 +1044,102 @@ def sfx_evolution_schlinge(rng):
     return fade_edges(out, 0.003, 0.3)
 
 
+def sfx_evolution_sonnenstich(rng):
+    """Atem der Verblassenden Sor: ein weisser Hitzesturm faehrt aus, ein tiefes Glimmen und Knistern bleibt."""
+    n = n_of(1.5)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    place(out, whoosh(rng, 1.0, 900, 5600, peak=0.3, tail=0.3, q=0.8), 0.0, 0.9)
+    hiss = sweep_filter(white(n, rng), 5200 - 3600 * smooth(t, 0, 1.3), 'band', q=0.7)
+    out += hiss * smooth(t, 0, 0.05) * np.exp(-t / 0.55) * 0.55
+    place(out, thump(120, 46, 0.5, 0.14), 0.0, 0.8)
+    place(out, noise_hit(rng, 1500, 8000, 0.15, 0.03), 0.0, 0.5)
+    out += crackle(rng, 1.5, 55, lo=1800, hi=8000, strength=0.5, tau=0.004, pops=0.1) * np.exp(-t / 0.7)
+    return fade_edges(out, 0.003, 0.35)
+
+
+def sfx_evolution_speer(rng):
+    """Speer der Verschwundenen Sonne: ein heller Ton steigt, dann schlaegt das Licht ein, vier Strahlen zischen hinaus."""
+    n = n_of(1.6)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    rise = 700 + 2600 * smooth(t, 0, 0.5)
+    tone = np.sin(phase_of(rise, n)) * smooth(t, 0, 0.45) * (1 - smooth(t, 0.45, 0.5))
+    out += tone * 0.25
+    place(out, thump(180, 44, 0.8, 0.22), 0.5, 1.2)
+    place(out, noise_hit(rng, 0, 4200, 0.6, 0.12), 0.5, 1.0)
+    place(out, noise_hit(rng, 2000, 9000, 0.2, 0.04), 0.5, 0.8)
+    place(out, chime(1320.0, 1.0, 0.3, ((1, 1), (2.01, 0.4), (3.02, 0.2)), rng), 0.5, 0.35)
+    for i in range(4):
+        place(out, whoosh(rng, 0.4, 2400, 7000, peak=0.2, tail=0.1, q=1.4), 0.52 + 0.015 * i, 0.3)
+    return fade_edges(out, 0.003, 0.4)
+
+
+def sfx_evolution_krone(rng):
+    """Krone der Erloschenen Sor: eine kurze, helle Hitzewelle, ein Funkenregen darunter."""
+    n = n_of(0.8)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    place(out, whoosh(rng, 0.4, 3600, 1200, peak=0.15, tail=0.12, q=1.1), 0.0, 0.7)
+    place(out, noise_hit(rng, 1800, 9000, 0.12, 0.025), 0.0, 0.7)
+    place(out, thump(210, 80, 0.2, 0.05), 0.0, 0.5)
+    place(out, chime(1760.0, 0.5, 0.12, ((1, 1), (2.76, 0.3), (5.4, 0.12)), rng), 0.02, 0.2)
+    out += crackle(rng, 0.8, 40, lo=2200, hi=9000, strength=0.4) * np.exp(-t / 0.3)
+    return fade_edges(out, 0.002, 0.2)
+
+
+def sfx_evolution_beben(rng):
+    """Beben der Alten Ordnung: drei schwere Schlaege rollen hintereinander, der Fels bricht und rieselt."""
+    out = np.zeros(n_of(2.0))
+    for i, at in enumerate((0.0, 0.28, 0.56)):
+        place(out, thump(110 - 12 * i, 28, 0.9, 0.24), at, 1.1 - 0.1 * i)
+        place(out, noise_hit(rng, 0, 1600, 0.7, 0.18), at, 0.8)
+    place(out, noise_hit(rng, 900, 5000, 0.5, 0.1), 0.0, 0.5)
+    place(out, crackle(rng, 1.4, 70, 600, 4200, 0.6, 0.006, 0.25), 0.1, 0.6)
+    place(out, noise_hit(rng, 0, 900, 1.2, 0.5), 0.5, 0.6)
+    return fade_edges(out, 0.002, 0.45)
+
+
+def sfx_evolution_griff(rng):
+    """Griff der Alten Tiefe: Wurzeln brechen aus der Erde, knarren und ziehen alles zusammen."""
+    n = n_of(1.7)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    place(out, thump(95, 36, 0.7, 0.2), 0.0, 1.0)
+    place(out, noise_hit(rng, 0, 1500, 0.8, 0.2), 0.0, 0.8)
+    creak = bandpass(white(n, rng), 140, 700) * (0.6 + 0.4 * np.sin(2 * np.pi * 9 * t))
+    out += creak / (np.std(creak) + 1e-9) * smooth(t, 0, 0.15) * np.exp(-t / 0.8) * 0.3
+    out += crackle(rng, 1.7, 45, lo=500, hi=3200, strength=0.6, tau=0.006, pops=0.3) * np.exp(-t / 0.9)
+    place(out, whoosh(rng, 0.7, 1800, 300, peak=0.15, tail=0.3, q=0.9), 0.05, 0.4)
+    place(out, thump(150, 60, 0.3, 0.07), 0.45, 0.6)
+    return fade_edges(out, 0.003, 0.35)
+
+
+def sfx_evolution_orkan(rng):
+    """Orkan der Alten Ordnung: ein tiefer, wuchtiger Windstoss, gleich ein zweiter hinterher."""
+    n = n_of(1.5)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    place(out, whoosh(rng, 1.0, 260, 2200, peak=0.3, tail=0.35, q=0.7), 0.0, 1.0)
+    place(out, whoosh(rng, 0.8, 380, 2800, peak=0.3, tail=0.3, q=0.8), 0.24, 0.85)
+    place(out, thump(80, 38, 0.5, 0.14), 0.0, 0.7)
+    out += bandpass(white(n, rng), 120, 900) * smooth(t, 0, 0.2) * np.exp(-t / 0.7) * 0.25
+    return fade_edges(out, 0.004, 0.4)
+
+
+def sfx_evolution_kuppel(rng):
+    """Kuppel der Alten Ordnung: eine Rune zerspringt wie Glas, eine scharfe Welle faehrt hinaus."""
+    n = n_of(1.2)
+    out = np.zeros(n)
+    place(out, noise_hit(rng, 2500, 11000, 0.1, 0.02), 0.0, 0.9)
+    for i, f in enumerate((1180.0, 1570.0, 2090.0, 2640.0)):
+        place(out, chime(f, 0.7, 0.14, ((1, 1), (2.32, 0.5), (4.1, 0.25)), rng), 0.01 * i, 0.3)
+    place(out, thump(150, 55, 0.35, 0.08), 0.0, 0.9)
+    place(out, whoosh(rng, 0.5, 500, 4200, peak=0.15, tail=0.15, q=1.2), 0.0, 0.6)
+    place(out, noise_hit(rng, 0, 2400, 0.35, 0.07), 0.02, 0.5)
+    return fade_edges(out, 0.001, 0.25)
+
+
 def sfx_angriff_hitze_werfen(rng):
     n = n_of(0.7)
     t = np.arange(n) / SR
@@ -1720,6 +1816,13 @@ def build_catalogue():
     sfx('sfx/evolution-nebel', sfx_evolution_nebel, -19.0)
     sfx('sfx/evolution-phantom', sfx_evolution_phantom, -16.0)
     sfx('sfx/evolution-schlinge', sfx_evolution_schlinge, -18.0)
+    sfx('sfx/evolution-sonnenstich', sfx_evolution_sonnenstich, -18.0)
+    sfx('sfx/evolution-speer', sfx_evolution_speer, -16.0)
+    sfx('sfx/evolution-krone', sfx_evolution_krone, -21.0)
+    sfx('sfx/evolution-beben', sfx_evolution_beben, -15.0)
+    sfx('sfx/evolution-griff', sfx_evolution_griff, -17.0)
+    sfx('sfx/evolution-orkan', sfx_evolution_orkan, -18.0)
+    sfx('sfx/evolution-kuppel', sfx_evolution_kuppel, -17.0)
 
     many('sfx/treffer-stahl', sfx_treffer_stahl, 3, -21.0)
     many('sfx/treffer-staub', sfx_treffer_staub, 3, -22.0)

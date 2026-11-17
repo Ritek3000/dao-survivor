@@ -95,6 +95,45 @@ export class Threats {
     audio.play('sog.ankuendigung', x, z);
   }
 
+  /**
+   * Zerreibt die Schwarzen Sogs, die Priester wirken, wenn ihre Mitte höchstens `reach` Meter (oder ihr eigener Radius, wenn der größer
+   * ist) von (x, z) liegt: Der Staub, den sie rufen, verweht, bevor er wirkt. Der Sog des Verschlingers-Bosses (`quench`) bleibt, er ist
+   * kein Zauber, den man zerreiben kann. Es sagt, wie viele es waren.
+   */
+  dissolve(x: number, z: number, reach: number): number {
+    let count = 0;
+    const p = this.particle;
+    for (let i = this.sogs.length - 1; i >= 0; i--) {
+      const sog = this.sogs[i];
+      if (!sog || sog.quench || sog.delay <= 0) continue;
+      if (Math.hypot(sog.x - x, sog.z - z) > Math.max(reach, sog.radius)) continue;
+      this.strips.cancel(sog.field, 0.2);
+      this.strips.cancel(sog.rim, 0.2);
+      this.sogs.splice(i, 1);
+      count++;
+      // Der Staub, der zur Mitte strömte, stiebt wieder auseinander; ein paar Körner leuchten kalt auf, wie das Zerreiben selbst.
+      for (let n = 0; n < 16; n++) {
+        const angle = Math.random() * TAU;
+        const from = sog.radius * Math.random();
+        p.x = sog.x + Math.sin(angle) * from;
+        p.y = 0.15 + Math.random() * 0.4;
+        p.z = sog.z + Math.cos(angle) * from;
+        p.vx = Math.sin(angle) * (2 + Math.random() * 3);
+        p.vy = 0.5 + Math.random();
+        p.vz = Math.cos(angle) * (2 + Math.random() * 3);
+        p.life = 0.4 + Math.random() * 0.3;
+        p.size = 0.07 + Math.random() * 0.05;
+        p.grow = -0.05;
+        p.gravity = 0;
+        p.drag = 1.2;
+        p.color.set(0xbfd4ff).multiplyScalar(1.6);
+        p.alpha = 0.9;
+        this.motes.spawn(p);
+      }
+    }
+    return count;
+  }
+
   /** Kündigt den Hieb des Verschlingers an: die Fläche vor ihm, die seine Faust gleich trifft. */
   arc(x: number, z: number, angle: number, width: number, reach: number, seconds: number): void {
     const shape = { x, z, angle, width, inner: reach * 0.25, outer: reach, life: seconds + 0.08 };
