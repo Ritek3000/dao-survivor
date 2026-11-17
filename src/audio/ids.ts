@@ -43,6 +43,9 @@ export type SoundId =
   | 'gegner-tod'
   | `gegner-tod.${string}`
   | `gegner-laut.${string}`
+  // Evolutionen: `evolution` beim Entwickeln eines Angriffs, `evolution.<Name>` bei ihrer Wirkung (Rückfall: `evolution`)
+  | 'evolution'
+  | `evolution.${string}`
   // Schwarzer Sog und Verschlinger
   | 'sog.ankuendigung'
   | 'sog.wirkung'

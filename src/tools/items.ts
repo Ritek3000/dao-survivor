@@ -5,6 +5,7 @@
  *   __items.fuellen()                        Inventar aller Klassen mit gewürfelten Gegenständen füllen (Seltenheit gemischt)
  *   __items.fuellen(2, 'rar')                nur das Inventar des Magiers (0 Kämpfer, 1 Wildnisläufer, 2 Magier), alle 'rar'
  *   __items.geben(0, 'ring', 'legendaer')    einen Gegenstand auf den ersten freien Platz im Inventar der Klasse legen
+ *   __items.geben(0, 'ring', 'legendaer', 'wuchthieb')   dasselbe mit der Evolution des genannten Angriffs auf dem Ring
  *   __items.leeren()                         alle Gegenstände aller Klassen und die Truhe löschen
  *   __items.truhe(30, 'rar')                 30 Gegenstände (hier alle 'rar', ohne Angabe gemischt) in die Truhe legen, Reiter für Reiter
  *   __items.gold(5000)                       schreibt der Geldbörse Gold gut (zum Ausprobieren des Händlers)
@@ -58,12 +59,12 @@ export function installItemTools(game: Game): void {
 
   const api = {
     /** Legt einen gewürfelten Gegenstand ins Inventar der Klasse (Stelle in der Liste der Klassen). */
-    geben(classIndex: number, slot: ItemSlot, rarity: Rarity = 'normal'): boolean {
+    geben(classIndex: number, slot: ItemSlot, rarity: Rarity = 'normal', evolution?: string): boolean {
       const playerClass = CLASSES[classIndex];
       if (!playerClass) throw new Error(`Unbekannte Klasse: ${classIndex}`);
       // Legendäres gibt es nur auf wenigen Plätzen; beim Füllen mit gemischter Seltenheit rückt es auf Rar.
       if (!isPossible(slot, rarity)) rarity = 'rar';
-      return internals.ausruestung.add(playerClass.id, rollItem(random, slot, rarity, playerClass.id));
+      return internals.ausruestung.add(playerClass.id, rollItem(random, slot, rarity, playerClass.id, evolution));
     },
     /** Füllt das Inventar einer Klasse oder aller Klassen bis zum letzten freien Platz. */
     fuellen(classIndex?: number, rarity?: Rarity): void {

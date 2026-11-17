@@ -7,6 +7,8 @@
  *   __messlauf.start()                               alle Klassen, je drei Nächte
  *   __messlauf.start({ nights: 5, classes: [2] })    nur der Magier, fünf Nächte
  *   __messlauf.start({ ausruestung: 'rar' })         alle neun Plätze jeder Klasse mit rar gewürfelten Gegenständen belegt
+ *   __messlauf.start({ evolution: 'axthieb', classes: [0] })   der Kämpfer trägt den legendären Ring der Evolution des Axthiebs und beginnt mit diesem Angriff auf Rang 4
+ *   __messlauf.start({ fokus: 'axthieb', classes: [0] })       dasselbe ohne Ring: Der Angriff endet bei Rang 5 (zum Vergleich mit der Evolution)
  *   __messlauf.results                               alle Messwerte
  *   __messlauf.config.enemies.ratePerMinute = 0.3  einen Wert nur für diese Sitzung ändern
  *   __messlauf.weapon('bogenschuss').damage = 20     ebenso einen Angriff
@@ -28,7 +30,7 @@ import type { Stats } from '../game/progression';
 import type { Ausruestung } from '../game/ausruestung';
 import type { Boerse } from '../game/boerse';
 import { ITEM_SLOTS, rollItem, type Rarity } from '../game/items';
-import { weaponById } from '../game/weapons';
+import { weaponById, type WeaponDef } from '../game/weapons';
 import type { Zone } from '../game/zones';
 
 /** Die Teile des Spiels, in die der Messlauf hineingreift; im Spiel selbst sind sie nicht öffentlich. */
@@ -58,6 +60,8 @@ interface Internals {
   arsenal: {
     owned: OwnedWeapon[];
     hit(enemy: Enemy, weapon: OwnedWeapon, fromX: number, fromZ: number): void;
+    rankOf(id: string): number;
+    take(def: WeaponDef): void;
   };
   events: { add(listener: CombatListener): void };
   progression: { level: number; stats: Stats; blessed: { name: string }[] };
@@ -152,6 +156,14 @@ interface Options {
    * Der echte Spielstand wird weder gelesen noch verändert.
    */
   ausruestung?: Exclude<Rarity, 'legendaer'>;
+  /**
+   * Die Kennung eines Angriffs mit Evolution (etwa `'axthieb'`): Die Klasse, zu der er gehört, trägt den legendären Ring, der sie freischaltet
+   * (er ersetzt den Ring der Ausrüstung); die Nacht beginnt mit diesem Angriff auf Rang 4, und die Figur wählt ihn bei jeder Stärkung, die ihn anbietet.
+   * So erreicht er in jeder Nacht früh Rang 6, und man sieht, was die Evolution leistet.
+   */
+  evolution?: string;
+  /** Wie `evolution`, nur ohne den Ring: Der Angriff beginnt auf Rang 4 und endet bei Rang 5. Der Vergleichswert zur Evolution. */
+  fokus?: string;
   seed?: number;
 }
 
@@ -236,7 +248,10 @@ function steer(g: Internals, style: Style, previous: number, out: MoveVector): n
   return best;
 }
 
-async function playNight(game: Game, classIndex: number, random: Random, maxSeconds: number): Promise<NightResult> {
+/** Der Rang, mit dem ein Angriff im Blick (`evolution`, `fokus`) in die Nacht geht. */
+const FOCUS_RANK = 4;
+
+async function playNight(game: Game, classIndex: number, random: Random, maxSeconds: number, focus?: string): Promise<NightResult> {
   const g = game as unknown as Internals;
   const playerClass = CLASSES[classIndex];
   if (!playerClass) throw new Error(`Keine Klasse an Stelle ${classIndex}.`);
@@ -277,6 +292,12 @@ async function playNight(game: Game, classIndex: number, random: Random, maxSeco
   g.hud.hideEnd();
   g.openSelect();
   g.pick(classIndex);
+  // Mit einem Angriff im Blick beginnt die Nacht mit ihm auf Rang 4: Sonst käme er in einer Nacht selten bis Rang 5, und es ließe sich nichts messen.
+  // Der nächste Rang ist dann die Evolution (mit dem Ring) oder Rang 5 (ohne).
+  if (focus) {
+    const def = weaponById(focus);
+    while (g.arsenal.rankOf(focus) < FOCUS_RANK) g.arsenal.take(def);
+  }
 
   // Mithören: Wer teilt wie viel aus, und was steckt die Figur ein?
   const arsenal = g.arsenal;
@@ -324,7 +345,10 @@ async function playNight(game: Game, classIndex: number, random: Random, maxSeco
       const sliceStart = performance.now();
       while (performance.now() - sliceStart < SLICE_MS && g.phase !== 'ended' && g.time < maxSeconds) {
         if (g.phase === 'levelup') {
-          g.pick(Math.floor(random() * g.offers.length));
+          // Mit einer Evolution im Blick nimmt die Figur den Angriff, sobald er angeboten wird; sonst entscheidet der Zufall.
+          const wanted = focus ? g.offers.findIndex((offer) => offer.name === weaponById(focus).name) : -1;
+          const index = wanted >= 0 ? wanted : Math.floor(random() * g.offers.length);
+          g.pick(index);
           continue;
         }
         if (g.phase !== 'playing') break;
@@ -420,17 +444,24 @@ export function installMesslauf(game: Game): void {
       const itemRandom = createRandom((options.seed ?? 12345) + 777);
       // Die Beute würfelt sonst mit der Uhrzeit; für die Messung bekommt sie einen festen, in jeder Nacht weitergezählten Anfang.
       (game as unknown as Internals).beute.fixedSeed = (options.seed ?? 12345) + 4242;
+      const focus = options.evolution ?? options.fokus;
+      const owner = focus ? CLASSES.find((candidate) => candidate.weapons.includes(focus)) : undefined;
+      if (options.evolution && !weaponById(options.evolution).evolution) throw new Error(`${options.evolution} hat keine Evolution.`);
       for (const playerClass of CLASSES) {
-        ausruestung.setLoadout(
-          playerClass.id,
-          options.ausruestung ? ITEM_SLOTS.map((slot) => rollItem(itemRandom, slot, options.ausruestung as Rarity, playerClass.id)) : [],
-        );
+        const items = options.ausruestung
+          ? ITEM_SLOTS.map((slot) => rollItem(itemRandom, slot, options.ausruestung as Rarity, playerClass.id))
+          : [];
+        // Der legendäre Ring ersetzt den Ring der Ausrüstung.
+        if (options.evolution && owner === playerClass) {
+          items.splice(0, items.length, ...items.filter((item) => item.slot !== 'ring'), rollItem(itemRandom, 'ring', 'legendaer', playerClass.id, options.evolution));
+        }
+        ausruestung.setLoadout(playerClass.id, items);
       }
       try {
         for (const classIndex of classes) {
           for (let night = 1; night <= nights; night++) {
             api.status = `${CLASSES[classIndex]?.name ?? '?'}, Nacht ${night} von ${nights}`;
-            api.results.push(await playNight(game, classIndex, random, options.maxSeconds ?? Infinity));
+            api.results.push(await playNight(game, classIndex, random, options.maxSeconds ?? Infinity, owner === CLASSES[classIndex] ? focus : undefined));
           }
         }
         api.status = 'fertig';

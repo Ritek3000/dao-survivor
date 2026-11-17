@@ -718,6 +718,67 @@ export const CONFIG = {
       primeHits: 10,
       primeShare: 0.25,
     },
+    /**
+     * Evolutionen (Rang 6): Hat ein Angriff Rang 5 und schaltet ein angelegter legendärer Ring seine Evolution frei, wird er zum
+     * Rang 6. Was der Rang an Schaden, Abklingzeit und Zuständen ändert, steht in `weapons.ts`; hier stehen die Zahlen der neuen Wirkungen.
+     */
+    evolution: {
+      /**
+       * Beute: Ein legendärer Ring kann die Evolution eines Angriffs tragen, den die Klasse noch nicht spielt. Angriffe, die in dieser
+       * Nacht schon so hohen Rang haben, werden um diesen Faktor häufiger gewürfelt (Zielhilfe, kein Zwang).
+       */
+      lootRank: 3,
+      lootWeight: 3,
+      kaempfer: {
+        /** Henkersbeil: Jeder so vielte Hieb entlädt die Sichel; sie ist so lang und breit (Meter), schlägt mit diesem Faktor auf den Schaden zu und richtet Geschwächte unter diesem Anteil ihres Lebens hin (Große und der Verschlinger nicht). */
+        sickleEvery: 4,
+        sickleLength: 14,
+        sickleWidth: 2.6,
+        sickleDamage: 3,
+        sickleExecute: 0.25,
+        /** Reliquie: Jeder Gegner im Umkreis (höchstens `relicStacks`) gibt einen Stapel: Abklingzeit × `relicHaste`, Tempo × `relicSpeed` je Stapel. Das Banner schwebt `relicLift` Meter hoch. */
+        relicStacks: 10,
+        relicHaste: 0.97,
+        relicSpeed: 1.015,
+        relicSeconds: 1,
+        relicLift: 2.5,
+        /** Sturm der Klingen: Die Äxte kreisen so lange (Sekunden) in diesem Abstand (Meter) mit diesem Tempo (Radiant je Sekunde); wer sie berührt, erleidet alle `stormEvery` Sekunden diesen Anteil des Schadens. Danach suchen sie Ziele bis `stormSight` mal ihrer Reichweite. */
+        stormSeconds: 1.1,
+        stormRadius: 1.9,
+        stormSpin: 8,
+        stormEvery: 0.2,
+        stormTouch: 0.2,
+        stormSight: 1.3,
+        /** Mahlstrom: So lange dreht er sich (Sekunden), mit diesem Faktor auf den Radius des Wirbelschlags; jeder Takt (`vortexEvery`) schlägt mit diesem Faktor zu und zieht Gegner mit diesem Tempo (m/s) heran. Am Ende schleudert die Druckwelle (Radius-Faktor, Schadensfaktor, Rückstoß in Metern) sie fort. */
+        vortexSeconds: 4,
+        vortexRadius: 1.2,
+        vortexEvery: 0.25,
+        vortexDamage: 0.4,
+        vortexPull: 3,
+        vortexBlastRadius: 1.4,
+        vortexBlastDamage: 2,
+        vortexBlastPush: 5,
+        /** Spalter von Ghen: Beim Ausholen zieht der Staub Gegner im Umkreis `cleaveReach` mit diesem Tempo (m/s) zum Einschlagpunkt `cleaveImpact` Meter vor der Figur; der Spalt ist so lang und breit (Meter), schlägt mit diesem Faktor zu und betäubt so lange (Sekunden). */
+        cleaveReach: 5,
+        cleavePull: 3.5,
+        cleaveImpact: 2.2,
+        cleaveLength: 13,
+        cleaveWidth: 2.6,
+        cleaveDamage: 2.4,
+        cleaveStun: 0.7,
+        /** Donner: Der Kegel öffnet sich so weit (Radiant); wer getroffen wird, nimmt so lange (Sekunden) diesen Faktor mehr Schaden aus den Nahkampfangriffen des Kämpfers. */
+        thunderArc: 1.4,
+        thunderSeconds: 4,
+        thunderFactor: 1.15,
+        /** Bollwerk: Die Aura beginnt `bulwarkStart` Meter vor der Figur, ist so lang und breit (Meter), wirkt alle `bulwarkEvery` Sekunden mit diesem Faktor auf den Dornenschaden und drängt Gegner um `bulwarkPush` Meter zurück. */
+        bulwarkStart: 0.5,
+        bulwarkLength: 2.6,
+        bulwarkWidth: 3,
+        bulwarkEvery: 0.3,
+        bulwarkDamage: 0.5,
+        bulwarkPush: 0.5,
+      },
+    },
   },
   xp: {
     /** Bedarf für die nächste Stufe: base + linear * Stufe + quadratic * Stufe². */

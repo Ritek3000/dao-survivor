@@ -96,6 +96,21 @@ export interface WeaponDef {
   ranks?: readonly RankRule[];
   /** Was ein Rang bringt, in einem Satz für die Auswahlkarte; der Eintrag an Stelle 0 gehört zu Rang 1. */
   rankText?: readonly string[];
+  /**
+   * Die Evolution des Angriffs: Hat er Rang 5 und schaltet ein angelegter legendärer Ring sie frei, wird er zu Rang 6. Die Zeile dazu
+   * steht als sechster Eintrag in `ranks` (siehe `EVOLUTION_RANK`).
+   */
+  evolution?: EvolutionInfo;
+}
+
+/** Name, Gegenstand und Wirkung einer Evolution, wie sie Auswahlkarte, Meldung und Gegenstandskarte zeigen. */
+export interface EvolutionInfo {
+  /** Der Name des entwickelten Angriffs („Henkersbeil der Alten Ordnung“); er ersetzt den Namen der Fertigkeit, solange sie entwickelt ist. */
+  name: string;
+  /** Der Name des legendären Rings, der sie freischaltet („Henkerswerk“). */
+  item: string;
+  /** Die Wirkung in ein, zwei Sätzen, für die Karte des Rings und die Meldung. */
+  text: string;
 }
 
 /**
@@ -155,7 +170,13 @@ export interface ResolvedRank {
   flags: readonly string[];
 }
 
+/** Der höchste Rang, den man wählen kann. */
 export const MAX_RANK = 5;
+/**
+ * Rang 6 ist die Evolution: Sie bekommt man nicht durch Wahl, sondern wenn ein Angriff mit Evolution Rang 5 erreicht und ein angelegter
+ * legendärer Ring sie freischaltet (`Arsenal.reset`, `Arsenal.take`).
+ */
+export const EVOLUTION_RANK = 6;
 /** Jeder Rang über dem ersten bringt so viel Schaden dazu. */
 export const DAMAGE_PER_RANK = 0.25;
 /** Jeder Rang über dem ersten verkürzt die Abklingzeit auf diesen Anteil. */
@@ -196,7 +217,14 @@ const DEFS: readonly WeaponDef[] = [
           { kind: 'mark', seconds: 4, power: 0.3 },
         ],
       },
+      // Evolution: Jeder vierte Hieb entlädt die Sichel (`CONFIG.skills.evolution.kaempfer`).
+      { flags: ['zulaufen', 'rueckhand', 'sichel'] },
     ],
+    evolution: {
+      name: 'Henkersbeil der Alten Ordnung',
+      item: 'Henkerswerk',
+      text: 'Jeder vierte Axthieb entlädt eine schwere Staub-Sichel nach vorn, die durch ganze Horden schneidet und geschwächte Feinde unter 25 % ihres Lebens sofort hinrichtet.',
+    },
     rankText: [
       'Weiter Hieb im Halbkreis auf den nächsten Gegner, stößt leicht zurück',
       'Reichweite +25 %; mehr Schaden gegen Gegner, auf die du zuläufst',
@@ -221,7 +249,14 @@ const DEFS: readonly WeaponDef[] = [
       { damage: 1.6, flags: ['splitter'] },
       { damage: 1.7, flags: ['splitter', 'lang'], statuses: [{ kind: 'feeble', seconds: 0.8, power: 0.2 }] },
       { damage: 1.9, flags: ['splitter', 'lang', 'magnet'] },
+      // Evolution: Das Banner schwebt dauerhaft über der Figur, ohne Pause und mit mehr Schaden je Takt; dazu kommen die Stapel an Tempo.
+      { damage: 3, radius: 1.4, flags: ['splitter', 'lang', 'magnet', 'reliquie'] },
     ],
+    evolution: {
+      name: 'Reliquie der Nimmersatten',
+      item: 'Nimmersatt',
+      text: 'Das Banner schwebt dauerhaft über dir. Gegner im Umkreis werden ausgesaugt; jeder betroffene Feind steigert deine Angriffs- und Lauftempo (bis zu 10 Stapel).',
+    },
     rankText: [
       'Ein Banner für 6 Sekunden: Gegner im Kreis erleiden fortwährend Schaden',
       'Radius +30 %, mehr Schaden',
@@ -248,7 +283,14 @@ const DEFS: readonly WeaponDef[] = [
       { damage: 2, count: 2 },
       { damage: 2.25, flags: ['staubspur'] },
       { damage: 2.5, flags: ['staubspur', 'kehrtwende'] },
+      // Evolution: sechs Äxte statt zwei, dafür je Axt weniger Schaden.
+      { damage: 1, count: 6, flags: ['staubspur', 'kehrtwende', 'sturm'] },
     ],
+    evolution: {
+      name: 'Sturm der Klingen',
+      item: 'Sturmklinge',
+      text: 'Sechs mit Staub gebundene Äxte kreisen kurz als Schutzring um dich, dann fliegen sie gleichzeitig in alle Richtungen auf die stärksten Ziele in Sichtweite.',
+    },
     rankText: [
       'Schwerer Wurf auf den nächsten Gegner; die Axt bleibt kurz im Ziel stecken',
       'Die Axt durchschlägt bis zu zwei Gegner hintereinander',
@@ -273,7 +315,14 @@ const DEFS: readonly WeaponDef[] = [
       { flags: ['doppelt'] },
       { flags: ['doppelt', 'abkuehlung'], knockback: 2.5 },
       { flags: ['doppelt', 'abkuehlung', 'schutz', 'umzingelt'] },
+      // Evolution: Statt zwei Wirbeln ein Mahlstrom von mehreren Sekunden (`CONFIG.skills.evolution.kaempfer`).
+      { flags: ['doppelt', 'abkuehlung', 'schutz', 'umzingelt', 'mahlstrom'] },
     ],
+    evolution: {
+      name: 'Mahlstrom aus Staub und Eisen',
+      item: 'Wirbelsturm',
+      text: 'Du drehst dich mehrere Sekunden ununterbrochen und läufst dabei frei. Ein reißender Staub-Tornado zieht Gegner an, zerschneidet sie und schleudert sie am Ende in einer Druckwelle nach außen.',
+    },
     rankText: [
       'Sprung mit Drehung, trifft alle Gegner rundum',
       'Radius +30 %',
@@ -306,7 +355,14 @@ const DEFS: readonly WeaponDef[] = [
       },
       { range: 1.4, knockback: 1.8 },
       { flags: ['schutz', 'kette'] },
+      // Evolution: längeres Ausholen, in dem der Staub Gegner zum Einschlag zieht, dann spaltet der Hieb den Boden in einer langen Linie.
+      { lead: 1.6, flags: ['schutz', 'kette', 'spalter'] },
     ],
+    evolution: {
+      name: 'Spalter von Ghen',
+      item: 'Weltenspalter',
+      text: 'Beim Ausholen saugt die Axt den Staub ein und zieht nahe Gegner zum Einschlagpunkt. Der Niederschlag spaltet den Boden in einer langen Linie und zerquetscht alles auf seinem Weg.',
+    },
     rankText: [
       'Weit ausgeholter Hieb, schleudert Gegner vor dir zurück',
       'Kürzeres Ausholen, dabei erleidest du 30 % weniger Schaden',
@@ -337,7 +393,22 @@ const DEFS: readonly WeaponDef[] = [
         ],
       },
       { damage: 1.5, cooldown: 0.7, flags: ['schwache', 'vorteil', 'echo'] },
+      // Evolution: ein Kegel mit doppelter Reichweite, der alle verletzt (nicht nur Schwache), bremst und für Nahkämpfe verwundbar macht.
+      {
+        radius: 2.7,
+        flags: ['vorteil', 'echo', 'donner'],
+        statuses: [
+          { kind: 'fear', seconds: 1.5 },
+          { kind: 'weak', seconds: 4, power: 1.2 },
+          { kind: 'slow', seconds: 1.5, power: 0.3 },
+        ],
+      },
     ],
+    evolution: {
+      name: 'Donner der Alten Ordnung',
+      item: 'Donneraxt',
+      text: 'Der Schrei fährt als Kegel in Blickrichtung mit doppelter Reichweite. Getroffene erleiden Schaden, werden 1,5 Sekunden um 30 % verlangsamt und nehmen von deinen Nahkampfangriffen 15 % mehr Schaden.',
+    },
     rankText: [
       'Druckwelle rundum: Gegner weichen zurück und geraten in Furcht',
       'Radius +35 %, leichter Schaden an schwachen Gegnern',
@@ -367,7 +438,14 @@ const DEFS: readonly WeaponDef[] = [
           { kind: 'slow', seconds: 1, power: 0.2 },
         ],
       },
+      // Evolution: eine Dornen-Aura vor der Figur, dauerhaft (`CONFIG.skills.evolution.kaempfer`).
+      { flags: ['ramm', 'splitter', 'bollwerk'] },
     ],
+    evolution: {
+      name: 'Bollwerk der Stacheln',
+      item: 'Stachelbeil',
+      text: 'Lange, staubverkrustete Eisenstangen bilden eine dauerhafte, enge Dornen-Aura vor dir. Gegner erleiden den Dornenschaden schon beim Berühren der Aura, bevor sie zuschlagen können, und werden leicht zurückgedrängt.',
+    },
     rankText: [
       'Wer dich im Nahkampf trifft, erleidet sofort leichten Stichschaden',
       'Dornenschaden +30 %; Angreifer bluten kurz',
@@ -825,12 +903,13 @@ function ruleRank(def: WeaponDef, rank: number): ResolvedRank {
   };
 }
 
-/** Alle Ränge eines Angriffs, von 1 bis `MAX_RANK`. */
+/** Alle Ränge eines Angriffs, von 1 bis `MAX_RANK`, mit Evolution bis `EVOLUTION_RANK`. */
 function resolveAll(def: WeaponDef): readonly ResolvedRank[] {
   const table = def.ranks ?? [];
   const named: RankRule = {};
   const all: ResolvedRank[] = [];
-  for (let rank = 1; rank <= MAX_RANK; rank++) {
+  const top = def.evolution ? EVOLUTION_RANK : MAX_RANK;
+  for (let rank = 1; rank <= top; rank++) {
     // Was ein Rang nennt, merkt sich `named` für die folgenden.
     Object.assign(named, table[rank - 1]);
     const resolved = ruleRank(def, rank);
@@ -857,10 +936,10 @@ function resolveAll(def: WeaponDef): readonly ResolvedRank[] {
 
 const RANKS = new Map(DEFS.map((def) => [def.id, resolveAll(def)]));
 
-/** Die fertige Zeile eines Rangs (1 bis `MAX_RANK`) eines Angriffs; sie liegt vorberechnet da, im Kampf entsteht nichts. */
+/** Die fertige Zeile eines Rangs (1 bis `MAX_RANK`, mit Evolution bis `EVOLUTION_RANK`); sie liegt vorberechnet da, im Kampf entsteht nichts. */
 export function resolveRank(def: WeaponDef, rank: number): ResolvedRank {
   const all = RANKS.get(def.id) ?? resolveAll(def);
-  const row = all[Math.min(Math.max(rank, 1), MAX_RANK) - 1];
+  const row = all[Math.min(Math.max(rank, 1), all.length) - 1];
   if (!row) throw new Error(`Kein Rang ${rank} für ${def.id}`);
   return row;
 }
@@ -880,4 +959,14 @@ export function weaponById(id: string): WeaponDef {
   const def = BY_ID.get(id);
   if (!def) throw new Error(`Unbekannter Angriff: ${id}`);
   return def;
+}
+
+/** Die Evolution eines Angriffs, falls er eine hat. */
+export function evolutionOf(id: string): EvolutionInfo | undefined {
+  return BY_ID.get(id)?.evolution;
+}
+
+/** Die Angriffe einer Auswahl (etwa einer Klasse), die eine Evolution haben, in der Reihenfolge der Auswahl. */
+export function evolvable(ids: readonly string[]): string[] {
+  return ids.filter((id) => BY_ID.get(id)?.evolution !== undefined);
 }

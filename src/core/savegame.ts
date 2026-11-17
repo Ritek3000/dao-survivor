@@ -16,7 +16,12 @@
 import { browserTextStore, type TextStore } from './storage';
 
 /** Die Fassung des Formats, die dieser Code schreibt. */
-export const SAVEGAME_VERSION = 6;
+export const SAVEGAME_VERSION = 7;
+/**
+ * Stände von einer älteren Fassung als dieser werden vor dem Heben gesichert. Das Heben von Fassung 6 auf 7 verwirft nichts; die
+ * Sicherung aus der Umstellung auf Fassung 6 (die Ränge der Steigerungen) soll darum nicht davon überschrieben werden.
+ */
+const BACKUP_BELOW = 6;
 
 /** Obergrenze für einen Rang der entfallenen Steigerungen beim Lesen; schützt vor Unsinn in einer von Hand bearbeiteten Datei. */
 const MAX_STORED_RANK = 99;
@@ -134,6 +139,7 @@ export function parseSavegame(text: string | null): Savegame {
   if (version < 4) raw = von3auf4(raw);
   if (version < 5) raw = von4auf5(raw);
   if (version < 6) raw = von5auf6(raw);
+  if (version < 7) raw = von6auf7(raw);
 
   if (typeof raw.version === 'number' && Number.isFinite(raw.version)) {
     // Ein Stand aus einer neueren Fassung wird so gut gelesen wie möglich, seine Nummer aber nicht zurückgesetzt.
@@ -216,6 +222,14 @@ function von5auf6(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...rest, version: 6, gold: wholeNumber(raw.gold, Number.MAX_SAFE_INTEGER) + refund, refund };
 }
 
+/**
+ * Fassung 7: Ein legendärer Ring trägt die Evolution einer Fertigkeit (Feld `evolution` am Gegenstand). Ringe aus Fassung 6 haben
+ * keine; `parseItem` gibt jedem eine aus seiner Nummer, sobald er gelesen wird. Sonst ändert sich nichts am Format.
+ */
+function von6auf7(raw: Record<string, unknown>): Record<string, unknown> {
+  return { ...raw, version: 7 };
+}
+
 function parseShop(raw: unknown): StoredShop {
   const shop = emptyShop();
   if (!isRecord(raw)) return shop;
@@ -270,14 +284,14 @@ function storedVersion(text: string): number | null {
 }
 
 /**
- * Liest den gespeicherten Stand; ohne oder mit unbrauchbarem Stand ein leerer. Ist der Stand von einer älteren Fassung, wird sein
+ * Liest den gespeicherten Stand; ohne oder mit unbrauchbarem Stand ein leerer. Ist der Stand von einer Fassung vor `BACKUP_BELOW`, wird sein
  * Text vorher unverändert gesichert (`BACKUP_KEY`), denn das Heben verwirft Daten, die es nicht mehr gibt.
  */
 export function loadSavegame(): Savegame {
   const text = store.read();
   if (text !== null && backup) {
     const version = storedVersion(text);
-    if (version !== null && version < SAVEGAME_VERSION && backup.read() !== text) backup.write(text);
+    if (version !== null && version < BACKUP_BELOW && backup.read() !== text) backup.write(text);
   }
   return parseSavegame(text);
 }

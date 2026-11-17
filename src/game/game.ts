@@ -157,6 +157,8 @@ export class Game {
       progression: this.progression,
       pickups: this.pickups,
     });
+    this.beute.rankOf = (id) => this.arsenal.rankOf(id);
+    this.arsenal.onEvolve = (weapon) => this.hud.announce(`Evolution · ${weapon.def.evolution?.name ?? weapon.def.name}`);
 
     this.scene.background = this.background;
     // Blendet den fernen Boden in den Hintergrund aus, damit keine Kante sichtbar wird.
@@ -679,7 +681,7 @@ export class Game {
     this.threats.reset();
     this.boss.reset();
     this.hud.setBoss(null);
-    this.arsenal.reset(playerClass);
+    this.arsenal.reset(playerClass, this.ausruestung.evolutionsOf(playerClass.id));
     finsternisUniforms.uSense.value = playerClass.id === 'wildnislaeufer' ? 1 : 0;
     this.traitLabel = '';
     this.rig.snapTo(this.player.position);
@@ -738,7 +740,11 @@ export class Game {
         name: def.name,
         // Was der nächste Rang bringt, steht auf der Karte; ohne Angabe die Kurzbeschreibung.
         text: def.rankText?.[rank] ?? def.text,
-        note: rank === 0 ? 'Neuer Angriff' : `Rang ${rank + 1} von ${MAX_RANK}`,
+        // Schaltet der angelegte Ring seine Evolution frei, steht auf der Karte schon, was aus dem Angriff wird.
+        note:
+          rank === 0
+            ? 'Neuer Angriff'
+            : `Rang ${rank + 1} von ${MAX_RANK}${rank + 1 === MAX_RANK && this.arsenal.unlocks(def) ? ` · wird zu ${def.evolution?.name ?? ''}` : ''}`,
         take: () => this.arsenal.take(def),
       })),
       ...this.progression.open().map((upgrade) => ({

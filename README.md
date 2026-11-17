@@ -180,7 +180,7 @@ Im Entwicklungsmodus (`npm run dev`) ist es immer da, und die Browser-Konsole er
 (`__items.fuellen()`, `__items.geben(0, 'ring', 'rar')`, `__items.fallen('rar')`, `__items.kiste()`, `__items.truhe(30)`, `__items.gold(5000)`, `__items.leeren()`; Beschreibung in `src/tools/items.ts`).
 
 **Aufbau.** Ein Gegenstand trägt je nach Seltenheit eine (Normal), zwei (Selten) oder drei (Rar) Eigenschaften; Legendär trägt drei und später
-die Evolution einer Fertigkeit, und gibt es vorerst nur als Ring (`LEGENDARY_SLOTS`). Jede Eigenschaft würfelt ihren Wert einmal beim Entstehen
+die Evolution einer Fertigkeit (siehe [Evolutionen](#evolutionen)), und gibt es vorerst nur als Ring (`LEGENDARY_SLOTS`). Jede Eigenschaft würfelt ihren Wert einmal beim Entstehen
 aus einem Bereich, der von der Eigenschaft und vom Platz abhängt; ein Kernplatz hebt ihn an (Schaden auf der Waffe, Leben und Rüstung auf der
 Brust, Lauftempo am Schuh, Sammelradius am Handschuh, Lichtschein an der Fackel). Es gibt 17 Eigenschaften (die zwölf der früheren Steigerungen plus
 Krit-Schaden, Schonfrist, Rastheilung, Brenndauer und Zündtempo); welche auf welchem Platz vorkommen kann, steht als Daten in `src/game/items.ts`
@@ -257,12 +257,12 @@ in `Ausruestung` (er ändert Gold, Gegenstände und Angebot in einem Zug), die B
   der Börse gutgeschrieben. Die Endanzeige nennt jeden Gegenstand und wohin er kam. Die Beute bleibt auch bei einem Sturz oder Abbruch erhalten.
 - *Zufall:* Die Beute hat einen eigenen Zufallsstrom, der mit der Uhrzeit des Nachtbeginns beginnt (nicht mit dem Seed der Welt, sonst fielen nach
   jedem Neustart dieselben Gegenstände). Der Messlauf legt einen festen Anfang fest und schreibt die gefallenen Gegenstände je Nacht mit (`beute`).
-- Noch nicht umgesetzt: Die Evolution der legendären Ringe und die Zielhilfe bei ihrer Wahl (Paket „Evolutionen“); der legendäre Ring ist bis dahin
-  ein Ring mit drei Eigenschaften.
+- *Legendäre Ringe:* Jeder trägt die Evolution einer Fertigkeit seiner Klasse (siehe [Evolutionen](#evolutionen)). Welche, entscheidet der Wurf; Angriffe, die in
+  der laufenden Nacht schon Rang 3 erreicht haben, werden dreimal so häufig gewürfelt (`CONFIG.skills.evolution.lootRank` und `lootWeight`), eine Hilfe und kein Zwang.
 
-**Speicherung.** Die Gegenstände liegen im selben Spielstand wie das Gold (Feld `items`; `src/game/ausruestung.ts`), Fassung 6 (neu: die Ränge der entfallenen Steigerungen sind
-als Gold erstattet und der alte Stand liegt als Sicherung bereit, siehe [Gold](#gold); Fassung 5 brachte den Stand des Händlers mit Angebot, Rückkauf und Zähler der Erneuerungen, Fassung 4 die Truhe,
-Fassung 3 den Pech-Schutz). Ältere Stände (Fassung 1 bis 5) werden Schritt für Schritt gehoben; Gold und Gegenstände bleiben unverändert. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
+**Speicherung.** Die Gegenstände liegen im selben Spielstand wie das Gold (Feld `items`; `src/game/ausruestung.ts`), Fassung 7 (neu: ein legendärer Ring trägt die Evolution einer Fertigkeit; Ringe aus Fassung 6 bekommen beim Lesen eine, ohne dass etwas verloren geht, und
+die Sicherung aus Fassung 6 bleibt dabei unberührt; Fassung 6 erstattete die Ränge der entfallenen Steigerungen als Gold und legte den alten Stand als Sicherung bereit, siehe [Gold](#gold); Fassung 5 brachte den Stand des Händlers mit Angebot, Rückkauf und Zähler der Erneuerungen, Fassung 4 die Truhe,
+Fassung 3 den Pech-Schutz). Ältere Stände (Fassung 1 bis 6) werden Schritt für Schritt gehoben; Gold und Gegenstände bleiben unverändert. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
 Name, unmögliche Eigenschaft), wird beim Lesen verworfen, Werte außerhalb des heutigen Bereichs rücken an dessen Rand.
 
 **Gleichgewicht.** `__items.verteilung('stark')`, `__items.kisten()` und `__items.angebote()` würfeln die Seltenheiten, den Pech-Schutz und das Angebot des Händlers in der Konsole tausendfach nach
@@ -302,7 +302,7 @@ sichtbare Wirkung** im Spiel, außer dass festgehaltene Gegner wie bisher fahl d
 
 Der Kämpfer hat sieben Fertigkeiten (Vorlage: „Klassen, Fertigkeiten & Evolutionen“, Abschnitt Kämpfer), je fünf Ränge. Alle sind **Daten** in `weapons.ts`; die Zahlen, die man beim Balancing anfasst,
 stehen in `CONFIG.skills.kaempfer`. Jeder Rang bringt auf der Auswahlkarte einen eigenen Satz (`WeaponDef.rankText`), der sagt, was der **nächste** Rang tut. Was die Tabelle eines Rangs nicht nennt,
-folgt den alten Regeln (+25 % Schaden je Rang). Die **Evolutionen** (Rang 6) sind ein eigenes Paket und noch nicht dabei.
+folgt den alten Regeln (+25 % Schaden je Rang). Die **Evolutionen** (Rang 6) stehen im Abschnitt [Evolutionen](#evolutionen).
 
 | Fertigkeit    | Art                    | Was die Ränge bringen                                                                                                                  |
 | ------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -430,6 +430,49 @@ Wie das gebaut ist:
   Im Messlauf (zwölf Nächte, zwei Saatwerte, 24 Läufe je Stand) überlebt die Automatik-Figur des Magiers damit im Mittel 450 s gegen 384 s vorher (die Streuung liegt bei 130 bis 190 s); eine Feinjustierung der Zahlen war nicht nötig.
 - Kein Savegame- und kein Plattform-Eingriff: `SAVEGAME_VERSION` bleibt, Pfade und Eingabe sind unverändert.
 
+## Evolutionen
+
+Jede Fertigkeit hat eine **Evolution**: einen sechsten Rang, der aus dem Angriff etwas Neues macht (Vorlage: „Klassen, Fertigkeiten & Evolutionen“). Das Paket kommt in drei Teilen; **dieser Stand
+bringt die Grundlage und die sieben Evolutionen des Kämpfers**, die des Wildnisläufers und des Magiers folgen.
+
+**Wie man sie bekommt.** Die Vorlage verlangt den Angriff auf Rang 5 und ein passives Item. Das Spiel hat keine passiven Gegenstände (das Talentbaum-Paket entfällt), also trägt der **legendäre Ring** die Evolution:
+Jeder legendäre Ring gehört zu einer Fertigkeit seiner Klasse (Feld `evolution` am Gegenstand; die Karte nennt Namen und Wirkung, und der Ring trägt den Gegenstandsnamen der Vorlage: Henkerswerk, Nimmersatt, Sturmklinge, Wirbelsturm,
+Weltenspalter, Donneraxt, Stachelbeil). Eine Klasse trägt nur einen Ring, also zugleich nur eine Evolution. Ist der Ring angelegt, wird der Angriff beim Schritt auf Rang 5 sofort zur Evolution (Rang 6); die Karte für Rang 5 sagt schon, wozu er wird. Die Evolution ersetzt die Fertigkeit und ist kein zusätzlicher
+Angriff, und was Rang 5 brachte, bleibt. Ohne Ring bleibt Rang 5 der letzte Rang, und das Spiel verhält sich wie vor diesem Paket.
+
+**Gebaut** ist es als ein weiterer Rang derselben `WeaponDef` (`EVOLUTION_RANK = 6`, `WeaponDef.evolution` mit Name, Gegenstand und Text; die Zeile für Rang 6 trägt Schalter wie `sichel` oder `bollwerk`, die einen Rang
+vollständig ersetzen, alles andere folgt dem Rang davor). `Arsenal.unlockEvolutions` bekommt beim Start der Nacht die Evolutionen der angelegten Ringe (`Ausruestung.evolutionsOf`); `Arsenal.take` macht aus Rang 5 dann Rang 6.
+Das Verhalten steht in `src/game/evolutions.ts` (`Evolutions`; der Treffer läuft weiter über `Arsenal.hit`, also mit Krits, Zuständen und Gegenständen), die Bilder in `src/game/evolutionEffects.ts`. Alle Zahlen stehen in
+`CONFIG.skills.evolution`. Die Evolutionen benutzen die Bausteine des Unterbaus (Bodenfelder, zeitweilige Werte, Zustände, Ereignisse mit Urheber) und legen im Kampf nichts Neues an.
+
+| Angriff       | Evolution                          | Was sie tut                                                                                                                                           |
+| ------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Axthieb       | Henkersbeil der Alten Ordnung      | Jeder vierte Hieb entlädt eine Sichel aus Staub (14 m lang, ×3 Schaden), die die ganze Linie durchschneidet; wer darin unter 25 % seines Lebens fällt, wird hingerichtet (nicht der Verschlinger) |
+| Banner        | Reliquie der Nimmersatten          | Das Banner folgt der Figur und bleibt; jeder Gegner im Umkreis gibt einen Stapel (bis 10): −3 % Abklingzeit und +1,5 % Lauftempo je Stapel                             |
+| Wurfaxt       | Sturm der Klingen                  | Sechs Äxte kreisen 1,1 s um die Figur (sie stoßen Gegner an), dann fliegen sie auf die lebenskräftigsten Gegner in Sichtweite, sonst nach außen                        |
+| Wirbelschlag  | Mahlstrom aus Staub und Eisen      | Die Figur dreht sich 4 s und läuft dabei frei; ein Tornado zieht Gegner heran und schneidet sie, am Ende schleudert eine Druckwelle sie nach außen (doppelter Schaden); beim Drehen 30 % weniger erlittener Schaden |
+| Wuchthieb     | Spalter von Ghen                   | Beim Ausholen zieht die Axt Gegner zum Einschlagpunkt; der Niederschlag spaltet den Boden 13 m weit (×2,4 Schaden) und betäubt die Kleinen kurz                         |
+| Kriegsschrei  | Donner der Alten Ordnung           | Der Schrei fährt als Kegel in Blickrichtung mit doppelter Reichweite; Getroffene werden 1,5 s um 30 % verlangsamt und erleiden 4 s lang 15 % mehr Schaden aus deinen Nahkampfangriffen |
+| Dornenschild  | Bollwerk der Stacheln              | Eine dauerhafte, enge Dornen-Aura vor der Figur (2,6 m lang): Wer sie berührt, wird alle 0,3 s gestochen und leicht zurückgedrängt; der Stich bei Treffern auf die Figur bleibt |
+
+**Dev-Werkzeuge.** `__skills.entwickeln('axthieb')` schaltet die Evolution mitten in einer Nacht frei und hebt den Angriff auf Rang 6; `__skills.raenge('axthieb')` zeigt nun sechs Ränge. `__items.geben(0, 'ring', 'legendaer', 'wuchthieb')` legt einen
+legendären Ring mit der genannten Evolution ins Inventar. `__messlauf.start({ evolution: 'axthieb', classes: [0] })` lässt die Figur den Ring tragen und die Nacht mit dem Angriff auf Rang 4 beginnen (er erreicht sonst selten Rang 5); `fokus: 'axthieb'` tut dasselbe ohne Ring und liefert
+den Vergleichswert, so lässt sich messen, was eine Evolution leistet. Neue Klänge: `evolution` (die Wandlung) sowie `evolution.sichel`, `evolution.sturm`, `evolution.mahlstrom`, `evolution.mahlstrom-ende`, `evolution.spalter`, `evolution.donner`
+(`audio.json`, erzeugt von `tools/audio-erzeugen.py`).
+
+**Abweichungen von der Vorlage** (die Vorlage ist ein Leitfaden, siehe [Lore](#lore)):
+
+- Der **Ring trägt die Evolution** statt eines passiven Gegenstands (siehe oben); den Namen des Gegenstands der Vorlage trägt der Ring.
+- Henkersbeil: „geschwächte Feinde“ sind im Spiel Gegner im Zustand `weak` oder `feeble`. Der Hieb der Sichel setzt `weak` selbst (Rang 5), also fällt in der Linie jeder unter 25 %. Der Verschlinger wird geführt und nie hingerichtet.
+- Reliquie: „langsam ausgesaugt“ ist ein Banner-Feld, das mit der Figur wandert, und ein paar Staubpunkte, die von den Gegnern zur Figur fliegen. Die Stapel zählen die Gegner im Umkreis und verfallen mit ihnen. Das Feld wird von allein neu gesetzt,
+  wenn der Vorrat der Felder es verdrängt hat.
+- Sturm der Klingen: „stärkste Ziele“ sind die Gegner mit dem meisten Leben in Sichtweite (das 1,3fache der Reichweite des Angriffs); ohne Ziele fliegen die Äxte nach außen.
+- Mahlstrom: Statt „immun gegen Verlangsamung“ (die Figur wird ohnehin nicht verlangsamt) gilt ein Schutz von 30 % weniger erlittenem Schaden, solange sie sich dreht.
+- Donner: Das Plus von 15 % gilt nur für **Nahkampf** (Axthieb, Wirbelschlag, Wuchthieb, Kriegsschrei, Dornenschild) und wirkt **4 s** (die Vorlage nennt keine Dauer); Fernkämpfer und Zauber profitieren nicht.
+- Spalter: Die Linie betäubt nur Kleine, nicht das Großwild und nicht den Verschlinger; sie zieht auch den Verschlinger nicht heran.
+- Bollwerk: Die Eisenstangen sind eine gerade Aura vor der Figur (kein Kreis), damit sie sich vom Dornenschild unterscheiden; die Stiche tragen die Kennung des Dornenschilds.
+- Kein Plattform-Eingriff: Pfade, Eingabe und Speicherschicht bleiben; neu ist nur das Format des Spielstands (Fassung 7), das `parseSavegame` aus Fassung 6 hebt.
+
 ## Ton und Musik
 
 Alle Klänge liegen als einzelne Dateien in `public/audio/` (`sfx/` für Töne, `schleifen/` für Dauerklänge, `musik/` für Stücke).
@@ -506,7 +549,8 @@ Dateien mit gleichem Namen. Neu erzeugte OGG-Dateien nur einchecken, wenn sich d
 - **Messlauf** (`src/tools/messlauf.ts`): Im Dev-Modus steht `__messlauf` in der Browser-Konsole. Eine Automatik-Figur
   spielt Nächte im Zeitraffer und zeigt grobe Schieflagen im Gleichgewicht, auch beim Gold. Beispiele stehen im Kopf der Datei.
 - **Gegenstände und Fertigkeiten**: `__items` (`src/tools/items.ts`) füllt Ausrüstung, Truhe und Börse und würfelt Beute nach; `__skills` (`src/tools/skills.ts`) bringt Zustände, Bodenfelder und
-  zeitweilige Werte an und zählt Ereignisse mit Urheber (siehe [Fertigkeiten](#fertigkeiten-der-unterbau)).
+  zeitweilige Werte an und zählt Ereignisse mit Urheber (siehe [Fertigkeiten](#fertigkeiten-der-unterbau)); `__skills.entwickeln(id)` und `__messlauf.start({ evolution })` probieren die Evolutionen
+  aus (siehe [Evolutionen](#evolutionen)).
 - **Ton**: Im Dev-Modus steht `__audio` in der Konsole. `__audio.played` zählt, wie oft jedes Ereignis erklang, `__audio.dropped`, wie viele
   Töne bei Andrang verworfen wurden. Der Messlauf schaltet den Ton für die Dauer des Laufs ab.
 - **Modell-Prüfer**: `http://localhost:5173/modell.html` zeigt eine GLB-Datei im Licht und aus der Kamera des Spiels

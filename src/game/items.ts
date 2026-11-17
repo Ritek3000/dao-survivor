@@ -16,6 +16,7 @@ import { CONFIG } from '../config';
 import type { Random } from '../core/random';
 import { CLASSES, type ClassId } from './classes';
 import type { Stats } from './progression';
+import { evolutionOf, evolvable, weaponById } from './weapons';
 
 export const ITEM_SLOTS = ['fackel', 'helm', 'guertel', 'waffe', 'handschuh', 'schuh', 'ring', 'brust', 'amulett'] as const;
 export type ItemSlot = (typeof ITEM_SLOTS)[number];
@@ -39,15 +40,20 @@ export interface Item {
   /** Fackel, Waffe und ein legendärer Ring gehören zu einer Klasse und lassen sich nur von ihr anlegen. */
   classId?: ClassId;
   props: ItemProperty[];
+  /**
+   * Nur beim legendären Ring: die Fertigkeit (ihre Kennung in `weapons.ts`), deren Evolution er freischaltet. Hat die Klasse noch keine
+   * Fertigkeit mit Evolution, fehlt sie, und der Ring ist ein Ring mit drei Eigenschaften.
+   */
+  evolution?: string;
 }
 
 /**
- * Auf diesen Plätzen kann es Legendäres geben, sonst nirgends: Ein legendärer Ring trägt später die Evolution einer
+ * Auf diesen Plätzen kann es Legendäres geben, sonst nirgends: Ein legendärer Ring trägt die Evolution einer
  * Fertigkeit der Klasse (siehe Entwurf zu Gegenständen, Entscheidung 2). Weitere Plätze brauchten je einen eigenen Effekt.
  */
 export const LEGENDARY_SLOTS: readonly ItemSlot[] = ['ring'];
 
-/** Wie viele Eigenschaften ein Gegenstand der Seltenheit trägt. Legendär bringt zu den dreien später eine Evolution. */
+/** Wie viele Eigenschaften ein Gegenstand der Seltenheit trägt. Legendär bringt zu den dreien eine Evolution. */
 export const RARITY_PROPERTIES: Readonly<Record<Rarity, number>> = { normal: 1, selten: 2, rar: 3, legendaer: 3 };
 
 export const RARITY_LABELS: Readonly<Record<Rarity, string>> = {
@@ -283,6 +289,8 @@ export function describeProperty(property: ItemProperty): string {
 
 /** „Ring der Wucht“: der Platz und das Anhängsel der Eigenschaft, die am besten gewürfelt hat. */
 export function itemName(item: Item): string {
+  const evolved = evolutionItem(item);
+  if (evolved) return evolved;
   const label = slotLabel(item.slot, item.classId);
   let best: ItemProperty | undefined;
   let bestQuality = -1;
@@ -312,6 +320,30 @@ export function sellPrice(item: Item): number {
   return Math.max(1, Math.round(itemValue(item) * CONFIG.items.price.sellShare));
 }
 
+/** Die Fertigkeiten einer Klasse, deren Evolution ein legendärer Ring freischalten kann. */
+export function evolutionChoices(classId: ClassId): string[] {
+  const owner = CLASSES.find((entry) => entry.id === classId);
+  return owner ? evolvable(owner.weapons) : [];
+}
+
+/** Die Evolution, die ein Ring ohne Angabe bekäme: `index` zählt in der Reihenfolge der Fertigkeiten (für Stände ohne Evolution). */
+function evolutionFor(classId: ClassId, index: number): string | undefined {
+  const choices = evolutionChoices(classId);
+  return choices[((index % choices.length) + choices.length) % choices.length];
+}
+
+/** Der Name des Gegenstands: bei einem legendären Ring mit Evolution der Name aus der Vorlage („Henkerswerk“). */
+function evolutionItem(item: Item): string | null {
+  return item.evolution ? (evolutionOf(item.evolution)?.item ?? null) : null;
+}
+
+/** Was die Karte eines legendären Rings über seine Evolution sagt; `null` bei allen anderen Gegenständen. */
+export function describeEvolution(item: Item): { title: string; requirement: string; text: string } | null {
+  const info = item.evolution ? evolutionOf(item.evolution) : undefined;
+  if (!item.evolution || !info) return null;
+  return { title: `Evolution: ${info.name}`, requirement: `Schaltet frei: ${weaponById(item.evolution).name} auf Rang 5`, text: info.text };
+}
+
 function rollValue(random: Random, id: PropertyId, slot: ItemSlot): number {
   const { min, max } = propertyRange(id, slot);
   const step = CONFIG.items.properties[id].step;
@@ -320,10 +352,11 @@ function rollValue(random: Random, id: PropertyId, slot: ItemSlot): number {
 
 /**
  * Würfelt einen neuen Gegenstand: Die Eigenschaften werden aus denen des Platzes gezogen (keine doppelt),
- * ihre Werte gleichverteilt aus dem Bereich. Fackel, Waffe und legendärer Ring brauchen eine Klasse.
+ * ihre Werte gleichverteilt aus dem Bereich. Fackel, Waffe und legendärer Ring brauchen eine Klasse. Ein legendärer Ring trägt die
+ * Evolution `evolution` (eine Fertigkeit der Klasse); ohne Angabe würfelt er eine, sofern die Klasse welche hat.
  * Die Nummer vergibt erst der Spielstand (`Ausruestung.add`).
  */
-export function rollItem(random: Random, slot: ItemSlot, rarity: Rarity, classId?: ClassId): Item {
+export function rollItem(random: Random, slot: ItemSlot, rarity: Rarity, classId?: ClassId, evolution?: string): Item {
   if (!isPossible(slot, rarity)) throw new Error(`Auf dem Platz „${slotLabel(slot)}“ gibt es nichts ${RARITY_LABELS[rarity]}.`);
   const bound = isClassBound(slot, rarity);
   if (bound && !classId) throw new Error(`Der Gegenstand „${slotLabel(slot)}“ (${rarity}) braucht eine Klasse.`);
@@ -339,6 +372,11 @@ export function rollItem(random: Random, slot: ItemSlot, rarity: Rarity, classId
   const props = pool.slice(0, RARITY_PROPERTIES[rarity]).map((id) => ({ id, value: rollValue(random, id, slot) }));
   const item: Item = { id: 0, slot, rarity, props };
   if (bound && classId) item.classId = classId;
+  if (rarity === 'legendaer' && classId) {
+    const choices = evolutionChoices(classId);
+    const chosen = evolution && choices.includes(evolution) ? evolution : choices[Math.floor(random() * choices.length)];
+    if (chosen) item.evolution = chosen;
+  }
   return item;
 }
 
@@ -373,6 +411,12 @@ export function parseItem(raw: unknown): Item | null {
   const id = typeof raw.id === 'number' && Number.isFinite(raw.id) ? Math.max(0, Math.floor(raw.id)) : 0;
   const item: Item = { id, slot: typedSlot, rarity: typedRarity, props: props.slice(0, RARITY_PROPERTIES[typedRarity]) };
   if (bound && classId) item.classId = classId;
+  if (typedRarity === 'legendaer' && classId) {
+    // Ein Ring aus einer Fassung ohne Evolution (bis 6) oder mit einer, die es nicht mehr gibt, bekommt eine aus seiner Nummer.
+    const known = typeof raw.evolution === 'string' && evolutionChoices(classId).includes(raw.evolution) ? raw.evolution : undefined;
+    const chosen = known ?? evolutionFor(classId, id);
+    if (chosen) item.evolution = chosen;
+  }
   return item;
 }
 

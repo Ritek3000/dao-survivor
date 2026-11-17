@@ -279,6 +279,13 @@ export class Progression {
     return added;
   }
 
+  /** Wie `addBuff`, setzt aber die Zahl der Stapel (siehe `Buffs.set`). */
+  setBuff(spec: BuffSpec, stacks: number): boolean {
+    const set = this.buffs.set(spec, stacks);
+    if (set) this.sync();
+    return set;
+  }
+
   /** `stats` ist `base` mit den wirkenden zeitweiligen Werten darüber. */
   private sync(): void {
     Object.assign(this.stats, this.base);
