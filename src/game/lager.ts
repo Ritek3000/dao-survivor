@@ -24,9 +24,11 @@ import {
   INVENTORY_COLUMNS,
   LagerView,
   TRUHE_COLUMNS,
+  type CommandView,
   type DetailView,
   type HaendlerModel,
   type ItemView,
+  type KeyHint,
   type LagerMode,
   type LagerModel,
   type LagerZone,
@@ -42,7 +44,6 @@ import {
   compareItems,
   canEquip,
   describeEvolution,
-  describeProperty,
   formatRange,
   formatValue,
   ITEM_SLOTS,
@@ -66,11 +67,13 @@ function itemView(item: Item, viewer: ClassId): ItemView {
   return {
     name: itemName(item),
     rarity: item.rarity,
-    subtitle: `${RARITY_LABELS[item.rarity]} · ${slotLabel(item.slot, item.classId)}`,
+    rarityLabel: RARITY_LABELS[item.rarity],
+    slotLabel: slotLabel(item.slot, item.classId),
     icon: itemIconId(item.slot, item.classId),
     image: { slot: item.slot, look: item.classId ?? viewer },
     props: item.props.map((property) => ({
-      text: describeProperty(property),
+      name: propertyName(property.id),
+      value: formatValue(property.id, property.value),
       range: formatRange(property.id, item.slot),
       quality: propertyQuality(item.slot, property),
     })),
@@ -91,12 +94,35 @@ const HAENDLER_COMMANDS = ['erneuern', 'normale'] as const;
 /** Die Farbe der Leiste für das Inventar, das beim Händler als erster Reiter vor denen der Truhe steht. */
 const INVENTORY_COLOR = '#b9b3a5';
 
-const KEYS_EQUIPMENT =
-  'Pfeiltasten: wählen · Enter: aufnehmen und ablegen · E: anlegen oder abnehmen · Tab: nächste Ansicht · 1 · 2 · 3: Klasse wechseln · Esc oder L: zurück';
-const KEYS_TRUHE =
-  'Pfeiltasten: wählen (ganz oben: Reiter und Befehle) · Enter: aufnehmen und ablegen · E: anlegen oder umräumen · Tab: nächste Ansicht · 1 · 2 · 3: Klasse wechseln · Esc oder L: zurück';
-const KEYS_HAENDLER =
-  'Pfeiltasten: wählen (ganz oben: Inventar und Reiter) · Enter: kaufen, aufnehmen und ablegen · E: kaufen oder verkaufen · Tab: nächste Ansicht · 1 · 2 · 3: Klasse wechseln · Esc oder L: zurück';
+/** Die Tasten unten, je Ansicht; die Texte sind kurz, damit sie in einer Zeile stehen. Wohin man mit den Pfeilen kommt, sagt die Karte rechts. */
+const KEY_MOVE: KeyHint = { keys: ['←', '↑', '↓', '→'], text: 'Wählen' };
+const KEY_VIEW: KeyHint = { keys: ['Tab'], text: 'Nächste Ansicht' };
+const KEY_CLASS: KeyHint = { keys: ['1', '2', '3'], text: 'Klasse' };
+const KEY_BACK: KeyHint = { keys: ['Esc', 'L'], text: 'Zurück' };
+const KEYS_EQUIPMENT: readonly KeyHint[] = [
+  KEY_MOVE,
+  { keys: ['Enter'], text: 'Aufnehmen / ablegen' },
+  { keys: ['E'], text: 'Anlegen / abnehmen' },
+  KEY_VIEW,
+  KEY_CLASS,
+  KEY_BACK,
+];
+const KEYS_TRUHE: readonly KeyHint[] = [
+  KEY_MOVE,
+  { keys: ['Enter'], text: 'Aufnehmen / ablegen' },
+  { keys: ['E'], text: 'Anlegen / umräumen' },
+  KEY_VIEW,
+  KEY_CLASS,
+  KEY_BACK,
+];
+const KEYS_HAENDLER: readonly KeyHint[] = [
+  KEY_MOVE,
+  { keys: ['Enter'], text: 'Kaufen / aufnehmen / ablegen' },
+  { keys: ['E'], text: 'Kaufen / verkaufen' },
+  KEY_VIEW,
+  KEY_CLASS,
+  KEY_BACK,
+];
 
 /** Ein Rückruf auf die Antwort „Ja“ einer Rückfrage; bei „Nein“ geschieht nichts. */
 type OnYes = () => void;
@@ -913,7 +939,8 @@ export class Lager {
       emptyText: '',
       compare: comparable
         ? compareItems(item, worn).map(({ id: property, delta }) => ({
-            text: `${propertyName(property)} ${formatValue(property, delta)}`,
+            name: propertyName(property),
+            value: formatValue(property, delta),
             better: delta > 0,
           }))
         : null,
@@ -956,14 +983,14 @@ export class Lager {
         }
         const price = this.priceOf(this.zone, item);
         const label = this.zone === 'angebot' ? 'Preis' : 'Rückkauf';
-        return { ...this.itemDetail(item), price: { text: `${label}: ${price} Gold`, poor: price > this.gold } };
+        return { ...this.itemDetail(item), price: { label, amount: price, poor: price > this.gold } };
       }
       default: {
         const place = this.placeAt(this.zone, this.cursor);
         const item = place ? this.ausruestung.itemAt(place) : null;
         if (!item) return this.emptyDetail('Leerer Platz.');
         const detail = this.itemDetail(item);
-        return this.mode === 'haendler' ? { ...detail, price: { text: `Verkauf: ${sellPrice(item)} Gold`, poor: false } } : detail;
+        return this.mode === 'haendler' ? { ...detail, price: { label: 'Verkauf', amount: sellPrice(item), poor: false } } : detail;
       }
     }
   }
@@ -1058,6 +1085,7 @@ export class Lager {
     const haendler = this.mode === 'haendler';
     const shown = this.tab < 0 ? inventory : (tabs[this.tab]?.slots ?? []);
     return {
+      title: haendler ? 'Dein Besitz' : 'Truhe',
       tabs: haendler
         ? [{ name: 'Inventar', color: INVENTORY_COLOR, count: inventory.filter((item) => item !== null).length, size: inventory.length }, ...chestTabs]
         : chestTabs,
@@ -1066,11 +1094,17 @@ export class Lager {
       commands: haendler
         ? []
         : [
-            { label: price === null ? '+ Reiter (voll)' : price === 0 ? '+ Reiter' : `+ Reiter (${price} Gold)`, title: 'Neuen Reiter anlegen' },
-            { label: 'Umbenennen', title: 'Den Namen des Reiters ändern' },
-            { label: 'Farbe', title: 'Die Farbe des Reiters wechseln' },
-            { label: 'Löschen', title: 'Den Reiter löschen' },
-          ],
+            {
+              label: 'Neuer Reiter',
+              note: price === null ? 'voll' : price === 0 ? 'gratis' : `${price} Gold`,
+              title: 'Neuen Reiter anlegen',
+              icon: 'plus',
+              poor: price !== null && price > this.gold,
+            },
+            { label: 'Umbenennen', title: 'Den Namen des Reiters ändern', icon: 'pencil' },
+            { label: 'Farbe wechseln', title: 'Die Farbe des Reiters wechseln', icon: 'drop' },
+            { label: 'Reiter löschen', title: 'Den Reiter löschen', icon: 'trash' },
+          ] satisfies CommandView[],
     };
   }
 
@@ -1082,7 +1116,7 @@ export class Lager {
       label: '',
       icon: null,
       item: item ? itemView(item, id) : null,
-      price: item ? { text: String(price), poor: price > gold } : null,
+      price: item ? { label: '', amount: price, poor: price > gold } : null,
     });
     const reroll = this.ausruestung.nextRerollPrice();
     return {
@@ -1093,12 +1127,14 @@ export class Lager {
       }),
       commands: [
         {
-          label: reroll === 0 ? 'Erneuern (gratis)' : `Erneuern (${reroll} Gold)`,
+          label: 'Erneuern',
+          note: reroll === 0 ? 'gratis' : `${reroll} Gold`,
           title: 'Das Angebot neu würfeln; was noch dort liegt, geht verloren',
+          icon: 'refresh',
           poor: reroll > gold,
         },
-        { label: 'Normale verkaufen', title: 'Alle normalen Gegenstände im gezeigten Inventar oder Reiter verkaufen', poor: false },
-      ],
+        { label: 'Normale verkaufen', title: 'Alle normalen Gegenstände im gezeigten Inventar oder Reiter verkaufen', icon: 'coin' },
+      ] satisfies CommandView[],
     };
   }
 
@@ -1122,7 +1158,8 @@ export class Lager {
       item: item ? itemView(item, id) : null,
     }));
     const summary = [...this.ausruestung.totals(id)].map(([property, total]) => ({
-      text: `${propertyName(property)} ${formatValue(property, total)}`,
+      name: propertyName(property),
+      value: formatValue(property, total),
       capped: total >= CONFIG.items.properties[property].cap,
     }));
     const heldItem = this.held ? this.ausruestung.itemAt(this.held.place) : null;
@@ -1141,7 +1178,7 @@ export class Lager {
       truhe: this.truheModel(),
       haendler: this.haendlerModel(),
       held: this.heldMark(),
-      hand: heldItem ? `In der Hand: ${itemName(heldItem)} (${RARITY_LABELS[heldItem.rarity]}) · ${dropHint} · Esc: zurücklegen` : '',
+      hand: heldItem ? { item: itemView(heldItem, id), hint: `${dropHint} · Esc: zurücklegen` } : null,
       note: this.note,
       noteBad: this.noteBad,
       keys: this.mode === 'ausruestung' ? KEYS_EQUIPMENT : this.mode === 'truhe' ? KEYS_TRUHE : KEYS_HAENDLER,

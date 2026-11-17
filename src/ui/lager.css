@@ -1,0 +1,1579 @@
+/*
+ * ===========================================================================================================
+ * Lager: Ausrüstung, Truhe und Händler
+ * ===========================================================================================================
+ *
+ * Aufbau (siehe index.html): Kopf mit Titel und Gold, Leiste mit Klasse und Ansicht, darunter der Körper aus zwei Feldern
+ * (`.panel`), rechts die Karte des markierten Gegenstands und unter den Feldern die Summe der Ausrüstung, zuletzt der Fuß.
+ *
+ * Gestaltungsregeln, damit das Lager aus einem Guss wirkt:
+ *  - Ein Raster: Ein Platz ist 64 px, dazwischen 6 px, ein Feld 14 px Rand. Daraus folgen alle Breiten und Höhen (siehe Maße unten);
+ *    jedes Feld hat denselben Aufbau (Kopf 44 px, Zeile 36 px, Raster), also stehen die Raster beim Wechsel der Ansicht am selben Ort.
+ *  - Farbe hat eine Aufgabe je Ding: Die Seltenheit färbt den Gegenstand (Rand, Glanz, Name), die Rauten in der Ecke wiederholen sie
+ *    für alle, die Farben schlecht unterscheiden. Der Zeiger der Tastatur und der Maus ist ein weißer Ring und damit nie mit einer
+ *    Seltenheit zu verwechseln (die Seltenheiten Rar und Legendär sind selbst golden und orange). Gold ist golden, zu wenig Gold rot.
+ *  - Schrift: Überschriften klein, gesperrt und in Großbuchstaben; Zahlen stehen rechts in einer Spalte; nichts unter 11 px.
+ *
+ * Nichts im Lager darf wandern, wenn der Zeiger sich bewegt und die Karte des markierten Gegenstands die Höhe wechselt (sie ist je nach
+ * Eigenschaften, Vergleich und Preis zwischen etwa 150 und 420 px hoch). Deshalb:
+ *  - Die Seite (`#lager-page`) beginnt an einer Stelle, die nur von der Fensterhöhe abhängt, und hat eine feste Mindesthöhe.
+ *    Kopf und Raster stehen also immer am selben Ort; wird der Inhalt höher als die Seite, wächst sie nach unten.
+ *  - Die Karte steht in der rechten Spalte und füllt beide Zeilen des Körpers; die erste Zeile (die Felder) hat die Höhe der Felder,
+ *    die zweite (die Summe) nimmt auf, was die Karte zusätzlich braucht. Raster und Summe liegen also nie unter einer Karte.
+ *  - Der markierte Platz zeigt sich nur durch einen Ring in einem Pseudoelement (`::after`), der keinen Platz braucht; kein
+ *    Rand, keine Schrift und kein Innenabstand ändern sich beim Markieren.
+ *  - Der Fuß (Rückmeldung, Zurück, Tasten) klebt am unteren Rand der Seite statt am Ende des Inhalts.
+ *  - Der Platz für die Bildlaufleiste ist immer reserviert, sonst rückte die Seite seitlich, sobald sie sie braucht.
+ *  - Die Eingabe des Namens und die Rückfrage legen sich über das Feld, statt es zu verschieben.
+ */
+
+#lager {
+  /* Höhe der Seite (siehe `#lager-page`): hoch genug für die höchste Karte neben einer vollen Summe. */
+  --lager-page-height: 900px;
+  /* Maße: Aus dem Platz (64 px) und dem Abstand (6 px) ergeben sich die Felder und die Breite des Körpers. */
+  --cell: 64px;
+  --gap: 6px;
+  --pad: 14px;
+  --bar: 36px;
+  --head: 44px;
+  /* Höhe der Befehle des Händlers; der Rest der Zeile bis zum Rückkauf ist die Überschrift (siehe `.panel-bar.sub`). */
+  --cmd-h: 32px;
+  --grid-h: calc(5 * var(--cell) + 4 * var(--gap));
+  --panel-w: calc(5 * var(--cell) + 4 * var(--gap) + 2 * var(--pad) + 2px);
+  --side-w: 336px;
+  --col-gap: 20px;
+  --content-w: calc(2 * var(--panel-w) + var(--side-w) + 2 * var(--col-gap));
+  /* Flächen und Linien. */
+  --surface: linear-gradient(180deg, rgba(30, 25, 19, 0.92), rgba(14, 12, 10, 0.92));
+  --well: rgba(0, 0, 0, 0.42);
+  --stroke: rgba(201, 193, 177, 0.16);
+  --stroke-strong: rgba(201, 193, 177, 0.32);
+  /* Der Ring des Zeigers: hell und ohne Seltenheitsfarbe. */
+  --focus: #fff1cf;
+  --bad: #e0705f;
+  --good: #8fc98a;
+
+  justify-content: flex-start;
+  overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
+  background:
+    radial-gradient(ellipse 70% 42% at 50% 0%, rgba(86, 56, 26, 0.3), transparent 70%),
+    #030304;
+  text-align: left;
+}
+
+#lager-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  /* Mittig im Fenster, gerechnet mit der Mindesthöhe und nicht mit dem Inhalt (24 px Rand oben und unten des Lagers). */
+  margin-top: max(0px, calc((100vh - 48px - var(--lager-page-height)) / 2));
+  /* Hoch genug für die höchste Karte neben einer vollen Übersicht; in niedrigeren Fenstern füllt die Seite das Fenster. */
+  min-height: min(100%, var(--lager-page-height));
+}
+
+/* Kopf, Leiste und Körper teilen sich dieselbe Breite. */
+#lager-head,
+#lager-bar,
+#lager-body,
+#lager-foot-row {
+  width: min(var(--content-w), 100%);
+}
+
+/* Kopf: Titel links, Gold rechts, darunter eine Zierlinie wie auf dem Startbildschirm. */
+#lager-head {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+}
+
+#lager-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--fitting), rgba(138, 116, 71, 0.25) 55%, transparent);
+}
+
+#lager-head h1 {
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: 0.28em;
+}
+
+/* Die Börse: eine Marke mit Münze; sie zuckt, wenn eine Handlung am Gold scheitert. */
+#lager-gold {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 10px;
+  background: rgba(255, 200, 61, 0.07);
+  border: 1px solid rgba(255, 200, 61, 0.3);
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}
+
+#lager-gold .coin {
+  display: inline-flex;
+}
+
+#lager-gold svg {
+  width: 22px;
+  height: 22px;
+}
+
+#lager-gold .unit {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 200, 61, 0.65);
+}
+
+#lager-gold.deny {
+  animation: deny 0.4s ease-out;
+}
+
+@keyframes deny {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-7px);
+    color: var(--bad);
+  }
+  75% {
+    transform: translateX(7px);
+    color: var(--bad);
+  }
+}
+
+/* Leiste: links die Klasse (1 bis 3), rechts die Ansicht (Tab). */
+#lager-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+#lager-tabs,
+#lager-modes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 16px 0 10px;
+  background: var(--well);
+  border: 1px solid var(--stroke);
+  color: var(--text-dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+}
+
+.tab:hover {
+  border-color: var(--stroke-strong);
+  color: var(--text);
+}
+
+.tab .name {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.tab .note {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.tab.selected {
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(255, 180, 94, 0.13), rgba(255, 180, 94, 0.03));
+  border-color: rgba(255, 180, 94, 0.5);
+  box-shadow: inset 0 -2px 0 var(--ember);
+}
+
+.mode {
+  padding: 0 18px;
+  height: 40px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition:
+    background-color 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+}
+
+.mode:hover {
+  color: var(--text);
+}
+
+.mode.selected {
+  color: var(--text);
+  background: rgba(255, 236, 200, 0.05);
+  border-color: var(--stroke);
+  box-shadow: inset 0 -2px 0 var(--ember);
+}
+
+#lager-modes kbd {
+  margin-left: 6px;
+}
+
+/* Tastenkappen im ganzen Lager. */
+#lager kbd {
+  min-width: 1.7em;
+  padding: 0 5px;
+  font: 11px/1.7 ui-monospace, Consolas, monospace;
+  color: var(--text);
+  background: rgba(255, 236, 200, 0.06);
+  border: 1px solid var(--stroke-strong);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+}
+
+/*
+ * Körper: zwei Felder und die Karte nebeneinander. Die Felder reihen sich von selbst in die ersten beiden Spalten (welche gerade zu
+ * sehen sind, bestimmt die Ansicht); die Karte steht rechts und füllt beide Zeilen, die Summe liegt unter den Feldern.
+ */
+#lager-body {
+  display: grid;
+  grid-template-columns: var(--panel-w) var(--panel-w) var(--side-w);
+  grid-template-rows: auto 1fr;
+  align-items: start;
+  gap: 16px var(--col-gap);
+  margin-top: 4px;
+}
+
+.panel {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: var(--panel-w);
+  padding: 0 var(--pad) var(--pad);
+  background: var(--surface);
+  border: 1px solid var(--stroke);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 200, 0.05),
+    0 10px 28px rgba(0, 0, 0, 0.4);
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: none;
+  height: var(--head);
+  margin: 0 calc(-1 * var(--pad));
+  padding: 0 var(--pad);
+  border-bottom: 1px solid var(--stroke);
+  background: rgba(255, 236, 200, 0.025);
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* Die Zeile unter dem Kopf: Füllstand, Reiter oder Überschrift eines Abschnitts. */
+.panel-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: var(--bar);
+}
+
+/* Beim Händler ist die zweite Zeile (Rückkauf) kürzer, damit Angebot, Befehle und Rückkauf den fünf Zeilen des Besitzes gegenüberstehen. */
+.panel-bar.sub {
+  /* Angebot (2 Zeilen), Befehle und Rückkauf sollen genau den fünf Zeilen des Besitzes gegenüberstehen: 3 Zeilen minus 3 Abstände des Feldes. */
+  height: calc(var(--cell) + 2 * var(--gap) - 24px - var(--cmd-h));
+}
+
+.panel-bar.sub .section-label {
+  width: auto;
+  flex: 1;
+}
+
+.panel-body {
+  position: relative;
+}
+
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--stroke);
+}
+
+/* Zusatz hinter der Überschrift eines Abschnitts, rechts am Ende der Linie. */
+.section-note {
+  flex: none;
+  margin-left: 10px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-dim);
+}
+
+/* Füllstand eines Feldes. */
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.meter .label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.meter .track {
+  flex: 1;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--stroke);
+}
+
+.meter .track i {
+  display: block;
+  height: 100%;
+  background: var(--ember);
+  opacity: 0.7;
+}
+
+.meter.full .track i {
+  background: var(--bad);
+  opacity: 0.85;
+}
+
+.meter .count {
+  min-width: 4.6em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Raster der Plätze. */
+#lager .slots {
+  display: grid;
+  grid-template-columns: repeat(5, var(--cell));
+  gap: var(--gap);
+}
+
+/* Die Ausrüstung: neun große Plätze, genauso hoch wie das Raster daneben. */
+#lager #equipment-slots {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  height: var(--grid-h);
+}
+
+/* Ein Platz. Der Rand folgt der Seltenheit des Gegenstands; leere Plätze sind Mulden. */
+.slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: var(--cell);
+  height: var(--cell);
+  padding: 0;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 236, 200, 0.035), transparent 70%),
+    var(--well);
+  border: 1px solid var(--stroke);
+  border-radius: 2px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+#equipment-slots .slot {
+  width: auto;
+  height: auto;
+  gap: 6px;
+}
+
+.slot[class*='rarity-'] {
+  color: var(--rarity);
+  border-color: var(--rarity-line);
+  background:
+    radial-gradient(circle at 50% 38%, var(--rarity-fill), transparent 78%),
+    var(--well);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.5),
+    inset 0 -2px 0 var(--rarity-line);
+}
+
+.slot.rarity-legendaer {
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.5),
+    inset 0 -2px 0 var(--rarity),
+    0 0 14px rgba(255, 138, 61, 0.22);
+}
+
+.slot.empty .icon {
+  opacity: 0.32;
+}
+
+.slot .label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.slot.rarity-normal .label,
+.slot[class*='rarity-'] .label {
+  color: var(--text-dim);
+}
+
+/* Ein Gegenstand in der Hand: sein Platz bleibt markiert, bis er abgelegt oder zurückgelegt ist. */
+.slot.held {
+  border-style: dashed;
+  opacity: 0.5;
+}
+
+.slot.lifted {
+  opacity: 0.35;
+}
+
+/* Rauten in der Ecke: ein Merkmal der Seltenheit neben der Farbe (Selten eine, Rar zwei, Legendär drei). */
+.slot .pips {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  display: flex;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.slot .pips i {
+  display: block;
+  width: 5px;
+  height: 5px;
+  background: var(--rarity);
+  transform: rotate(45deg);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
+}
+
+/*
+ * Der Ring des Zeigers (Tastatur und Maus), auch für Reiter und Knöpfe. Er liegt in einem Pseudoelement außerhalb des Rands,
+ * braucht also keinen Platz und ändert nichts am Rest; so kann der Zeiger durch alle Plätze laufen, ohne dass etwas wandert.
+ * Ein Platz, über dem ein gezogener Gegenstand schwebt (`.drop`), bekommt dafür einen gestrichelten goldenen Ring.
+ */
+.slot::after,
+.rtab::after,
+.icon-btn::after,
+.action::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--focus);
+  border-radius: 3px;
+  box-shadow: 0 0 14px rgba(255, 241, 207, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.08s;
+}
+
+.slot.selected,
+.rtab.selected,
+.icon-btn.selected,
+.action.selected {
+  z-index: 2;
+}
+
+.slot.selected::after,
+.rtab.selected::after,
+.icon-btn.selected::after,
+.action.selected::after {
+  opacity: 1;
+}
+
+.slot.drop::after,
+.rtab.drop::after,
+.icon-btn.drop::after,
+.action.drop::after {
+  border-style: dashed;
+  border-color: var(--ember);
+  box-shadow: 0 0 14px rgba(255, 180, 94, 0.35);
+  opacity: 1;
+}
+
+/* Das Feld des Händlers als Ganzes: Wer einen Gegenstand darauf fallen lässt, verkauft ihn. */
+.panel.drop {
+  outline: 2px dashed var(--ember);
+  outline-offset: 3px;
+}
+
+/*
+ * Gegenstandsbilder (public/icons/items, 256 px, durchsichtiger Grund). Sie tragen ihre Farben selbst; die Seltenheit zeigen
+ * Rand und Hintergrund des Feldes. Der Schatten löst das Bild vom Grund, wenn es klein steht.
+ */
+.icon {
+  display: inline-flex;
+}
+
+.icon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.icon.picture img {
+  display: block;
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
+  pointer-events: none;
+  user-select: none;
+}
+
+#equipment-slots .slot .icon.picture img {
+  width: 70px;
+  height: 70px;
+}
+
+#equipment-slots .slot .icon svg {
+  width: 40px;
+  height: 40px;
+}
+
+/* Preis auf dem Platz des Händlers: ein Streifen unten, mit Münze; rot, wenn das Gold nicht reicht. */
+.slot.priced .icon.picture img {
+  width: 44px;
+  height: 44px;
+  margin-top: -9px;
+}
+
+.slot .price {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 9px 0 3px;
+  font-size: 12px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.82) 70%);
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+
+.slot .price .glyph svg {
+  display: block;
+  width: 11px;
+  height: 11px;
+}
+
+.slot .price.poor {
+  color: var(--bad);
+}
+
+/* Reiter der Truhe: eine Zeile, die bei vielen Reitern seitwärts läuft und an den Rändern ausblendet. */
+#truhe-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding: 0 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+#truhe-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+#truhe-tabs.overflowing {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 22px), transparent);
+}
+
+.rtab {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  background: var(--well);
+  border: 1px solid var(--stroke);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rtab .dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--tab, var(--dust));
+}
+
+.rtab .name {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rtab .count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.rtab.current {
+  color: var(--text);
+  background: rgba(255, 236, 200, 0.07);
+  border-color: var(--tab, var(--stroke-strong));
+  box-shadow: inset 0 -2px 0 var(--tab, var(--stroke-strong));
+}
+
+/* Befehle der Truhe: Zeichen im Kopf des Feldes (der Name steht beim Verweilen und auf der Karte). */
+#truhe-commands {
+  display: flex;
+  gap: 4px;
+}
+
+.icon-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: var(--well);
+  border: 1px solid var(--stroke);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.icon-btn:hover,
+.action:hover {
+  border-color: var(--stroke-strong);
+  background: rgba(255, 236, 200, 0.09);
+}
+
+.icon-btn svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+
+.icon-btn.poor {
+  color: var(--bad);
+}
+
+/* Beschriftete Knöpfe: Befehle des Händlers und die Antworten der Rückfrage. */
+.action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  background: rgba(255, 236, 200, 0.05);
+  border: 1px solid var(--stroke-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.action svg {
+  display: block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.action .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action .note {
+  flex: none;
+  font-size: 12px;
+  color: var(--gold);
+}
+
+.action.poor,
+.action.poor .note {
+  color: var(--bad);
+}
+
+/* Händler: Angebot, Befehle und Rückkauf untereinander (die Höhen stehen im Kommentar zu `.panel-bar.sub`). */
+#haendler-commands {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--gap);
+}
+
+#haendler-commands .action {
+  height: var(--cmd-h);
+}
+
+/* Name des Reiters ändern: legt sich über die Zeile der Reiter. */
+#truhe-rename {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  background: rgb(20, 17, 13);
+}
+
+#truhe-name {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid var(--ember);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  user-select: text;
+}
+
+/* Rückfrage vor dem Löschen eines vollen Reiters: legt sich über das Raster. */
+#truhe-ask {
+  position: absolute;
+  inset: -4px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  background: rgba(8, 6, 5, 0.95);
+  border: 1px solid rgba(156, 47, 36, 0.75);
+  text-align: center;
+}
+
+#truhe-ask p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+#truhe-ask .choices {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* Rechte Spalte: die Karte des Gegenstands. Sie wächst nach unten, ohne dass Felder oder Summe sich bewegen. */
+#lager-side {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  width: var(--side-w);
+}
+
+.item-card {
+  position: relative;
+  padding: 14px 16px;
+  background:
+    linear-gradient(180deg, var(--rarity-fill), transparent 150px),
+    var(--surface);
+  border: 1px solid var(--rarity-line);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 200, 0.05),
+    0 10px 28px rgba(0, 0, 0, 0.4);
+}
+
+/* Ein Streifen in der Farbe der Seltenheit am oberen Rand. */
+.item-card::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: -1px;
+  height: 3px;
+  background: var(--rarity);
+}
+
+.item-card.rarity-legendaer {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 200, 0.05),
+    0 10px 28px rgba(0, 0, 0, 0.4),
+    0 0 26px rgba(255, 138, 61, 0.14);
+}
+
+.item-card .head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.item-card .frame {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  background:
+    radial-gradient(circle at 50% 38%, var(--rarity-fill), transparent 80%),
+    var(--well);
+  border: 1px solid var(--rarity-line);
+  box-shadow: inset 0 -2px 0 var(--rarity-line);
+  color: var(--rarity);
+}
+
+.item-card .frame .icon.picture img {
+  width: 58px;
+  height: 58px;
+}
+
+.item-card .frame .icon svg {
+  width: 34px;
+  height: 34px;
+}
+
+.item-card .title {
+  min-width: 0;
+}
+
+.item-card .name {
+  display: block;
+  font-size: 18px;
+  line-height: 1.2;
+  color: var(--rarity);
+}
+
+.item-card .meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+/* Das Schild der Seltenheit: Schrift auf Farbe, also auch ohne Farbunterscheidung zu lesen. */
+.item-card .badge {
+  padding: 1px 7px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #0d0b09;
+  background: var(--rarity);
+}
+
+.item-card .kind {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.item-card .props {
+  display: grid;
+  gap: 9px;
+  margin: 12px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--stroke);
+  list-style: none;
+}
+
+/* Eine Eigenschaft: Name und Wert in einer Zeile, darunter der Balken (wo der Wurf im Bereich liegt) und der Bereich. */
+.item-card .props li {
+  display: grid;
+  grid-template-columns: 1fr 64px;
+  align-items: center;
+  gap: 5px 10px;
+}
+
+.item-card .pname {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.item-card .pvalue {
+  text-align: right;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.item-card .range {
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.item-card .bar {
+  display: block;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--stroke);
+}
+
+.item-card .bar b {
+  display: block;
+  height: 100%;
+  background: var(--rarity);
+}
+
+.item-card .evolution {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, var(--rarity-fill), transparent);
+  border-left: 2px solid var(--rarity);
+}
+
+.item-card .evolution .title {
+  font-size: 14px;
+  color: var(--rarity);
+}
+
+.item-card .evolution .requirement {
+  font-size: 12px;
+  color: var(--ember);
+}
+
+.item-card .evolution .text {
+  font-size: 12.5px;
+  line-height: 1.38;
+  color: var(--text-dim);
+}
+
+.item-card .bound {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--ember);
+}
+
+.item-card .bound svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+.item-card .compare {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--stroke);
+}
+
+.item-card .compare .title {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.item-card .compare ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item-card .compare li {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.item-card .compare li.same {
+  grid-template-columns: 1fr;
+  color: var(--text-dim);
+}
+
+.item-card .compare .cvalue {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Besser oder schlechter: ein Dreieck neben der Farbe (der Text darin ist nur für Vorleser). */
+.item-card .compare .arrow {
+  display: block;
+  width: 10px;
+  height: 9px;
+  overflow: hidden;
+  text-indent: -999px;
+  white-space: nowrap;
+}
+
+.item-card .compare .arrow::before {
+  content: '';
+  display: block;
+  width: 10px;
+  height: 9px;
+  background: currentColor;
+  text-indent: 0;
+}
+
+.item-card .compare .better {
+  color: var(--good);
+}
+
+.item-card .compare .better .arrow::before {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.item-card .compare .worse {
+  color: var(--bad);
+}
+
+.item-card .compare .worse .arrow::before {
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+/* Preis beim Händler: Beschriftung links, Betrag mit Münze rechts; reicht das Gold nicht, steht es auch im Text. */
+.item-card .price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 200, 61, 0.06);
+  border: 1px solid rgba(255, 200, 61, 0.26);
+}
+
+.item-card .price .plabel {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.item-card .price .amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}
+
+.item-card .price .amount svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.item-card .price .unit {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.item-card .price .short {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--bad);
+}
+
+.item-card .price.poor {
+  background: rgba(224, 112, 95, 0.07);
+  border-color: rgba(224, 112, 95, 0.45);
+}
+
+.item-card .price.poor .amount {
+  color: var(--bad);
+}
+
+/* Karte ohne Gegenstand: ein leerer Platz oder die Erklärung eines Befehls. */
+.item-card.plain {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px dashed var(--stroke-strong);
+  box-shadow: none;
+}
+
+.item-card.plain::before {
+  display: none;
+}
+
+.item-card.plain .text {
+  display: block;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+/* Summe der Ausrüstung: ein Streifen unter den Feldern. */
+#lager-summary {
+  grid-column: 1 / span 2;
+  grid-row: 2;
+  box-sizing: border-box;
+  min-height: 110px;
+  padding: 10px var(--pad) 12px;
+  background: var(--surface);
+  border: 1px solid var(--stroke);
+}
+
+#lager-summary .title {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+#lager-summary .lines {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 0 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#lager-summary .line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(201, 193, 177, 0.08);
+  font-size: 14px;
+}
+
+#lager-summary .lname {
+  flex: 1;
+  color: var(--text-dim);
+}
+
+#lager-summary .lvalue {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+#lager-summary .cap {
+  padding: 0 5px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ember);
+  border: 1px solid rgba(255, 180, 94, 0.4);
+}
+
+#lager-summary .line.capped .lvalue {
+  color: var(--ember);
+}
+
+#lager-summary .line.empty {
+  border-bottom: 0;
+}
+
+#lager-summary .line.empty .lname {
+  font-style: italic;
+}
+
+/* Der Gegenstand, der beim Ziehen am Zeiger hängt. */
+.ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  width: var(--cell);
+  height: var(--cell);
+  color: var(--rarity);
+  background:
+    radial-gradient(circle at 50% 38%, var(--rarity-fill), transparent 78%),
+    rgba(8, 7, 6, 0.92);
+  border: 1px solid var(--rarity-line);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
+  opacity: 0.94;
+  pointer-events: none;
+}
+
+#lager.dragging,
+#lager.dragging .slot,
+#lager.dragging .rtab {
+  cursor: grabbing;
+}
+
+/* Wer einen Gegenstand mit dem Finger zieht, soll nicht die Seite verschieben. */
+.slot,
+.rtab {
+  touch-action: none;
+}
+
+/*
+ * Fuß: Rückmeldung und Gegenstand in der Hand, darunter Zurück und die Tasten. Er klebt unten; ist das Fenster niedriger als die
+ * Seite, bleibt er am unteren Rand des Fensters stehen, statt mit dem Inhalt zu wandern, und der Inhalt läuft darunter weg und
+ * blendet aus. Die 24 px Rand des Lagers gehören dazu, damit nichts darunter hervorschaut.
+ */
+#lager-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: stretch;
+  gap: 10px;
+  margin-top: auto;
+  position: sticky;
+  bottom: -24px;
+  z-index: 5;
+  padding: 20px 0 24px;
+  margin-bottom: -24px;
+  background: linear-gradient(transparent, rgb(3, 3, 4) 20px);
+}
+
+/* Die Zeile der Rückmeldung hat immer dieselbe Höhe, auch wenn sie leer ist. */
+#lager-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 16px;
+  min-height: 32px;
+}
+
+#lager-hand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 14px 3px 3px;
+  background:
+    linear-gradient(90deg, var(--rarity-fill), transparent),
+    rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--rarity-line);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+#lager-hand .thumb {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+}
+
+#lager-hand .thumb .icon.picture img {
+  width: 28px;
+  height: 28px;
+}
+
+#lager-hand .label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+#lager-hand .name {
+  font-size: 15px;
+  color: var(--rarity);
+}
+
+#lager-hand .hint {
+  padding-left: 12px;
+  border-left: 1px solid var(--stroke);
+}
+
+#lager-note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ember);
+}
+
+#lager-note.bad {
+  color: var(--bad);
+}
+
+#lager-foot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+#lager-back {
+  flex: none;
+  margin: 0;
+  padding: 7px 16px;
+  font-size: 14px;
+}
+
+#lager-back kbd {
+  margin-left: 6px;
+}
+
+#lager-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 18px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+#lager-keys .hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-dim);
+}
+
+#lager-keys .hint .text {
+  margin-left: 4px;
+}
+
+/* `scrollIntoView` (siehe `LagerView.setCursor`) soll den markierten Platz nicht unter den klebenden Fuß schieben. */
+#lager .slot,
+#lager .rtab,
+#lager .icon-btn,
+#lager .action {
+  scroll-margin-bottom: 170px;
+}
+
+/*
+ * Niedrige Fenster (etwa 1366 × 768 oder 1280 × 720): Plätze und Abstände schrumpfen, damit die Felder, die Karte und der Fuß
+ * auch dort in einen Bildschirm passen. Die Summe darunter und sehr hohe Karten laufen dann nach unten weg (der Fuß bleibt stehen).
+ */
+@media (max-height: 820px) {
+  #lager {
+    --cell: 58px;
+    --head: 38px;
+    --cmd-h: 28px;
+  }
+
+  #lager-page {
+    gap: 8px;
+  }
+
+  #lager-head {
+    padding-bottom: 8px;
+  }
+
+  #lager-head h1 {
+    font-size: 24px;
+  }
+
+  #lager-gold {
+    padding: 4px 12px 4px 8px;
+    font-size: 18px;
+  }
+
+  .tab,
+  .mode {
+    height: 36px;
+  }
+
+  .icon.picture img {
+    width: 45px;
+    height: 45px;
+  }
+
+  .slot.priced .icon.picture img {
+    width: 40px;
+    height: 40px;
+  }
+
+  #lager-foot {
+    gap: 6px;
+    padding-top: 10px;
+  }
+
+  #lager-status {
+    min-height: 28px;
+  }
+
+  #lager-back {
+    padding: 5px 14px;
+  }
+}
+
+/*
+ * Schmalere Fenster (etwa ein halber Bildschirm): kleinere Plätze und eine schmalere Karte, damit alles nebeneinander bleibt;
+ * die Karte muss neben den Feldern stehen, sonst läge sie beim Durchgehen unter dem Rand des Fensters.
+ */
+@media (max-width: 1240px) {
+  #lager {
+    --cell: 50px;
+    --side-w: 280px;
+    --col-gap: 14px;
+  }
+
+  .icon.picture img {
+    width: 38px;
+    height: 38px;
+  }
+
+  #lager #equipment-slots .slot .icon.picture img {
+    width: 56px;
+    height: 56px;
+  }
+
+  .slot.priced .icon.picture img {
+    width: 34px;
+    height: 34px;
+    margin-top: -8px;
+  }
+
+  .slot .price {
+    font-size: 11px;
+  }
+
+  .item-card .frame {
+    width: 60px;
+    height: 60px;
+  }
+
+  .item-card .frame .icon.picture img {
+    width: 50px;
+    height: 50px;
+  }
+}
+
+/* Noch schmaler: Die Karte rückt unter die Felder, und die Summe rückt zwischen beide. */
+@media (max-width: 1000px) {
+  #lager {
+    --cell: 56px;
+    --content-w: calc(2 * var(--panel-w) + var(--col-gap));
+  }
+
+  .icon.picture img {
+    width: 42px;
+    height: 42px;
+  }
+
+  #lager-body {
+    grid-template-columns: var(--panel-w) var(--panel-w);
+    grid-template-rows: auto auto auto;
+  }
+
+  #lager-summary {
+    grid-row: 2;
+  }
+
+  #lager-side {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: center;
+    width: min(100%, 460px);
+  }
+}
+
+/* Ganz schmale Fenster: ein Feld breit. */
+@media (max-width: 760px) {
+  #lager {
+    --content-w: var(--panel-w);
+  }
+
+  #lager-body {
+    grid-template-columns: var(--panel-w);
+    grid-template-rows: none;
+  }
+
+  #lager-summary,
+  #lager-side {
+    grid-column: 1;
+    grid-row: auto;
+    width: 100%;
+  }
+
+  #lager-keys {
+    justify-content: flex-start;
+  }
+
+  #lager-foot-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #lager-gold.deny {
+    animation: none;
+  }
+
+  .slot::after,
+  .rtab::after,
+  .icon-btn::after,
+  .action::after,
+  .tab,
+  .mode {
+    transition: none;
+  }
+}
