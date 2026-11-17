@@ -252,6 +252,11 @@ export const CONFIG = {
     spawnRing: { min: 23, max: 29 },
     /** Wer weiter weg gerät, wird an den Rand des Sichtfelds zurückgesetzt. */
     recycleDistance: 42,
+    /**
+     * Köder (Köderpuppe des Wildnisläufers): Wer einem Köder folgt, bleibt in diesem Abstand (Meter, vom Rand des Gegners bis zur
+     * Mitte des Köders) stehen und drängt sich dort mit den anderen, statt auf die Mitte zu laufen.
+     */
+    lureStand: 0.7,
     baseRate: 0.9,
     ratePerMinute: 0.25,
     /** Sekunden, nach denen Gegner doppelt so viel aushalten. */
@@ -639,6 +644,8 @@ export const CONFIG = {
       sporeAgainSeconds: 2,
       /** Sporenfalle, Rang 5: Solange weniger Felder liegen als dieser Wert, hinterlässt ein Gestorbener eine Wolke (der Vorrat ist begrenzt). */
       sporeAgainLimit: 14,
+      /** Köderpuppe: Gegner bis zu diesem Vielfachen des Radius der Puppe (Meter vom Gestell) laufen auf sie zu statt auf die Figur und schlagen und zaubern dorthin. */
+      decoyLure: 3,
       /** Köderpuppe, Rang 3: Wer so lange (Sekunden) im Schatten der Puppe steht, gerät in Furcht, sofern er nicht groß ist; die Furcht hält so lange. */
       decoyFearAfter: 1.5,
       decoyFearSeconds: 1.2,
@@ -818,6 +825,8 @@ export const CONFIG = {
         fogDamage: 1.6,
         /** Vollstrecker der Ödnis: Das Phantom zieht Gegner mit diesem Tempo (m/s) zur Mitte und versetzt kleine in Furcht (Sekunden); die Schockwelle am Ende reicht so weit (Faktor auf den Radius), schlägt mit diesem Faktor zu und bringt jedem Verlangsamten oder Gefesselten diesen Anteil mehr Schaden. */
         phantomPull: 2.2,
+        /** Vollstrecker der Ödnis: Das Phantom lockt Gegner bis zu diesem Vielfachen seines Radius an (Meter vom Phantom); weiter als das Gestell der Puppe, denn es zieht „im weiten Umkreis“. */
+        phantomLure: 2.5,
         phantomFear: 1.2,
         phantomBlast: 1.5,
         phantomDamage: 1.8,
