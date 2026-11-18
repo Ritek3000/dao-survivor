@@ -36,6 +36,9 @@ export const VITALS_POSITION_LABELS: Readonly<Record<VitalsPosition, string>> = 
 /** So viel Prozent verstellen Links und Rechts einen Tonregler. */
 const SLIDER_STEP = 5;
 
+/** Um diesen Anteil der Fensterhöhe blättern Auf und Ab die Anleitung. */
+const HELP_SCROLL_SHARE = 0.4;
+
 type SliderRow = 'master' | 'effects' | 'music';
 
 export class Menus {
@@ -124,6 +127,19 @@ export class Menus {
 
   showHelp(): void {
     this.show('help', 0);
+    this.roots.help.scrollTop = 0;
+  }
+
+  /**
+   * Auf und Ab blättern die Anleitung: Sie ist länger als mancher Bildschirm, und die Pfeiltasten gehören dem Spiel, scrollen also
+   * nicht von allein. `direction` ist -1 (hoch) oder 1 (runter); gibt zurück, ob es etwas zu blättern gab.
+   */
+  scrollHelp(direction: -1 | 1): boolean {
+    if (this.current !== 'help') return false;
+    const page = this.roots.help;
+    if (page.scrollHeight <= page.clientHeight) return false;
+    page.scrollBy({ top: direction * page.clientHeight * HELP_SCROLL_SHARE, behavior: 'smooth' });
+    return true;
   }
 
   /** `solid`: undurchsichtiger Grund, wenn dahinter kein Spiel zu sehen sein soll (vom Startbildschirm aus). */
