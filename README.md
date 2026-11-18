@@ -5,10 +5,10 @@ Von der Abendglocke bis zum Sonnenaufgang hält sich die Spielfigur im Licht, en
 wehrt die Horde ab und widersteht dem Staub und der Finsternis. Gegen Ende der Nacht erscheint der Verschlinger.
 Wer bis zum Sonnenaufgang überlebt, gewinnt.
 
-Das Spiel ist ein früher Prototyp. Es gibt drei Klassen (Kämpfer, Wildnisläufer, Magier), Stufenaufstiege
-mit Stärkungen, Segen der Höheren Mächte, eine Gegnerhorde, Feuerschalen als Lichtinseln und einen
+Das Spiel ist ein früher Prototyp. Es gibt drei Klassen (Kämpfer, Wildnisläufer, Magier) mit je sieben Fertigkeiten
+und deren Evolutionen, Stufenaufstiege mit Stärkungen, Segen der Höheren Mächte, eine Gegnerhorde, Feuerschalen als Lichtinseln und einen
 Endgegner. Das Gold, das eine Nacht einbringt, kauft zwischen den Nächten beim Händler im Lager Gegenstände für die Klassen
-(siehe [Gold](#gold) und [Gegenstände](#gegenstände)). Die Zielplattform (Browser oder Desktop) ist noch offen;
+(siehe [Gold](#gold) und [Gegenstände](#gegenstände)); ein legendärer Ring schaltet die Evolution einer Fertigkeit frei (siehe [Evolutionen](#evolutionen)). Die Zielplattform (Browser oder Desktop) ist noch offen;
 vorerst läuft das Spiel im Browser.
 
 ## Schnellstart
@@ -52,7 +52,7 @@ Nach jedem Merge auf `main` baut GitHub das Spiel und veröffentlicht den Stand 
 | WASD oder Pfeiltasten      | Bewegen                                 |
 | Esc oder P                 | Pause (Weiter, Optionen, Lauf abbrechen); in Menüs zurück; bei der Klassenwahl und am Ende der Nacht zum Startbildschirm |
 | M                          | Ton an oder aus                         |
-| 1, 2, 3 oder Pfeile, Enter | Klasse und Stärkungen wählen, Bestätigen |
+| 1, 2, 3 oder Pfeile, Enter (auch Leertaste) | Klasse und Stärkungen wählen, Bestätigen; in der Anleitung blättern Auf und Ab |
 | L oder U                   | Lager öffnen: Ausrüstung, Truhe und Händler (bei der Klassenwahl und am Ende der Nacht; sobald es Gegenstände oder Gold gibt, siehe [Gegenstände](#gegenstände)). U war die Taste der entfallenen Steigerungen |
 | Tab, E (im Lager)          | Ansicht wechseln (Ausrüstung, Truhe, Händler); Gegenstand gleich anlegen, umräumen, beim Händler kaufen oder verkaufen |
 
@@ -97,6 +97,7 @@ Wichtige Teile von `src/game/`:
 | `game.ts`                      | Hauptschleife und Phasen (Laden, Startbildschirm, Klassenwahl, Spiel, Pause, Ende) |
 | `classes.ts`, `gear.ts`        | Die drei Klassen mit Werten, Modell und Ausrüstung; die Ausrüstung in den Händen (Axt, Bogen, Buch, Schild des Kämpfers) |
 | `weapons.ts`, `arsenal.ts`     | Alle Angriffe als Daten (mit Rangregeln) und ihre Ausführung; die Fertigkeiten der drei Klassen (siehe [Kämpfer](#fertigkeiten-des-kämpfers), [Wildnisläufer](#fertigkeiten-des-wildnisläufers), [Magier](#fertigkeiten-des-magiers)) |
+| `evolutions.ts`, `evolutionsLaeufer.ts`, `evolutionsMagier.ts` (und `evolutionEffects*.ts`, `crowd.ts`) | Die Evolutionen (Rang 6) der drei Klassen, ihre Bilder und die Suche nach Gruppen (siehe [Evolutionen](#evolutionen)) |
 | `status.ts`, `events.ts`, `fields.ts`, `buffs.ts` | Unterbau der Fertigkeiten: Zustände der Gegner, Ereignisse mit Urheber, Bodenfelder, zeitweilige Werte (siehe [Fertigkeiten](#fertigkeiten-der-unterbau)) |
 | `effects.ts`, `strips.ts`, `particles.ts`, `props.ts` | Wie die Angriffe aussehen                        |
 | `enemies.ts`, `boss.ts`, `threats.ts` | Horde, Verschlinger und die Zauber der Gegner                    |
@@ -114,8 +115,8 @@ Wichtige Teile von `src/game/`:
 Spielstand gibt (Gold in der Börse oder Gegenstände) und führt zur Klassenwahl. „Neues Spiel“ setzt den dauerhaften Fortschritt zurück
 (Gold, Gegenstände und Truhe; die Optionen bleiben). Gibt es einen Fortschritt, warnt davor eine Rückfrage, die nennt, was verloren ginge
 (vorgewählt ist „Abbrechen“); ohne Fortschritt geht es sofort weiter. Von der Klassenwahl und vom Ende der Nacht führt **Esc** (oder der Knopf
-„Hauptmenü“) zurück zum Startbildschirm. Die **Anleitung** erklärt Ziel, Steuerung, Licht und Finsternis, Stufen, Gold und die Klassen
-(Text in `index.html`).
+„Hauptmenü“) zurück zum Startbildschirm. Die **Anleitung** erklärt Ziel, Steuerung, Licht und Finsternis, Stufen und Segen, die Klassen mit ihren Angriffen, die Evolutionen, Gold,
+Gegenstände, Beute und das Lager (Text in `index.html`; sie ist länger als mancher Bildschirm, darum blättern Auf und Ab, siehe `Menus.scrollHelp`).
 
 **Pause** (Esc oder P): *Weiter*, *Optionen* und *Lauf abbrechen*. Wer den Lauf abbricht, bestätigt zuerst eine Rückfrage; die Nacht endet dann
 wie bei einem Sturz (Ertrag nach `CONFIG.gold.deathKeep`) mit der Endanzeige „Lauf abgebrochen“.
@@ -152,7 +153,7 @@ verliert das Gold dieser Nacht. Die Endanzeige schlüsselt den Ertrag auf.
 Gold zurück. Es gibt keine dauerhaften Steigerungen mehr: Die Werte der Figur kommen aus den Gegenständen, den Stärkungen und den Segen der Nacht.
 
 **Speicherung.** Gold und Gegenstände liegen im Browser (`localStorage`, Schlüssel `dao-survivor.spielstand`) als JSON mit Versionsnummer
-(`version`, jetzt 6). Der Zugriff steckt hinter `TextStore` in `src/core/storage.ts` und `src/core/savegame.ts`; wo `localStorage` fehlt oder
+(`version`, jetzt 7). Der Zugriff steckt hinter `TextStore` in `src/core/storage.ts` und `src/core/savegame.ts`; wo `localStorage` fehlt oder
 gesperrt ist, gilt der Stand nur für die Sitzung. Eine Desktop-Fassung kann mit `useSavegameStore` eine Datei an die Stelle setzen (und als zweiten Speicher
 eine für die Sicherung). Ein unlesbarer Stand beginnt bei null; was das Spiel nicht kennt (etwa die Gegenstände einer neueren Fassung), bleibt beim Speichern erhalten.
 Zurücksetzen lässt sich der Stand mit „Neues Spiel“ im Startbildschirm (mit Rückfrage); in den Entwicklerwerkzeugen genügt auch `localStorage.removeItem('dao-survivor.spielstand')`.
@@ -174,13 +175,13 @@ Spielende Steigerungen mit Charakterpunkten, nicht mit Geld); mit den Gegenstän
 ## Gegenstände
 
 Zwischen den Nächten legen die Klassen Gegenstände an: Fackel, Helm, Gürtel, Waffe, Handschuh, Schuh, Ring, Brustrüstung und Amulett. Sie ersetzen
-die früheren Steigerungen; das System entsteht in Paketen (Entwurf: „Item-, Loot- und Händlersystem“). **Stand: Grundlage, Beute, Truhe, Händler; die Steigerungen sind entfallen.**
+die früheren Steigerungen; das System entstand in Paketen (Entwurf: „Item-, Loot- und Händlersystem“). **Stand: Grundlage, Beute, Truhe, Händler und die Evolutionen über den legendären Ring; die Steigerungen sind entfallen.**
 Das Lager (Ausrüstung, Truhe und Händler) bleibt verborgen, solange kein Gegenstand im Spielstand liegt und kein Gold in der Börse; der erste Fund oder die erste Münze schaltet es frei.
 Im Entwicklungsmodus (`npm run dev`) ist es immer da, und die Browser-Konsole erzeugt Gegenstände, Beute und Gold zum Ausprobieren
 (`__items.fuellen()`, `__items.geben(0, 'ring', 'rar')`, `__items.fallen('rar')`, `__items.kiste()`, `__items.truhe(30)`, `__items.gold(5000)`, `__items.leeren()`; Beschreibung in `src/tools/items.ts`).
 
-**Aufbau.** Ein Gegenstand trägt je nach Seltenheit eine (Normal), zwei (Selten) oder drei (Rar) Eigenschaften; Legendär trägt drei und später
-die Evolution einer Fertigkeit (siehe [Evolutionen](#evolutionen)), und gibt es vorerst nur als Ring (`LEGENDARY_SLOTS`). Jede Eigenschaft würfelt ihren Wert einmal beim Entstehen
+**Aufbau.** Ein Gegenstand trägt je nach Seltenheit eine (Normal), zwei (Selten) oder drei (Rar) Eigenschaften; Legendär trägt drei und
+die Evolution einer Fertigkeit (siehe [Evolutionen](#evolutionen)), und gibt es nur als Ring (`LEGENDARY_SLOTS`). Jede Eigenschaft würfelt ihren Wert einmal beim Entstehen
 aus einem Bereich, der von der Eigenschaft und vom Platz abhängt; ein Kernplatz hebt ihn an (Schaden auf der Waffe, Leben und Rüstung auf der
 Brust, Lauftempo am Schuh, Sammelradius am Handschuh, Lichtschein an der Fackel). Es gibt 17 Eigenschaften (die zwölf der früheren Steigerungen plus
 Krit-Schaden, Schonfrist, Rastheilung, Brenndauer und Zündtempo); welche auf welchem Platz vorkommen kann, steht als Daten in `src/game/items.ts`
@@ -280,9 +281,9 @@ und zählen. `__messlauf.start({ ausruestung: 'rar' })` belegt alle neun Plätze
 
 ## Fertigkeiten: der Unterbau
 
-Die Fertigkeiten der Klassen kommen in eigenen Paketen (Kämpfer, Wildnisläufer, Magier). Dieses Paket legt nur die Bausteine, die sie gemeinsam brauchen; es hat **keine
-sichtbare Wirkung** im Spiel, außer dass festgehaltene Gegner wie bisher fahl dastehen. Die Angriffe von heute laufen schon über die neuen Bausteine und verhalten sich genau wie vorher
-(in einem festgelegten Lauf über zwölf Minuten Spielzeit stimmen Gegner, Erschlagene, Leben der Horde, Ort der Figur und Ränge der Angriffe bei allen drei Klassen mit dem Stand vor dem Umbau überein).
+Die Fertigkeiten der Klassen kamen in eigenen Paketen (Kämpfer, Wildnisläufer, Magier) und bauen alle auf diesen Bausteinen auf. Das Paket, das sie legte (Version 0.8.0), hatte **keine
+sichtbare Wirkung** im Spiel, außer dass festgehaltene Gegner wie bisher fahl dastehen: Die Angriffe von damals liefen über die neuen Bausteine und verhielten sich genau wie vorher
+(in einem festgelegten Lauf über zwölf Minuten Spielzeit stimmten Gegner, Erschlagene, Leben der Horde, Ort der Figur und Ränge der Angriffe bei allen drei Klassen mit dem Stand vor dem Umbau überein).
 
 - **Zustände der Gegner** (`status.ts`): festgehalten (`hold`), verlangsamt (`slow`), im Nachteil (`weak`), blutend (`bleed`), brennend (`burn`), markiert (`mark`), in Furcht (`fear`),
   geblendet (`blind`), geschwächt (`feeble`) und ohne Zauber (`silence`). Jeder Gegner trägt einen festen Satz davon (Restzeit, Stärke, Urheber); es entsteht nie etwas Neues.

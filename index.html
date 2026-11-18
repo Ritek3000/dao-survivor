@@ -103,12 +103,14 @@
 
     <div id="help" class="overlay" hidden>
       <h1>Anleitung</h1>
+      <!-- Wer etwas am Spiel ändert, prüft, ob dieser Text noch stimmt (Zahlen, Tasten, Namen). Die Zahlen stehen in src/config.ts. -->
       <div class="help-grid">
         <section>
           <h2>Ziel</h2>
           <p>
             Eine Nacht dauert 15 Minuten. Überlebe sie von der Abendglocke bis zum Sonnenaufgang, wenn Sor aufgeht.
-            Gegen Ende der Nacht erscheint der Verschlinger.
+            In den letzten vier Minuten erscheint der Verschlinger. Fällt er, springt seine Kiste auf, und eine Höhere Macht
+            antwortet mit einem Segen; gewonnen hast du erst, wenn die Sonne aufgeht.
           </p>
         </section>
         <section>
@@ -116,7 +118,12 @@
           <ul>
             <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> oder Pfeiltasten: bewegen. Angegriffen wird von selbst.</li>
             <li><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> oder Pfeile und <kbd>Enter</kbd>: wählen und bestätigen.</li>
-            <li><kbd>Esc</kbd> oder <kbd>P</kbd>: Pause · <kbd>M</kbd>: Ton an oder aus · <kbd>L</kbd>: Lager (zwischen den Nächten).</li>
+            <li><kbd>Esc</kbd> oder <kbd>P</kbd>: Pause · <kbd>M</kbd>: Ton an oder aus.</li>
+            <li>
+              <kbd>L</kbd>: Lager, bei der Klassenwahl und am Ende der Nacht. Dort wechselt <kbd>Tab</kbd> die Ansicht,
+              <kbd>Enter</kbd> nimmt einen Gegenstand auf und legt ihn ab, <kbd>E</kbd> legt an, räumt um, kauft oder verkauft gleich.
+              Mit der Maus klickst oder ziehst du.
+            </li>
           </ul>
         </section>
         <section>
@@ -133,28 +140,78 @@
         <section>
           <h2>Stufen und Segen</h2>
           <p>
-            Sammle die Edelsteine, die Gegner fallen lassen. Mit jeder Stufe wählst du eine Stärkung; auf jeder fünften
-            antwortet eine Höhere Macht mit einem Segen.
-          </p>
-        </section>
-        <section>
-          <h2>Gold und Gegenstände</h2>
-          <p>
-            Münzen aus Gegnern, Sold für jede überlebte Minute und eine Prämie bei Sonnenaufgang füllen den Geldbeutel.
-            Gegner und die Kiste des Verschlingers lassen Gegenstände fallen; du legst sie zwischen den Nächten im Lager (<kbd>L</kbd>) an.
-            Beim Händler im Lager gibst du das Gold für Gegenstände aus und verkaufst, was du nicht brauchst.
+            Sammle die Edelsteine, die Gegner fallen lassen. Mit jeder Stufe wählst du eine von drei Karten: einen neuen Angriff,
+            den nächsten Rang eines Angriffs oder eine Stärkung für diese Nacht. Auf jeder fünften Stufe und nach dem Verschlinger
+            antwortet eine Höhere Macht mit einem Segen; jeden Segen gibt es je Nacht nur einmal.
           </p>
         </section>
         <section>
           <h2>Die Klassen</h2>
           <ul>
-            <li><b>Kämpfer:</b> stark im Licht der Feuer.</li>
-            <li><b>Wildnisläufer:</b> zu Hause am Rand der Finsternis.</li>
-            <li><b>Magier:</b> wirkt am schnellsten mitten in der Finsternis.</li>
+            <li>
+              <b>Kämpfer:</b> stark im Licht der Feuer. Axthieb (zu Beginn), Banner, Wurfaxt, Wirbelschlag, Wuchthieb, Kriegsschrei, Dornenschild.
+            </li>
+            <li>
+              <b>Wildnisläufer:</b> zu Hause am Rand der Finsternis. Bogenschuss (zu Beginn), Pfeilhagel, Fangeisen, Wurfmesser-Fächer,
+              Sporenfalle, Köderpuppe, Netz.
+            </li>
+            <li>
+              <b>Magier:</b> wirkt am schnellsten mitten in der Finsternis. Hitze werfen (zu Beginn), Sorlanze, Glut formen, Erdstoß,
+              Wurzelgriff, Sturmböe, Schild.
+            </li>
           </ul>
+        </section>
+        <section>
+          <h2>Angriffe und Evolutionen</h2>
+          <p>
+            Jede Klasse hat sieben Angriffe und beginnt mit einem; die übrigen kommen beim Stufenaufstieg dazu. Jeder Angriff wächst bis Rang 5.
+          </p>
+          <p>
+            Ein <b>legendärer Ring</b> verwandelt einen Angriff auf Rang 5 in seine Evolution (Rang 6): Sie ersetzt den Angriff und
+            ist etwas Neues. Jeder Ring gehört zu einem Angriff seiner Klasse, und eine Klasse trägt nur einen Ring, also nur eine Evolution je Nacht.
+            Mit angelegtem Ring nennt schon die Karte für Rang 5, wozu der Angriff wird.
+          </p>
+        </section>
+        <section>
+          <h2>Gold</h2>
+          <p>
+            Münzen aus Gegnern, ein Kranz Münzen vom Verschlinger, Sold für jede volle überlebte Minute und eine Prämie bei Sonnenaufgang
+            füllen den Geldbeutel. Gutgeschrieben wird am Ende der Nacht, und wer fällt, behält es. Das Gold gehört allen Klassen und
+            bezahlt den Händler und weitere Reiter der Truhe.
+          </p>
+        </section>
+        <section>
+          <h2>Gegenstände</h2>
+          <p>
+            Jede Klasse legt neun Gegenstände an: Fackel (der Magier das Kerzenwort), Helm, Gürtel, Waffe, Handschuhe, Schuhe,
+            Ring, Brustrüstung und Amulett. Sie sind Normal, Selten, Rar oder Legendär und tragen je nach Seltenheit eine bis drei Eigenschaften
+            (Schaden, Leben, Tempo und mehr). Legendär gibt es nur als Ring. Fackel, Waffe und legendäre Ringe gehören einer Klasse, alles andere
+            kann jede tragen. Angelegt wird zwischen den Nächten.
+          </p>
+        </section>
+        <section>
+          <h2>Beute</h2>
+          <p>
+            Gegner lassen selten einen Gegenstand fallen; er liegt kurz unter einem Lichtstrahl in der Farbe seiner Seltenheit und fliegt dann
+            zu dir. Der Stein neben dem Geldbeutel zählt die Funde der Nacht. Die Kiste des Verschlingers bringt drei bessere, mit Aussicht
+            auf einen legendären Ring. Am Ende der Nacht wandern die Funde ins Inventar der gespielten Klasse (25 Plätze); was nicht
+            hineinpasst, kommt in die Truhe, und was auch dort keinen Platz findet, wird verkauft.
+          </p>
+        </section>
+        <section>
+          <h2>Das Lager</h2>
+          <p>
+            Es öffnet sich bei der Klassenwahl und am Ende der Nacht, sobald es einen Gegenstand oder Gold gibt. Es hat drei Ansichten:
+            <b>Ausrüstung</b> (angelegt und Inventar der Klasse), <b>Truhe</b> (eine für alle Klassen, in Reitern, die du benennen und
+            färben kannst; die ersten fünf sind gratis) und <b>Händler</b>. Er verkauft Gegenstände für Gold und kauft deine für
+            ein Viertel des Preises; was du ihm verkauft hast, kannst du zurückkaufen, und sein Angebot lässt sich erneuern.
+            Ein aufgenommener Gegenstand bleibt in der Hand, wenn du Ansicht oder Klasse wechselst (<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>);
+            so zieht er in die Truhe oder zu einer anderen Klasse.
+          </p>
         </section>
       </div>
       <button type="button" class="button" data-item data-command="back">Zurück (Esc)</button>
+      <p class="keys">Auf und Ab: blättern · Esc: zurück</p>
     </div>
 
     <div id="pause" class="overlay" hidden>

@@ -501,6 +501,11 @@ export class Game {
       this.menuBack();
       return;
     }
+    // In der Anleitung gibt es nur einen Knopf; dort blättern Auf und Ab.
+    if (menus.screen === 'help') {
+      if (input.wasPressed('up')) menus.scrollHelp(-1);
+      else if (input.wasPressed('down')) menus.scrollHelp(1);
+    }
     let moved = false;
     if (input.wasPressed('up')) moved = menus.step(-1);
     else if (input.wasPressed('down')) moved = menus.step(1);
