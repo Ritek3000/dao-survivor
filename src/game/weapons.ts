@@ -795,11 +795,13 @@ const DEFS: readonly WeaponDef[] = [
       { cooldown: 0.8, statuses: [{ kind: 'blind', seconds: 2.5, power: 0.4 }] },
       { flags: ['glutspur'] },
       { flags: ['glutspur', 'doppel', 'treffsicher'] },
-      // Evolution: Ein Lichtspeer fällt aus dem Himmel in die dichteste Gruppe und teilt sich in vier Strahlen. Die Abklingzeit bleibt die von
-      // Rang 3 (Faktor 0,8): Mit dem Faktor 1 wäre der Speer langsamer als die zwei Lanzen von Rang 5. Der Schaden ist ausdrücklich 3 statt 2,25:
-      // Die zwei durchbohrenden Lanzen von Rang 5 sind stark, und der Speer lag im Messlauf bei den Standardwerten nicht über ihnen.
+      // Evolution: Ein Lichtspeer fällt aus dem Himmel in die dichteste Gruppe und teilt sich in vier Strahlen. Abklingzeit und Schaden sind
+      // ausdrücklich gesetzt (Faktor 0,6 statt 0,8 von Rang 3, Schaden 4 statt 2,25): Die zwei durchbohrenden Lanzen von Rang 5 sind stark, und
+      // der Speer lag im Messlauf mit den Standardwerten darunter (773 s und 39 % Siege gegen 833 s und 77 % auf Rang 5). Erst zusammen mit mehr
+      // Fläche und längeren Strahlen (`CONFIG.skills.evolution.magier`, `spear*`) erreicht er Rang 5 (831 s, 80 %); einzeln reichten Zeit und Schaden oder Fläche nicht.
       {
-        damage: 3,
+        cooldown: 0.6,
+        damage: 4,
         flags: ['treffsicher', 'sonnenspeer'],
         statuses: [
           { kind: 'blind', seconds: 2.5, power: 0.4 },
