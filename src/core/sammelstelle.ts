@@ -7,8 +7,8 @@
  * Zeit, Stufe, Stärkungen, Segen und Ränge der Fertigkeiten, dazu die zufällige Kennung der Nacht und die Fassung des Spiels.
  * Kein Name, keine Kennung des Geräts, nichts vom Spielstand.
  *
- * Das Senden ist freiwillig und geschieht nur, wenn der Spieler zugestimmt hat (`Settings.data.share`, siehe `settings.ts`);
- * das entscheidet das Spiel, nicht dieser Teil. Fehler schaden dem Spiel nie: Eine Nacht, die nicht ankommt, fehlt in der Statistik
+ * Das Senden ist standardmäßig an, ohne Rückfrage, und lässt sich in den Optionen abschalten (`Settings.data.share`, siehe
+ * `settings.ts`); das entscheidet das Spiel, nicht dieser Teil. Fehler schaden dem Spiel nie: Eine Nacht, die nicht ankommt, fehlt in der Statistik
  * aller, mehr nicht.
  */
 

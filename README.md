@@ -159,15 +159,15 @@ Ein Lauf, den man vor `CONFIG.items.shop.minNightSeconds` (60 Sekunden) abbricht
 
 ### Sammelstelle: die Statistik aller Spieler
 
-Wer zustimmt, meldet jede Nacht zusätzlich anonym an eine Sammelstelle (Supabase, eine Postgres-Datenbank mit REST-Schnittstelle). Die **globale Seite**
+Das Spiel meldet jede Nacht zusätzlich anonym an eine Sammelstelle (Supabase, eine Postgres-Datenbank mit REST-Schnittstelle). Die **globale Seite**
 `statistik-global.html` zeigt daraus dieselbe Statistik wie im Spiel, nur für alle Nächte aller Spieler. Das Spiel verlinkt sie nirgends.
 
-- **Zustimmung.** Beim ersten Start fragt das Spiel einmal („Anonyme Statistik“: *Nicht senden* ist vorgewählt, *Einverstanden*); bis zur Antwort wird nichts gesendet. Esc lässt die Frage offen,
-  sie kommt beim nächsten Start wieder. Später lässt es sich in den **Optionen** unter *Daten* umschalten (`Settings.data.share`: `null` = nicht entschieden, `true`, `false`;
-  `src/core/settings.ts`). Der Text nennt offen, dass der Dienst beim Übertragen wie bei jeder Webanfrage die IP-Adresse sieht; in der Tabelle steht sie nicht.
+- **Abschalten statt Zustimmung.** Das Senden ist standardmäßig an und kommt ohne Rückfrage (seit 0.17.1; in 0.17.0 fragte das Spiel beim ersten Start). Wer nicht möchte, nimmt in den **Optionen** unter *Daten*
+  das Häkchen „Statistik anonym senden“ heraus (`Settings.data.share`, `true` oder `false`; `src/core/settings.ts`). Eine früher gespeicherte Entscheidung „Nicht senden“ (`false`) bleibt erhalten,
+  ein offenes `null` aus 0.17.0 zählt wie nicht gespeichert, also ja. Der Text in den Optionen nennt offen, was gesendet wird und dass der Dienst beim Übertragen wie bei jeder Webanfrage die IP-Adresse sieht; in der Tabelle steht sie nicht.
 - **Was gesendet wird.** Der Datensatz der Nacht (siehe oben) ohne den Zeitpunkt: Kennung der Nacht, Fassung, Klasse, Ausgang, Sekunden, Stufe, Stärkungen, Segen, Ränge der Fertigkeiten.
   Keine Kennung des Spielers oder Geräts, nichts vom Spielstand. Die Kennung der Nacht verhindert nur Doppelte. `Game.recordNight` ruft `sendRun` (`src/core/sammelstelle.ts`) auf, `fetch` ohne Bibliothek;
-  Fehler stehen nur in der Konsole, das Spiel läuft weiter, die Nacht fehlt dann in der Statistik aller. Im Dev-Modus trägt die Fassung die Endung `-dev` (`vite.config.ts`); solche Nächte zählt die Auswertung nicht.
+  Fehler stehen nur in der Konsole, das Spiel läuft weiter, die Nacht fehlt dann in der Statistik aller. Im Dev-Modus (`npm run dev`) wird nichts gesendet; die Fassung trägt dort die Endung `-dev` (`vite.config.ts`), und solche Nächte zählt die Auswertung ohnehin nicht.
 - **Die Datenbank.** `tools/supabase/statistik.sql` legt alles an und ist wiederholbar: die Tabelle `runs` (mit Prüfregeln für die Werte), Zeilensicherheit (RLS) und die Funktion
   `stats_overview(token)`. Das Spiel darf mit dem öffentlichen Schlüssel (`CONFIG.sammelstelle`, ein „publishable key“, der dafür gemacht ist, im Spiel zu stehen) nur **neue Zeilen eintragen**;
   Lesen, Ändern und Löschen einzelner Zeilen darf niemand über die Schnittstelle. Die globale Seite liest keine Zeilen, sondern nur die **Zähler** aus `stats_overview`, in der Form von `Auswertung`

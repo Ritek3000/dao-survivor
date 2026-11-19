@@ -24,8 +24,6 @@ export interface ConfirmView {
   text: string;
   no: string;
   yes: string;
-  /** Ist `yes` ein Schritt, den man bereuen kann (rot gefärbt)? Ohne Angabe ja. */
-  danger?: boolean;
 }
 
 /** Die Namen der Stellen für die Lebensgruppe, wie sie im Menü stehen. */
@@ -170,7 +168,6 @@ export class Menus {
     this.confirmText.textContent = view.text;
     this.confirmNo.textContent = view.no;
     this.confirmYes.textContent = view.yes;
-    this.confirmYes.classList.toggle('danger', view.danger !== false);
     this.show('confirm', 0, false, solid);
   }
 
@@ -189,7 +186,7 @@ export class Menus {
     this.muteBox.checked = volumes.muted;
   }
 
-  /** Zeigt das Häkchen für die anonyme Statistik, auch wenn die Rückfrage beim Start es gesetzt hat. */
+  /** Zeigt das Häkchen für die anonyme Statistik; beim Start kommt es aus den Einstellungen. */
   showShare(share: boolean): void {
     this.shareBox.checked = share;
   }

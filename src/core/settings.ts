@@ -28,10 +28,11 @@ export interface UiSettings {
 
 export interface DataSettings {
   /**
-   * Darf das Spiel jede Nacht anonym an die Sammelstelle der Statistik melden (`core/sammelstelle.ts`)? `null`: Der Spieler hat noch
-   * nicht entschieden; dann wird nichts gesendet, und beim Start fragt das Spiel danach.
+   * Meldet das Spiel jede Nacht anonym an die Sammelstelle der Statistik (`core/sammelstelle.ts`)? Standardmäßig ja, ohne Rückfrage;
+   * wer nicht will, schaltet es in den Optionen ab. Ein früher gespeichertes `null` (noch nicht entschieden, so fragte Fassung 0.17.0)
+   * zählt wie nicht gespeichert, also ja; ein gespeichertes `false` bleibt.
    */
-  share: boolean | null;
+  share: boolean;
 }
 
 export interface Settings {
