@@ -132,7 +132,7 @@ export class Game {
   /** Wurde die Nacht über das Pausenmenü abgebrochen? Dann spielt zum Ende die Musik des Menüs. */
   private aborted = false;
   /** Worauf die offene Rückfrage antwortet: das Abbrechen der Nacht oder das Löschen des Spielstands. */
-  private confirming: 'abort' | 'new' | 'share' | null = null;
+  private confirming: 'abort' | 'new' | null = null;
   private settings: Settings;
   /**
    * Schreibt jede Nacht ins Protokoll der Statistik (`core/statistik.ts`)? Der Messlauf spielt Nächte im Zeitraffer und
@@ -195,7 +195,7 @@ export class Game {
     this.settings = loadSettings({
       sound: { ...CONFIG.audio.defaults, muted: false },
       ui: { vitalsPosition: 'top-left' },
-      data: { share: null },
+      data: { share: true },
     });
     audio.setVolumes(this.settings.sound);
     audio.muffleAt = (x, z) => this.zones.finsternisAt(x, z);
@@ -209,7 +209,7 @@ export class Game {
     this.menus.onSound = (volumes) => audio.setVolumes(volumes);
     this.menus.onVitalsPosition = (position) => this.setVitalsPosition(position);
     this.menus.onShare = (share) => this.setShare(share);
-    this.menus.showShare(this.settings.data.share === true);
+    this.menus.showShare(this.settings.data.share);
     this.menus.showSound(this.settings.sound);
     this.hud.setMuted(this.settings.sound.muted);
     this.setVitalsPosition(this.settings.ui.vitalsPosition, false);
@@ -239,8 +239,6 @@ export class Game {
     );
     this.hud.setLoading(null);
     this.openTitle();
-    // Wer noch nicht entschieden hat, ob die Nächte anonym gemeldet werden dürfen, wird einmal beim Start gefragt.
-    if (this.settings.data.share === null) this.askShare();
   }
 
   start(): void {
@@ -507,30 +505,11 @@ export class Game {
     if (save) saveSettings(this.settings);
   }
 
-  /** Erlaubt oder verbietet das anonyme Melden der Nächte an die Sammelstelle (`core/sammelstelle.ts`) und merkt es sich. */
+  /** Schaltet das anonyme Melden der Nächte an die Sammelstelle (`core/sammelstelle.ts`) ein oder aus und merkt es sich. */
   private setShare(share: boolean): void {
     this.settings.data.share = share;
     this.menus.showShare(share);
     saveSettings(this.settings);
-  }
-
-  /** Die Frage beim ersten Start: Es wird nichts gesendet, bevor der Spieler geantwortet hat. Esc lässt sie offen (beim nächsten Start kommt sie wieder). */
-  private askShare(): void {
-    this.confirming = 'share';
-    this.menus.showConfirm(
-      {
-        title: 'Anonyme Statistik',
-        text:
-          'Darf das Spiel am Ende jeder Nacht anonym melden, welche Klasse du gespielt hast, wie die Nacht endete und was du gewählt hast? ' +
-          'So lässt sich das Gleichgewicht verbessern. Es gibt keinen Namen und keine Kennung deines Geräts. ' +
-          'Beim Übertragen sieht der Dienst (Supabase) wie bei jeder Webanfrage deine IP-Adresse; in der Statistik wird sie nicht gespeichert. ' +
-          'Du kannst es jederzeit in den Optionen ändern.',
-        no: 'Nicht senden',
-        yes: 'Einverstanden',
-        danger: false,
-      },
-      true,
-    );
   }
 
   /** Bedienung der Menüs im Startbildschirm und in der Pause: Auf und Ab wählen, Links und Rechts ändern, Enter bestätigt, Esc geht zurück. */
@@ -621,27 +600,12 @@ export class Game {
       case 'yes': {
         const confirmed = this.confirming;
         this.confirming = null;
-        if (confirmed === 'share') {
-          this.setShare(true);
-          this.showMenuHome(true);
-          audio.play('bestaetigen');
-          break;
-        }
         this.menus.hide();
         if (confirmed === 'abort') this.end('aborted');
         else if (confirmed === 'new') this.startNewGame();
         break;
       }
       case 'no':
-        if (this.confirming === 'share') {
-          this.confirming = null;
-          this.setShare(false);
-          this.showMenuHome(true);
-          audio.play('auswahl');
-          break;
-        }
-        this.menuBack();
-        break;
       case 'back':
         this.menuBack();
         break;
@@ -953,8 +917,9 @@ export class Game {
       skills,
     };
     recordRun(run);
-    // Nur mit Zustimmung (`setShare`); der Messlauf kommt gar nicht bis hierher (`recordStats`).
-    if (this.settings.data.share === true) sendRun(run);
+    // Standardmäßig an, in den Optionen abschaltbar (`setShare`). Der Messlauf kommt gar nicht bis hierher (`recordStats`); aus dem
+    // Dev-Modus geht nichts hinaus, denn die Sammelstelle zählt Nächte der Fassung "-dev" ohnehin nicht (siehe `tools/supabase/statistik.sql`).
+    if (this.settings.data.share && !import.meta.env.DEV) sendRun(run);
   }
 
   /**
