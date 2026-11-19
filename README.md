@@ -81,10 +81,10 @@ public/icons/items/   Bilder der Gegenstände im Lager: 27 WebP-Dateien, neun Pl
 src/
   main.ts             Einstieg: baut das Spiel und hängt Entwicklungswerkzeuge nur im Dev-Modus an
   config.ts           Zentrale Stellschrauben: Nachtdauer, Welt, Gegnerarten, Kulisse
-  core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Gegenstände)
+  core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Gegenstände), Protokoll der Nächte und seine Auswertung (Statistik)
   audio/              Ton und Musik: Engine, Ereignisnamen, Lesen von audio.json
   game/               Spiellogik und Darstellung (siehe unten)
-  ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Anleitung, Rückfragen; lagerView.ts und lager.css: Lager (Ausrüstung, Truhe und Händler)
+  ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Statistik, Anleitung, Rückfragen; statistikView.ts und statistik.css: die Anzeige der Statistik; lagerView.ts und lager.css: Lager (Ausrüstung, Truhe und Händler)
   tools/              Entwicklungswerkzeuge: Messlauf, Gegenstände (`__items`), Fertigkeiten-Unterbau (`__skills`) und Modell-Prüfer
 tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten, Gegenstandsbilder freistellen)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
@@ -111,12 +111,12 @@ Wichtige Teile von `src/game/`:
 
 ## Menüs und Oberfläche
 
-**Startbildschirm** (nach dem Laden): *Neues Spiel*, *Spiel fortsetzen*, *Optionen* und *Anleitung*. „Spiel fortsetzen“ erscheint nur, wenn es einen
+**Startbildschirm** (nach dem Laden): *Neues Spiel*, *Spiel fortsetzen*, *Optionen*, *Statistik* und *Anleitung*. „Spiel fortsetzen“ erscheint nur, wenn es einen
 Spielstand gibt (Gold in der Börse oder Gegenstände) und führt zur Klassenwahl. „Neues Spiel“ setzt den dauerhaften Fortschritt zurück
-(Gold, Gegenstände und Truhe; die Optionen bleiben). Gibt es einen Fortschritt, warnt davor eine Rückfrage, die nennt, was verloren ginge
+(Gold, Gegenstände und Truhe; die Optionen und die Statistik bleiben). Gibt es einen Fortschritt, warnt davor eine Rückfrage, die nennt, was verloren ginge
 (vorgewählt ist „Abbrechen“); ohne Fortschritt geht es sofort weiter. Von der Klassenwahl und vom Ende der Nacht führt **Esc** (oder der Knopf
 „Hauptmenü“) zurück zum Startbildschirm. Die **Anleitung** erklärt Ziel, Steuerung, Licht und Finsternis, Stufen und Segen, die Klassen mit ihren Angriffen, die Evolutionen, Gold,
-Gegenstände, Beute und das Lager (Text in `index.html`; sie ist länger als mancher Bildschirm, darum blättern Auf und Ab, siehe `Menus.scrollHelp`).
+Gegenstände, Beute und das Lager (Text in `index.html`; sie ist länger als mancher Bildschirm, darum blättern Auf und Ab, siehe `Menus.scrollPage`).
 
 **Pause** (Esc oder P): *Weiter*, *Optionen* und *Lauf abbrechen*. Wer den Lauf abbricht, bestätigt zuerst eine Rückfrage; die Nacht endet dann
 wie bei einem Sturz (Ertrag nach `CONFIG.gold.deathKeep`) mit der Endanzeige „Lauf abgebrochen“.
@@ -126,9 +126,34 @@ Lebensgruppe (Stufe im Kreis, Lebensbalken, Gold im Geldbeutel): oben links, obe
 wandert als Ganzes; was dort sonst stünde (Hinweis, Tonmeldung, Feuer entzünden), weicht aus. Bedienung mit der Maus oder mit den Tasten
 (Auf und Ab wählen die Zeile, Links und Rechts ändern, Enter schaltet um, Esc geht zurück).
 
+**Statistik** (Startbildschirm): zeigt die eigenen Nächte in Reitern, einer Übersicht und je einer Seite für jede Klasse. Die Übersicht nennt, wie oft jede
+Klasse gespielt wurde (Zahl und Anteil), mit Siegen und mittlerer überlebter Zeit. Die Seite einer Klasse zeigt ihre Nächte (gespielt, Siege, Gefallen,
+Abgebrochen, Ø überlebt), den Rang jeder Fertigkeit am Ende der Nacht, die erreichten Stufen, die gewählten Stärkungen und die gewährten Segen, jeweils mit Zahl
+und Anteil. Links und Rechts wechseln den Reiter, Auf und Ab blättern (`Menus.showStats`, `Menus.scrollPage`). Siehe [Statistik](#statistik).
+
 Alle Einstellungen bleiben erhalten (`localStorage`, Schlüssel `dao-survivor.einstellungen`, siehe `src/core/settings.ts`); Stände ohne die Stelle der
 Lebensgruppe gelten als „oben links“. Die Menüs stehen in `index.html`, bedient werden sie von `src/ui/menus.ts`; was ein Knopf bewirkt,
 entscheidet `Game.onMenuCommand`.
+
+## Statistik
+
+Jede Nacht, die endet, hinterlässt einen kleinen Datensatz (`RunRecord` in `src/core/statistik.ts`): Klasse, Ausgang (Sonnenaufgang, gefallen oder abgebrochen),
+überlebte Sekunden, erreichte Stufe, gewählte Stärkungen (Kennung → Rang), gewährte Segen und der Rang jeder Fertigkeit am Ende (6 ist die Evolution), dazu eine
+zufällige Kennung, der Zeitpunkt und die Fassung des Spiels. Es gibt keinen Namen und keine Angabe zur Person. `Game.recordNight` schreibt ihn beim Ende der Nacht.
+Ein Lauf, den man vor `CONFIG.items.shop.minNightSeconds` (60 Sekunden) abbricht, fehlt, so wie er für den Händler nicht als gespielte Nacht zählt.
+
+- **Speicher.** Das Protokoll liegt unter dem Schlüssel `dao-survivor.statistik` (`localStorage`) als JSON mit Versionsnummer (`STATISTIK_VERSION`, jetzt 1), hinter
+  `TextStore` wie Spielstand und Einstellungen; eine Desktop-Fassung setzt mit `useStatistikStore` eine Datei an die Stelle. Es ist bewusst vom Spielstand getrennt: Es wächst
+  mit jeder Nacht (höchstens `MAX_RUNS` = 2000, die ältesten fallen heraus, etwa 700 KB), würde den Spielstand bei jedem Handel mitschreiben lassen und soll
+  „Neues Spiel“ überstehen. Ein unlesbarer Stand beginnt leer; unbrauchbare Einträge werden beim Lesen übersprungen.
+- **Auswertung.** `evaluate` in `src/core/auswertung.ts` zählt die Nächte zusammen (insgesamt und je Klasse): Nächte, Siege, Gefallen, Abgebrochen, Summe der Sekunden, Nächte je
+  Stufe, Wahlen je Stärkung und Segen, Nächte je Rang und Fertigkeit. Die Zähler lassen sich addieren. Anteile und Namen rechnet erst die Anzeige.
+- **Anzeige.** `src/ui/statistikView.ts` zeigt eine fertige `Auswertung`; sie liest nichts selbst und kennt keine Spielregeln. Das Menü *Statistik* im Startbildschirm bindet sie
+  ein (`Menus.showStats`).
+- **Anteile.** Bei den Klassen, den Fertigkeiten und den Stufen ist es der Anteil an allen Nächten der Klasse (bzw. aller Klassen). Bei Stärkungen und Segen ist es der Anteil an allen
+  Wahlen dieser Art. „Steigerungen“ meint hier, was beim Stufenaufstieg gewählt wird: Stärkungen und Segen (die Fertigkeiten haben ihre eigene Tabelle).
+- **Messlauf.** Er schaltet das Protokoll ab (`Game.recordStats`), damit seine Probenächte die Statistik nicht verfälschen.
+- **Zurücksetzen.** In den Entwicklerwerkzeugen genügt `localStorage.removeItem('dao-survivor.statistik')`.
 
 ## Gold
 

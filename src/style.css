@@ -584,9 +584,10 @@ body[data-vitals='bottom-left'] #debug {
   display: none !important;
 }
 
-/* Undurchsichtiger Grund: Anleitung immer, Optionen und Rückfragen, wenn sie vom Startbildschirm kommen. */
+/* Undurchsichtiger Grund: Anleitung und Statistik immer, Optionen und Rückfragen, wenn sie vom Startbildschirm kommen. */
 .overlay.solid,
 #options.solid,
+#stats,
 #help {
   background: #030304;
 }
@@ -906,8 +907,9 @@ body[data-vitals='bottom-left'] #debug {
   background: linear-gradient(90deg, transparent, var(--fitting), transparent);
 }
 
-/* Anleitung: Abschnitte in zwei Spalten, auf schmalen Bildschirmen untereinander. */
-#help {
+/* Anleitung und Statistik: länger als mancher Bildschirm; die Seite blättert. Die Karten der Statistik stehen in `ui/statistik.css`. */
+#help,
+#stats {
   justify-content: safe center;
   overflow-y: auto;
 }

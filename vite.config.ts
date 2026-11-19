@@ -9,6 +9,8 @@ export default defineConfig({
   base: './',
   server: { port: 5173, strictPort: true },
   build: { target: 'es2022' },
+  // Die Fassung steht auch im Code zur Verfügung (die Statistik hält sie je Nacht fest), ohne dass dort eine zweite Zahl steht.
+  define: { __GAME_VERSION__: JSON.stringify(pkg.version) },
   plugins: [
     {
       name: 'dao-version',

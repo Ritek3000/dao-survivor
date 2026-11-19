@@ -1,0 +1,232 @@
+/*
+ * Die Statistik (src/ui/statistikView.ts): Reiter, Karten und Tabellen im Stil der Anleitung. Die Farben kommen aus den Variablen
+ * der Seite (--text, --ember, --panel, --line); jede Seite, die die Anzeige einbindet, setzt sie.
+ */
+
+.stats {
+  width: min(980px, 94vw);
+  margin-top: 14px;
+  text-align: left;
+}
+
+.stats-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.stats-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 7px 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.stats-tab small {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.stats-tab:hover {
+  border-color: var(--ember);
+}
+
+.stats-tab.selected {
+  border-color: var(--ember);
+  box-shadow: 0 0 18px rgba(255, 180, 94, 0.25);
+  color: var(--ember);
+}
+
+/* Zwei Spalten wie die Anleitung; breite Karten laufen über beide. */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+  margin-top: 14px;
+  align-items: start;
+}
+
+.stats-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.stats-card {
+  padding: 12px 16px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  min-width: 0;
+}
+
+.stats-card.wide {
+  grid-column: 1 / -1;
+}
+
+.stats-card h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ember);
+}
+
+.stats-empty {
+  grid-column: 1 / -1;
+  padding: 28px 0;
+  text-align: center;
+}
+
+.overlay .stats-note {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+/* Die großen Zahlen der Nächte. */
+.stats-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  margin: 0;
+}
+
+.stats-figures .figure {
+  display: flex;
+  flex-direction: column;
+  min-width: 96px;
+}
+
+.stats-figures dd {
+  margin: 0;
+  font-size: 26px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-figures dt {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.stats-figures small {
+  font-size: 12.5px;
+  color: var(--ember);
+}
+
+/* Tabellen: Namen links, Zahlen rechts. */
+.table-scroll {
+  overflow-x: auto;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-table th {
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: right;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.stats-table td {
+  padding: 4px 8px;
+  text-align: right;
+  border-top: 1px solid rgba(201, 193, 177, 0.08);
+}
+
+.stats-table th:first-child,
+.stats-table td.name {
+  text-align: left;
+}
+
+.stats-table td.name small {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.stats-table tr.total td {
+  border-top-color: var(--line);
+  color: var(--ember);
+}
+
+.stats-table td.none {
+  color: var(--text-dim);
+}
+
+/* Der Balken misst den größten Eintrag der Tabelle; der Anteil daneben ist der echte. */
+.stats-table td.bar-cell {
+  width: 32%;
+  min-width: 70px;
+  padding-left: 0;
+}
+
+.stats-table .bar {
+  display: block;
+  height: 8px;
+  background: rgba(201, 193, 177, 0.08);
+}
+
+.stats-table .bar i {
+  display: block;
+  height: 100%;
+  background: var(--ember);
+  opacity: 0.75;
+}
+
+/* Matrix der Fertigkeiten: Zahl über Anteil; je häufiger, desto wärmer der Grund. */
+.stats-table.skills td.figure-cell {
+  padding: 4px 6px;
+  text-align: center;
+}
+
+.stats-table td.figure-cell span {
+  display: block;
+}
+
+.stats-table td.figure-cell small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.stats-table td.heat {
+  background: color-mix(in srgb, var(--ember) calc(var(--share, 0) * 50%), transparent);
+}
+
+.stats-table.skills th {
+  text-align: center;
+}
+
+.stats-table.skills th:first-child {
+  text-align: left;
+}
+
+@media (max-width: 760px) {
+  .stats-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

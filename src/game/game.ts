@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { audio, type Duck, type MusicId } from '../audio';
 import { CONFIG } from '../config';
+import { evaluate } from '../core/auswertung';
 import { Input, type MoveVector } from '../core/input';
 import { createRandom } from '../core/random';
 import { loadSettings, saveSettings, type Settings, type VitalsPosition } from '../core/settings';
+import { loadRuns, newRunId, recordRun, type RunOutcome } from '../core/statistik';
 import { formatTime, type EndLoot, type Hud } from '../ui/hud';
 import { LagerView } from '../ui/lagerView';
 import { Menus, type MenuCommand } from '../ui/menus';
@@ -26,7 +28,7 @@ import { Lager } from './lager';
 import { loadModels, type Models } from './models';
 import { Pickups } from './pickups';
 import { Player } from './player';
-import { Progression, SEGEN_EVERY_LEVELS } from './progression';
+import { Progression, SEGEN_EVERY_LEVELS, UPGRADES } from './progression';
 import { Threats } from './threats';
 import { MAX_RANK } from './weapons';
 import { World } from './world';
@@ -131,6 +133,11 @@ export class Game {
   /** Worauf die offene Rückfrage antwortet: das Abbrechen der Nacht oder das Löschen des Spielstands. */
   private confirming: 'abort' | 'new' | null = null;
   private settings: Settings;
+  /**
+   * Schreibt jede Nacht ins Protokoll der Statistik (`core/statistik.ts`)? Der Messlauf spielt Nächte im Zeitraffer und
+   * schaltet es ab, damit seine Probenächte die Statistik nicht verfälschen.
+   */
+  private recordStats = true;
   /** Sekunden bis zum nächsten Ruf aus der Horde. */
   private callIn = 2;
   /** Nächste brennende Feuerschale, für das Knistern: Ort und Abstand zur Spielfigur. */
@@ -501,10 +508,10 @@ export class Game {
       this.menuBack();
       return;
     }
-    // In der Anleitung gibt es nur einen Knopf; dort blättern Auf und Ab.
-    if (menus.screen === 'help') {
-      if (input.wasPressed('up')) menus.scrollHelp(-1);
-      else if (input.wasPressed('down')) menus.scrollHelp(1);
+    // In der Anleitung und der Statistik gibt es nur einen Knopf; dort blättern Auf und Ab.
+    if (menus.screen === 'help' || menus.screen === 'stats') {
+      if (input.wasPressed('up')) menus.scrollPage(-1);
+      else if (input.wasPressed('down')) menus.scrollPage(1);
     }
     let moved = false;
     if (input.wasPressed('up')) moved = menus.step(-1);
@@ -545,6 +552,10 @@ export class Game {
       case 'options':
         // Vom Startbildschirm aus liegt kein Spiel dahinter, das man sehen müsste.
         this.menus.showOptions(this.phase === 'title');
+        audio.play('auswahl');
+        break;
+      case 'stats':
+        this.menus.showStats(evaluate(loadRuns()));
         audio.play('auswahl');
         break;
       case 'help':
@@ -599,7 +610,7 @@ export class Game {
     this.confirming = 'new';
     this.menus.showConfirm({
       title: 'Neues Spiel beginnen?',
-      text: `Dein Fortschritt wird zurückgesetzt: ${lost.join(' und ')} gehen verloren. Das lässt sich nicht rückgängig machen. Die Optionen bleiben.`,
+      text: `Dein Fortschritt wird zurückgesetzt: ${lost.join(' und ')} gehen verloren. Das lässt sich nicht rückgängig machen. Die Optionen und die Statistik bleiben.`,
       no: 'Abbrechen',
       yes: 'Fortschritt löschen',
     }, true);
@@ -836,6 +847,7 @@ export class Game {
     // Der letzte Frame läuft knapp über das Ende der Nacht hinaus.
     const survived = Math.min(this.time, CONFIG.run.nightSeconds);
     const stats = `${this.playerClass.name} · Überlebt: ${formatTime(survived)} · Stufe ${this.progression.level} · Erschlagen: ${this.enemies.kills}`;
+    this.recordNight(outcome, survived);
     const loot = this.settleLoot();
     const gold = this.settle(won, survived, loot.gold);
     const lines = this.lootLines(loot);
@@ -862,6 +874,37 @@ export class Game {
         this.hud.showEnd('Gefallen', 'Die Nacht hat dich geholt.', stats, gold, lines);
       }
     }
+  }
+
+  /**
+   * Hält die Nacht für die Statistik fest: Klasse, Ausgang, Zeit, Stufe, die gewählten Stärkungen und Segen und den Rang jeder Fertigkeit.
+   * Es zählt wie bei der gespielten Nacht des Händlers: Ein Lauf, den man vor `minNightSeconds` abbricht, fehlt im Protokoll.
+   */
+  private recordNight(outcome: RunOutcome, survived: number): void {
+    if (!this.recordStats) return;
+    if (outcome === 'aborted' && survived < CONFIG.items.shop.minNightSeconds) return;
+    const upgrades: Record<string, number> = {};
+    for (const upgrade of UPGRADES) {
+      const rank = this.progression.rank(upgrade);
+      if (rank > 0) upgrades[upgrade.id] = rank;
+    }
+    const skills: Record<string, number> = {};
+    for (const id of this.playerClass.weapons) {
+      const rank = this.arsenal.rankOf(id);
+      if (rank > 0) skills[id] = rank;
+    }
+    recordRun({
+      id: newRunId(),
+      at: Date.now(),
+      version: __GAME_VERSION__,
+      classId: this.playerClass.id,
+      outcome,
+      seconds: Math.round(survived),
+      level: this.progression.level,
+      upgrades,
+      segen: this.progression.blessed.map((segen) => segen.id),
+      skills,
+    });
   }
 
   /**

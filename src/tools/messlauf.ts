@@ -35,6 +35,7 @@ import type { Zone } from '../game/zones';
 
 /** Die Teile des Spiels, in die der Messlauf hineingreift; im Spiel selbst sind sie nicht öffentlich. */
 interface Internals {
+  recordStats: boolean;
   phase: string;
   time: number;
   offers: { name: string; note: string }[];
@@ -438,6 +439,8 @@ export function installMesslauf(game: Game): void {
       // Das Gold der Messung wird nicht gespeichert; am Ende gilt wieder der echte Spielstand.
       const boerse = (game as unknown as Internals).boerse;
       boerse.persist = false;
+      // Auch die Statistik soll die Probenächte nicht zählen.
+      (game as unknown as Internals).recordStats = false;
       // Dasselbe für die Gegenstände: Die Ausrüstung der Messung ersetzt die echte, bis der Spielstand neu gelesen wird.
       const ausruestung = (game as unknown as Internals).ausruestung;
       ausruestung.persist = false;
@@ -472,6 +475,7 @@ export function installMesslauf(game: Game): void {
         api.running = false;
         audio.silenced = false;
         boerse.persist = true;
+        (game as unknown as Internals).recordStats = true;
         boerse.reload();
         ausruestung.persist = true;
         ausruestung.reload();
