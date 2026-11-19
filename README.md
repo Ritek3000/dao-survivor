@@ -73,6 +73,7 @@ Spiellogik dazukommen kann.
 ```
 index.html            Seite des Spiels mit allen HUD-Elementen
 modell.html           Modell-Prüfer (nur für die Entwicklung, nicht Teil des Spiels)
+statistik-global.html Die Statistik aller Spieler (nicht verlinkt, braucht den Schlüssel im Link, siehe „Sammelstelle“)
 finsternis.md         Lore-Quelle: Staub und Finsternis
 magie_mystik/         Lore-Quelle: Katalog von Magie und Mystik, geordnet nach Domänen und Mächten
 public/models/        Spielfertige GLB-Modelle (Figuren, Gegner, Kulisse unter welt/, Ausrüstung wie der Schild unter ausruestung/)
@@ -80,13 +81,14 @@ public/audio/         Klänge und Musik (sfx/, schleifen/, musik/) und audio.jso
 public/icons/items/   Bilder der Gegenstände im Lager: 27 WebP-Dateien, neun Plätze mal drei Klassen (`<platz>-<klasse>.webp`)
 src/
   main.ts             Einstieg: baut das Spiel und hängt Entwicklungswerkzeuge nur im Dev-Modus an
+  statistikGlobal.ts  Einstieg der globalen Statistik (statistik-global.html, nicht verlinkt)
   config.ts           Zentrale Stellschrauben: Nachtdauer, Welt, Gegnerarten, Kulisse
-  core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Gegenstände), Protokoll der Nächte und seine Auswertung (Statistik)
+  core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Gegenstände), Protokoll der Nächte und seine Auswertung (Statistik), Sammelstelle (Senden und Lesen über Supabase)
   audio/              Ton und Musik: Engine, Ereignisnamen, Lesen von audio.json
   game/               Spiellogik und Darstellung (siehe unten)
   ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Statistik, Anleitung, Rückfragen; statistikView.ts und statistik.css: die Anzeige der Statistik; lagerView.ts und lager.css: Lager (Ausrüstung, Truhe und Händler)
   tools/              Entwicklungswerkzeuge: Messlauf, Gegenstände (`__items`), Fertigkeiten-Unterbau (`__skills`) und Modell-Prüfer
-tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten, Gegenstandsbilder freistellen)
+tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten, Gegenstandsbilder freistellen; SQL: die Sammelstelle der Statistik in Supabase einrichten, `supabase/statistik.sql`)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
 ```
 
@@ -129,7 +131,7 @@ wandert als Ganzes; was dort sonst stünde (Hinweis, Tonmeldung, Feuer entzünde
 **Statistik** (Startbildschirm): zeigt die eigenen Nächte in Reitern, einer Übersicht und je einer Seite für jede Klasse. Die Übersicht nennt, wie oft jede
 Klasse gespielt wurde (Zahl und Anteil), mit Siegen und mittlerer überlebter Zeit. Die Seite einer Klasse zeigt ihre Nächte (gespielt, Siege, Gefallen,
 Abgebrochen, Ø überlebt), den Rang jeder Fertigkeit am Ende der Nacht, die erreichten Stufen, die gewählten Stärkungen und die gewährten Segen, jeweils mit Zahl
-und Anteil. Links und Rechts wechseln den Reiter, Auf und Ab blättern (`Menus.showStats`, `Menus.scrollPage`). Siehe [Statistik](#statistik).
+und Anteil. Links und Rechts wechseln den Reiter, Auf und Ab blättern (`Menus.showStats`, `Menus.scrollPage`). Siehe [Statistik](#statistik). Die *Optionen* haben die Gruppe *Daten* (Häkchen „Statistik anonym senden“).
 
 Alle Einstellungen bleiben erhalten (`localStorage`, Schlüssel `dao-survivor.einstellungen`, siehe `src/core/settings.ts`); Stände ohne die Stelle der
 Lebensgruppe gelten als „oben links“. Die Menüs stehen in `index.html`, bedient werden sie von `src/ui/menus.ts`; was ein Knopf bewirkt,
@@ -139,7 +141,7 @@ entscheidet `Game.onMenuCommand`.
 
 Jede Nacht, die endet, hinterlässt einen kleinen Datensatz (`RunRecord` in `src/core/statistik.ts`): Klasse, Ausgang (Sonnenaufgang, gefallen oder abgebrochen),
 überlebte Sekunden, erreichte Stufe, gewählte Stärkungen (Kennung → Rang), gewährte Segen und der Rang jeder Fertigkeit am Ende (6 ist die Evolution), dazu eine
-zufällige Kennung, der Zeitpunkt und die Fassung des Spiels. Es gibt keinen Namen und keine Angabe zur Person. `Game.recordNight` schreibt ihn beim Ende der Nacht.
+zufällige Kennung, der Zeitpunkt und die Fassung des Spiels (im Dev-Modus mit Endung `-dev`). Es gibt keinen Namen und keine Angabe zur Person. `Game.recordNight` schreibt ihn beim Ende der Nacht.
 Ein Lauf, den man vor `CONFIG.items.shop.minNightSeconds` (60 Sekunden) abbricht, fehlt, so wie er für den Händler nicht als gespielte Nacht zählt.
 
 - **Speicher.** Das Protokoll liegt unter dem Schlüssel `dao-survivor.statistik` (`localStorage`) als JSON mit Versionsnummer (`STATISTIK_VERSION`, jetzt 1), hinter
@@ -154,6 +156,31 @@ Ein Lauf, den man vor `CONFIG.items.shop.minNightSeconds` (60 Sekunden) abbricht
   Wahlen dieser Art. „Steigerungen“ meint hier, was beim Stufenaufstieg gewählt wird: Stärkungen und Segen (die Fertigkeiten haben ihre eigene Tabelle).
 - **Messlauf.** Er schaltet das Protokoll ab (`Game.recordStats`), damit seine Probenächte die Statistik nicht verfälschen.
 - **Zurücksetzen.** In den Entwicklerwerkzeugen genügt `localStorage.removeItem('dao-survivor.statistik')`.
+
+### Sammelstelle: die Statistik aller Spieler
+
+Wer zustimmt, meldet jede Nacht zusätzlich anonym an eine Sammelstelle (Supabase, eine Postgres-Datenbank mit REST-Schnittstelle). Die **globale Seite**
+`statistik-global.html` zeigt daraus dieselbe Statistik wie im Spiel, nur für alle Nächte aller Spieler. Das Spiel verlinkt sie nirgends.
+
+- **Zustimmung.** Beim ersten Start fragt das Spiel einmal („Anonyme Statistik“: *Nicht senden* ist vorgewählt, *Einverstanden*); bis zur Antwort wird nichts gesendet. Esc lässt die Frage offen,
+  sie kommt beim nächsten Start wieder. Später lässt es sich in den **Optionen** unter *Daten* umschalten (`Settings.data.share`: `null` = nicht entschieden, `true`, `false`;
+  `src/core/settings.ts`). Der Text nennt offen, dass der Dienst beim Übertragen wie bei jeder Webanfrage die IP-Adresse sieht; in der Tabelle steht sie nicht.
+- **Was gesendet wird.** Der Datensatz der Nacht (siehe oben) ohne den Zeitpunkt: Kennung der Nacht, Fassung, Klasse, Ausgang, Sekunden, Stufe, Stärkungen, Segen, Ränge der Fertigkeiten.
+  Keine Kennung des Spielers oder Geräts, nichts vom Spielstand. Die Kennung der Nacht verhindert nur Doppelte. `Game.recordNight` ruft `sendRun` (`src/core/sammelstelle.ts`) auf, `fetch` ohne Bibliothek;
+  Fehler stehen nur in der Konsole, das Spiel läuft weiter, die Nacht fehlt dann in der Statistik aller. Im Dev-Modus trägt die Fassung die Endung `-dev` (`vite.config.ts`); solche Nächte zählt die Auswertung nicht.
+- **Die Datenbank.** `tools/supabase/statistik.sql` legt alles an und ist wiederholbar: die Tabelle `runs` (mit Prüfregeln für die Werte), Zeilensicherheit (RLS) und die Funktion
+  `stats_overview(token)`. Das Spiel darf mit dem öffentlichen Schlüssel (`CONFIG.sammelstelle`, ein „publishable key“, der dafür gemacht ist, im Spiel zu stehen) nur **neue Zeilen eintragen**;
+  Lesen, Ändern und Löschen einzelner Zeilen darf niemand über die Schnittstelle. Die globale Seite liest keine Zeilen, sondern nur die **Zähler** aus `stats_overview`, in der Form von `Auswertung`
+  (`src/core/auswertung.ts`; die Funktion rechnet dasselbe wie `evaluate`, nach `tallyRun` in SQL).
+- **Der Link.** Die Funktion verlangt einen Schlüssel, den das Skript einmal zufällig erzeugt (Tabelle `stats_config`); er steht nicht im Repository. Die Seite liest ihn aus dem Teil der Adresse hinter dem `#`
+  (der geht nur an die Sammelstelle, nie an den Server der Seite). Ohne Schlüssel oder mit einem falschen zeigt die Seite nichts außer einem Hinweis. Die Adresse lautet also
+  `https://ritek3000.github.io/dao-survivor/statistik-global.html#<Schlüssel>`; die Seite trägt `noindex`. Das ist ein Zugangsschlüssel im Link, kein Passwort-Schutz: Wer den Link hat, sieht die Zähler.
+  Einen neuen Schlüssel setzt `update public.stats_config set value = '…' where key = 'token';` im SQL-Editor.
+- **Einrichten (einmalig).** Im Supabase-Dashboard unter *SQL Editor* den Inhalt von `tools/supabase/statistik.sql` einfügen und ausführen; die letzte Zeile des Ergebnisses (`link_ende`) ist der Rest des Links.
+  Alle gesammelten Nächte löscht `delete from public.runs;`.
+- **Grenzen.** Die Werte kommen vom Spiel im Browser des Spielers und lassen sich fälschen; sie sind Richtwerte, kein Beweis. Jeder mit dem öffentlichen Schlüssel kann Nächte eintragen (die Prüfregeln
+  begrenzen nur, was als Nacht durchgeht). Der Hinweistext im Spiel ist ein ehrlicher Hinweis, keine Rechtsberatung; wer das Spiel öffentlich anbietet, prüft, ob eine Datenschutzerklärung nötig ist
+  und ob das Supabase-Projekt in einer EU-Region liegt.
 
 ## Gold
 

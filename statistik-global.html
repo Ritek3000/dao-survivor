@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Die Seite ist von nirgends verlinkt; Suchmaschinen sollen sie auch nicht finden. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Statistik – Alle Spieler</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+  </head>
+  <body>
+    <!--
+      Die Statistik aller Spieler. Die Seite braucht den Schlüssel der Sammelstelle hinter dem "#" der Adresse (er steht nicht im
+      Repository; tools/supabase/statistik.sql erzeugt ihn). Den Inhalt baut src/statistikGlobal.ts mit derselben Anzeige wie das Spiel.
+    -->
+    <main>
+      <h1>Statistik</h1>
+      <p class="stats-sub">Die Nächte aller Spieler, anonym gesammelt</p>
+      <p id="stats-status" class="stats-sub">Wird geladen …</p>
+      <div id="stats-view" class="stats"></div>
+      <p class="stats-foot">Version %APP_VERSION%</p>
+    </main>
+    <script type="module" src="/src/statistikGlobal.ts"></script>
+  </body>
+</html>

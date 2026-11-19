@@ -68,3 +68,53 @@ export function evaluate(runs: readonly RunRecord[]): Auswertung {
   }
   return result;
 }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function count(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+/** Kennung (oder Zahl als Text) → Zahl; Einträge ohne Zahl fallen weg. */
+function parseCounts<K extends string | number>(raw: unknown): Record<K, number> {
+  const counts: Record<string, number> = {};
+  if (!isRecord(raw)) return counts as Record<K, number>;
+  for (const [key, value] of Object.entries(raw)) {
+    const n = count(value);
+    if (n > 0) counts[key] = n;
+  }
+  return counts as Record<K, number>;
+}
+
+function parseTally(raw: unknown): Tally {
+  const tally = emptyTally();
+  if (!isRecord(raw)) return tally;
+  tally.nights = count(raw.nights);
+  tally.wins = count(raw.wins);
+  tally.falls = count(raw.falls);
+  tally.aborts = count(raw.aborts);
+  tally.seconds = count(raw.seconds);
+  tally.levels = parseCounts<number>(raw.levels);
+  tally.upgrades = parseCounts<string>(raw.upgrades);
+  tally.segen = parseCounts<string>(raw.segen);
+  if (isRecord(raw.skills)) {
+    for (const [id, ranks] of Object.entries(raw.skills)) tally.skills[id] = parseCounts<number>(ranks);
+  }
+  return tally;
+}
+
+/**
+ * Liest eine Auswertung, die von außen kommt (die Sammelstelle liefert sie als JSON, siehe `sammelstelle.ts`). Was fehlt oder keine
+ * Zahl ist, zählt als 0; ein Text, der keine Auswertung ist, ergibt eine leere.
+ */
+export function parseAuswertung(raw: unknown): Auswertung {
+  const result: Auswertung = { total: emptyTally(), byClass: {} };
+  if (!isRecord(raw)) return result;
+  result.total = parseTally(raw.total);
+  if (isRecord(raw.byClass)) {
+    for (const [classId, tally] of Object.entries(raw.byClass)) result.byClass[classId] = parseTally(tally);
+  }
+  return result;
+}

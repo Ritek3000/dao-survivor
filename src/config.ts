@@ -914,4 +914,15 @@ export const CONFIG = {
       largeFrom: 5,
     },
   },
+  /**
+   * Die Sammelstelle für die Statistik aller Spieler (Supabase; Einrichtung in tools/supabase/statistik.sql, siehe README, Abschnitt
+   * "Sammelstelle"). Der Schlüssel ist ein "publishable key": Er ist dafür gemacht, im Spiel zu stehen. Was er darf, regeln die
+   * Regeln in der Datenbank (nur Nächte eintragen, nur Zähler lesen), nicht seine Geheimhaltung.
+   */
+  sammelstelle: {
+    url: 'https://bakxzwwqbmnlkvgmbumy.supabase.co',
+    key: 'sb_publishable_c5G9AvY1aNuep5rJ401TMQ_ftOe76re',
+    /** Nach so vielen Sekunden gibt eine Anfrage auf; die Nacht ist dann für die Statistik aller verloren, das Spiel läuft weiter. */
+    timeoutSeconds: 10,
+  },
 } as const;
