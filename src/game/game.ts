@@ -132,7 +132,7 @@ export class Game {
   /** Wurde die Nacht über das Pausenmenü abgebrochen? Dann spielt zum Ende die Musik des Menüs. */
   private aborted = false;
   /** Worauf die offene Rückfrage antwortet: das Abbrechen der Nacht oder das Löschen des Spielstands. */
-  private confirming: 'abort' | 'new' | null = null;
+  private confirming: 'abort' | 'new' | 'notice' | null = null;
   private settings: Settings;
   /**
    * Schreibt jede Nacht ins Protokoll der Statistik (`core/statistik.ts`)? Der Messlauf spielt Nächte im Zeitraffer und
@@ -195,7 +195,7 @@ export class Game {
     this.settings = loadSettings({
       sound: { ...CONFIG.audio.defaults, muted: false },
       ui: { vitalsPosition: 'top-left' },
-      data: { share: true },
+      data: { share: true, noticeSeen: false },
     });
     audio.setVolumes(this.settings.sound);
     audio.muffleAt = (x, z) => this.zones.finsternisAt(x, z);
@@ -239,6 +239,7 @@ export class Game {
     );
     this.hud.setLoading(null);
     this.openTitle();
+    if (!this.settings.data.noticeSeen) this.showDataNotice();
   }
 
   start(): void {
@@ -512,6 +513,44 @@ export class Game {
     saveSettings(this.settings);
   }
 
+  /**
+   * Der Hinweis zur anonymen Statistik, einmal je Spieler (`Settings.data.noticeSeen`), auch für alle, die in 0.17.0 noch gefragt wurden.
+   * Wer das Senden eingeschaltet hat (der Standard), liest nur und bestätigt. Wer in 0.17.0 "Nicht senden" gewählt hat, bleibt abgeschaltet,
+   * bis er hier selbst "Jetzt senden" wählt: Eine ausdrückliche Absage wird nie übergangen. Esc zählt als "Weiter nicht senden" bzw. als gelesen.
+   */
+  private showDataNotice(): void {
+    this.confirming = 'notice';
+    const what =
+      'Am Ende jeder Nacht meldet das Spiel anonym, welche Klasse du gespielt hast, wie die Nacht endete und was du gewählt hast. ' +
+      'So lässt sich das Gleichgewicht verbessern. Es gibt keinen Namen und keine Kennung deines Geräts; beim Übertragen sieht der Dienst ' +
+      '(Supabase) wie bei jeder Webanfrage deine IP-Adresse, in der Statistik wird sie nicht gespeichert.';
+    if (this.settings.data.share) {
+      this.menus.showConfirm(
+        { title: 'Anonyme Statistik', text: `${what} Abschalten kannst du es jederzeit in den Optionen unter „Daten“.`, no: 'Verstanden' },
+        true,
+      );
+    } else {
+      this.menus.showConfirm(
+        {
+          title: 'Anonyme Statistik',
+          text: `${what} Du hattest „Nicht senden“ gewählt; dabei bleibt es, bis du „Jetzt senden“ wählst. Ändern kannst du es jederzeit in den Optionen unter „Daten“.`,
+          no: 'Weiter nicht senden',
+          yes: 'Jetzt senden',
+          danger: false,
+        },
+        true,
+      );
+    }
+  }
+
+  /** Der Hinweis ist gelesen; zurück zum Startbildschirm. */
+  private closeDataNotice(): void {
+    this.confirming = null;
+    this.settings.data.noticeSeen = true;
+    saveSettings(this.settings);
+    this.showMenuHome(true);
+  }
+
   /** Bedienung der Menüs im Startbildschirm und in der Pause: Auf und Ab wählen, Links und Rechts ändern, Enter bestätigt, Esc geht zurück. */
   private updateMenu(): void {
     const { input, menus } = this;
@@ -543,8 +582,11 @@ export class Game {
       case null:
         break;
       default:
-        this.confirming = null;
-        this.showMenuHome(true);
+        if (this.confirming === 'notice') this.closeDataNotice();
+        else {
+          this.confirming = null;
+          this.showMenuHome(true);
+        }
         audio.play('auswahl');
     }
   }
@@ -598,6 +640,12 @@ export class Game {
         break;
       }
       case 'yes': {
+        if (this.confirming === 'notice') {
+          this.setShare(true);
+          this.closeDataNotice();
+          audio.play('bestaetigen');
+          break;
+        }
         const confirmed = this.confirming;
         this.confirming = null;
         this.menus.hide();

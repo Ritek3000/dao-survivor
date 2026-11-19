@@ -165,6 +165,10 @@ Das Spiel meldet jede Nacht zusätzlich anonym an eine Sammelstelle (Supabase, e
 - **Abschalten statt Zustimmung.** Das Senden ist standardmäßig an und kommt ohne Rückfrage (seit 0.17.1; in 0.17.0 fragte das Spiel beim ersten Start). Wer nicht möchte, nimmt in den **Optionen** unter *Daten*
   das Häkchen „Statistik anonym senden“ heraus (`Settings.data.share`, `true` oder `false`; `src/core/settings.ts`). Eine früher gespeicherte Entscheidung „Nicht senden“ (`false`) bleibt erhalten,
   ein offenes `null` aus 0.17.0 zählt wie nicht gespeichert, also ja. Der Text in den Optionen nennt offen, was gesendet wird und dass der Dienst beim Übertragen wie bei jeder Webanfrage die IP-Adresse sieht; in der Tabelle steht sie nicht.
+- **Hinweis beim Start.** Einmal je Spieler (Merker `Settings.data.noticeSeen`, auch bei Spielern, die schon mit 0.17.0 gespielt haben) blendet das Spiel nach dem Laden „Anonyme Statistik“ ein: was gemeldet wird,
+  dass es keinen Namen und keine Gerätekennung gibt, dass der Dienst die IP-Adresse sieht, und wo man es abschaltet. Wer das Senden eingeschaltet hat, bestätigt mit „Verstanden“ (Esc zählt auch). Wer in 0.17.0 „Nicht senden“
+  gewählt hatte, **bleibt abgeschaltet**: Der Hinweis fragt ihn einmal, ob er jetzt senden will („Weiter nicht senden“ ist vorgewählt, Esc zählt wie dieser Knopf). Eine ausdrückliche Absage wird nie übergangen
+  (`Game.showDataNotice`).
 - **Was gesendet wird.** Der Datensatz der Nacht (siehe oben) ohne den Zeitpunkt: Kennung der Nacht, Fassung, Klasse, Ausgang, Sekunden, Stufe, Stärkungen, Segen, Ränge der Fertigkeiten.
   Keine Kennung des Spielers oder Geräts, nichts vom Spielstand. Die Kennung der Nacht verhindert nur Doppelte. `Game.recordNight` ruft `sendRun` (`src/core/sammelstelle.ts`) auf, `fetch` ohne Bibliothek;
   Fehler stehen nur in der Konsole, das Spiel läuft weiter, die Nacht fehlt dann in der Statistik aller. Im Dev-Modus (`npm run dev`) wird nichts gesendet; die Fassung trägt dort die Endung `-dev` (`vite.config.ts`), und solche Nächte zählt die Auswertung ohnehin nicht.

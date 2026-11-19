@@ -18,12 +18,14 @@ export type MenuCommand = 'new' | 'continue' | 'options' | 'stats' | 'help' | 'r
 
 export type MenuScreen = 'title' | 'pause' | 'options' | 'stats' | 'help' | 'confirm';
 
-/** Eine Rückfrage mit zwei Antworten; `no` ist die sichere und steht vorn und vorgewählt. */
+/** Eine Rückfrage mit zwei Antworten; `no` ist die sichere und steht vorn und vorgewählt. Ohne `yes` ist es ein Hinweis mit einem Knopf. */
 export interface ConfirmView {
   title: string;
   text: string;
   no: string;
-  yes: string;
+  yes?: string;
+  /** Ist `yes` ein Schritt, den man bereuen kann (rot gefärbt)? Ohne Angabe ja. */
+  danger?: boolean;
 }
 
 /** Die Namen der Stellen für die Lebensgruppe, wie sie im Menü stehen. */
@@ -167,7 +169,9 @@ export class Menus {
     this.confirmTitle.textContent = view.title;
     this.confirmText.textContent = view.text;
     this.confirmNo.textContent = view.no;
-    this.confirmYes.textContent = view.yes;
+    this.confirmYes.hidden = view.yes === undefined;
+    this.confirmYes.textContent = view.yes ?? '';
+    this.confirmYes.classList.toggle('danger', view.danger !== false);
     this.show('confirm', 0, false, solid);
   }
 
