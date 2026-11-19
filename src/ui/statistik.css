@@ -89,8 +89,8 @@
   text-align: center;
 }
 
-.overlay .stats-note {
-  margin-top: 8px;
+.stats .stats-note {
+  margin: 8px 0 0;
   font-size: 12.5px;
   color: var(--text-dim);
 }

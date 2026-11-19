@@ -24,6 +24,8 @@ export interface ConfirmView {
   text: string;
   no: string;
   yes: string;
+  /** Ist `yes` ein Schritt, den man bereuen kann (rot gefärbt)? Ohne Angabe ja. */
+  danger?: boolean;
 }
 
 /** Die Namen der Stellen für die Lebensgruppe, wie sie im Menü stehen. */
@@ -48,6 +50,8 @@ export class Menus {
   onCommand: (command: MenuCommand) => void = () => {};
   /** Wird aufgerufen, wenn ein Tonregler oder das Häkchen "Ton aus" geändert wird. */
   onSound: (volumes: Volumes) => void = () => {};
+  /** Wird aufgerufen, wenn das Häkchen für die anonyme Statistik geändert wird. */
+  onShare: (share: boolean) => void = () => {};
   onVitalsPosition: (position: VitalsPosition) => void = () => {};
 
   private readonly roots: Readonly<Record<MenuScreen, HTMLElement>> = {
@@ -70,6 +74,7 @@ export class Menus {
   };
   private readonly stats = new StatistikView(element('stats-view'), element('stats'));
   private readonly muteBox = element<HTMLInputElement>('vol-mute');
+  private readonly shareBox = element<HTMLInputElement>('data-share');
   private readonly spots = [...element('position-picker').querySelectorAll<HTMLButtonElement>('.spot')];
   private readonly positionName = element('position-name');
   private readonly continueButton = element('title-continue');
@@ -102,6 +107,8 @@ export class Menus {
       // Der Fokus bliebe sonst am Regler hängen; die Pfeiltasten gehören aber dem Spiel.
       control.addEventListener('change', () => control.blur());
     }
+    this.shareBox.addEventListener('input', () => this.onShare(this.shareBox.checked));
+    this.shareBox.addEventListener('change', () => this.shareBox.blur());
     for (const spot of this.spots) {
       spot.addEventListener('click', () => {
         spot.blur();
@@ -163,6 +170,7 @@ export class Menus {
     this.confirmText.textContent = view.text;
     this.confirmNo.textContent = view.no;
     this.confirmYes.textContent = view.yes;
+    this.confirmYes.classList.toggle('danger', view.danger !== false);
     this.show('confirm', 0, false, solid);
   }
 
@@ -179,6 +187,11 @@ export class Menus {
       this.sliderValues[row].textContent = `${percent} %`;
     }
     this.muteBox.checked = volumes.muted;
+  }
+
+  /** Zeigt das Häkchen für die anonyme Statistik, auch wenn die Rückfrage beim Start es gesetzt hat. */
+  showShare(share: boolean): void {
+    this.shareBox.checked = share;
   }
 
   /** Markiert die gewählte Stelle der Lebensgruppe im Menü. */
@@ -221,6 +234,10 @@ export class Menus {
         this.muteBox.checked = !this.muteBox.checked;
         this.onSound(this.readSound());
         return true;
+      case 'share':
+        this.shareBox.checked = !this.shareBox.checked;
+        this.onShare(this.shareBox.checked);
+        return true;
       case 'position': {
         const count = VITALS_POSITIONS.length;
         const at = VITALS_POSITIONS.indexOf(this.position);
@@ -234,12 +251,12 @@ export class Menus {
     }
   }
 
-  /** Enter: löst den markierten Knopf aus, schaltet "Ton aus" um oder rückt die Stelle der Lebensgruppe weiter. */
+  /** Enter: löst den markierten Knopf aus, schaltet "Ton aus" oder die anonyme Statistik um oder rückt die Stelle der Lebensgruppe weiter. */
   activate(): void {
     const item = this.items()[this.selected];
     if (!item) return;
     if (item.dataset.command) item.click();
-    else if (item.dataset.row === 'mute' || item.dataset.row === 'position') this.adjust(1);
+    else if (item.dataset.row === 'mute' || item.dataset.row === 'share' || item.dataset.row === 'position') this.adjust(1);
   }
 
   private show(screen: MenuScreen, selected: number, restore = false, solid = false): void {
@@ -259,6 +276,8 @@ export class Menus {
     this.selected = index;
     if (this.current) this.lastSelected[this.current] = index;
     for (const [at, item] of this.items().entries()) item.classList.toggle('selected', at === index);
+    // Auf kleinen Bildschirmen reichen die Optionen über den Rand; die Auswahl per Tasten soll dort bleiben, wo man sie sieht.
+    if (this.current === 'options') this.items()[index]?.scrollIntoView({ block: 'nearest' });
   }
 
   private markItem(item: HTMLElement): void {

@@ -1,5 +1,6 @@
 /**
- * Einstellungen des Spielers, die den Neustart überdauern sollen: die Tonregler und die Stelle der Lebensgruppe.
+ * Einstellungen des Spielers, die den Neustart überdauern sollen: die Tonregler, die Stelle der Lebensgruppe und ob die Statistik
+ * anonym an die Sammelstelle gehen darf.
  *
  * Wo sie liegen, versteckt `SettingsStore`: im Browser in `localStorage`, und wo der fehlt oder gesperrt ist
  * (private Fenster, eingebettete Hüllen), nur im Speicher der laufenden Sitzung. Eine Desktop-Fassung kann
@@ -25,9 +26,18 @@ export interface UiSettings {
   vitalsPosition: VitalsPosition;
 }
 
+export interface DataSettings {
+  /**
+   * Darf das Spiel jede Nacht anonym an die Sammelstelle der Statistik melden (`core/sammelstelle.ts`)? `null`: Der Spieler hat noch
+   * nicht entschieden; dann wird nichts gesendet, und beim Start fragt das Spiel danach.
+   */
+  share: boolean | null;
+}
+
 export interface Settings {
   sound: SoundSettings;
   ui: UiSettings;
+  data: DataSettings;
 }
 
 export type SettingsStore = TextStore;
@@ -62,9 +72,10 @@ export function loadSettings(defaults: Settings): Settings {
   } catch {
     // Beschädigter Text: Es gelten die Standardwerte.
   }
-  // Ältere Stände kennen `ui` noch nicht; dann gilt der Standardwert.
+  // Ältere Stände kennen `ui` und `data` noch nicht; dann gilt der Standardwert.
   const sound = isRecord(stored.sound) ? stored.sound : {};
   const ui = isRecord(stored.ui) ? stored.ui : {};
+  const data = isRecord(stored.data) ? stored.data : {};
   const base = defaults.sound;
   return {
     sound: {
@@ -75,6 +86,9 @@ export function loadSettings(defaults: Settings): Settings {
     },
     ui: {
       vitalsPosition: isVitalsPosition(ui.vitalsPosition) ? ui.vitalsPosition : defaults.ui.vitalsPosition,
+    },
+    data: {
+      share: typeof data.share === 'boolean' ? data.share : defaults.data.share,
     },
   };
 }

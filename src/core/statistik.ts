@@ -29,7 +29,10 @@ export interface RunRecord {
   id: string;
   /** Wann die Nacht endete, in Millisekunden seit 1970. */
   at: number;
-  /** Die Fassung des Spiels (aus package.json), damit sich Läufe nach Änderungen am Gleichgewicht trennen lassen. */
+  /**
+   * Die Fassung des Spiels (aus package.json), damit sich Läufe nach Änderungen am Gleichgewicht trennen lassen. Im Dev-Modus mit
+   * der Endung "-dev"; die Sammelstelle zählt solche Nächte nicht mit.
+   */
   version: string;
   classId: string;
   outcome: RunOutcome;

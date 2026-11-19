@@ -710,6 +710,12 @@ body[data-vitals='bottom-left'] #debug {
   accent-color: var(--ember);
 }
 
+.option-group .option-note {
+  margin: 2px 8px 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
 /* Lebensgruppe platzieren: ein kleiner Bildschirm, auf dem man die Stelle anklickt. */
 .option.position {
   flex-direction: column;

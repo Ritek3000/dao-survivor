@@ -5,7 +5,8 @@ import { evaluate } from '../core/auswertung';
 import { Input, type MoveVector } from '../core/input';
 import { createRandom } from '../core/random';
 import { loadSettings, saveSettings, type Settings, type VitalsPosition } from '../core/settings';
-import { loadRuns, newRunId, recordRun, type RunOutcome } from '../core/statistik';
+import { sendRun } from '../core/sammelstelle';
+import { loadRuns, newRunId, recordRun, type RunOutcome, type RunRecord } from '../core/statistik';
 import { formatTime, type EndLoot, type Hud } from '../ui/hud';
 import { LagerView } from '../ui/lagerView';
 import { Menus, type MenuCommand } from '../ui/menus';
@@ -131,7 +132,7 @@ export class Game {
   /** Wurde die Nacht über das Pausenmenü abgebrochen? Dann spielt zum Ende die Musik des Menüs. */
   private aborted = false;
   /** Worauf die offene Rückfrage antwortet: das Abbrechen der Nacht oder das Löschen des Spielstands. */
-  private confirming: 'abort' | 'new' | null = null;
+  private confirming: 'abort' | 'new' | 'share' | null = null;
   private settings: Settings;
   /**
    * Schreibt jede Nacht ins Protokoll der Statistik (`core/statistik.ts`)? Der Messlauf spielt Nächte im Zeitraffer und
@@ -194,6 +195,7 @@ export class Game {
     this.settings = loadSettings({
       sound: { ...CONFIG.audio.defaults, muted: false },
       ui: { vitalsPosition: 'top-left' },
+      data: { share: null },
     });
     audio.setVolumes(this.settings.sound);
     audio.muffleAt = (x, z) => this.zones.finsternisAt(x, z);
@@ -206,6 +208,8 @@ export class Game {
     this.menus.onCommand = (command) => this.onMenuCommand(command);
     this.menus.onSound = (volumes) => audio.setVolumes(volumes);
     this.menus.onVitalsPosition = (position) => this.setVitalsPosition(position);
+    this.menus.onShare = (share) => this.setShare(share);
+    this.menus.showShare(this.settings.data.share === true);
     this.menus.showSound(this.settings.sound);
     this.hud.setMuted(this.settings.sound.muted);
     this.setVitalsPosition(this.settings.ui.vitalsPosition, false);
@@ -235,6 +239,8 @@ export class Game {
     );
     this.hud.setLoading(null);
     this.openTitle();
+    // Wer noch nicht entschieden hat, ob die Nächte anonym gemeldet werden dürfen, wird einmal beim Start gefragt.
+    if (this.settings.data.share === null) this.askShare();
   }
 
   start(): void {
@@ -501,6 +507,32 @@ export class Game {
     if (save) saveSettings(this.settings);
   }
 
+  /** Erlaubt oder verbietet das anonyme Melden der Nächte an die Sammelstelle (`core/sammelstelle.ts`) und merkt es sich. */
+  private setShare(share: boolean): void {
+    this.settings.data.share = share;
+    this.menus.showShare(share);
+    saveSettings(this.settings);
+  }
+
+  /** Die Frage beim ersten Start: Es wird nichts gesendet, bevor der Spieler geantwortet hat. Esc lässt sie offen (beim nächsten Start kommt sie wieder). */
+  private askShare(): void {
+    this.confirming = 'share';
+    this.menus.showConfirm(
+      {
+        title: 'Anonyme Statistik',
+        text:
+          'Darf das Spiel am Ende jeder Nacht anonym melden, welche Klasse du gespielt hast, wie die Nacht endete und was du gewählt hast? ' +
+          'So lässt sich das Gleichgewicht verbessern. Es gibt keinen Namen und keine Kennung deines Geräts. ' +
+          'Beim Übertragen sieht der Dienst (Supabase) wie bei jeder Webanfrage deine IP-Adresse; in der Statistik wird sie nicht gespeichert. ' +
+          'Du kannst es jederzeit in den Optionen ändern.',
+        no: 'Nicht senden',
+        yes: 'Einverstanden',
+        danger: false,
+      },
+      true,
+    );
+  }
+
   /** Bedienung der Menüs im Startbildschirm und in der Pause: Auf und Ab wählen, Links und Rechts ändern, Enter bestätigt, Esc geht zurück. */
   private updateMenu(): void {
     const { input, menus } = this;
@@ -589,12 +621,27 @@ export class Game {
       case 'yes': {
         const confirmed = this.confirming;
         this.confirming = null;
+        if (confirmed === 'share') {
+          this.setShare(true);
+          this.showMenuHome(true);
+          audio.play('bestaetigen');
+          break;
+        }
         this.menus.hide();
         if (confirmed === 'abort') this.end('aborted');
         else if (confirmed === 'new') this.startNewGame();
         break;
       }
       case 'no':
+        if (this.confirming === 'share') {
+          this.confirming = null;
+          this.setShare(false);
+          this.showMenuHome(true);
+          audio.play('auswahl');
+          break;
+        }
+        this.menuBack();
+        break;
       case 'back':
         this.menuBack();
         break;
@@ -893,7 +940,7 @@ export class Game {
       const rank = this.arsenal.rankOf(id);
       if (rank > 0) skills[id] = rank;
     }
-    recordRun({
+    const run: RunRecord = {
       id: newRunId(),
       at: Date.now(),
       version: __GAME_VERSION__,
@@ -904,7 +951,10 @@ export class Game {
       upgrades,
       segen: this.progression.blessed.map((segen) => segen.id),
       skills,
-    });
+    };
+    recordRun(run);
+    // Nur mit Zustimmung (`setShare`); der Messlauf kommt gar nicht bis hierher (`recordStats`).
+    if (this.settings.data.share === true) sendRun(run);
   }
 
   /**
