@@ -33,6 +33,11 @@ export interface DataSettings {
    * zählt wie nicht gespeichert, also ja; ein gespeichertes `false` bleibt.
    */
   share: boolean;
+  /**
+   * Hat der Spieler den Hinweis zur anonymen Statistik schon gesehen? Das Spiel blendet ihn einmal beim Start ein (`Game.showDataNotice`),
+   * auch bei Spielern, die in Fassung 0.17.0 noch gefragt wurden und deren Einstellungen diesen Merker nicht kennen.
+   */
+  noticeSeen: boolean;
 }
 
 export interface Settings {
@@ -90,6 +95,7 @@ export function loadSettings(defaults: Settings): Settings {
     },
     data: {
       share: typeof data.share === 'boolean' ? data.share : defaults.data.share,
+      noticeSeen: typeof data.noticeSeen === 'boolean' ? data.noticeSeen : defaults.data.noticeSeen,
     },
   };
 }
