@@ -94,11 +94,21 @@
         <button type="button" class="menu-item" data-item data-command="new">Neues Spiel</button>
         <button type="button" class="menu-item" data-item data-command="continue" id="title-continue">Spiel fortsetzen</button>
         <button type="button" class="menu-item" data-item data-command="options">Optionen</button>
+        <button type="button" class="menu-item" data-item data-command="stats">Statistik</button>
         <button type="button" class="menu-item" data-item data-command="help">Anleitung</button>
       </div>
       <p class="keys">Auf und Ab: wählen · Enter: bestätigen</p>
       <!-- Die Zahl kommt aus package.json (siehe vite.config.ts). -->
       <p class="version">Version %APP_VERSION%</p>
+    </div>
+
+    <div id="stats" class="overlay" hidden>
+      <h1>Statistik</h1>
+      <p class="stats-sub">Deine Nächte, gespeichert in diesem Browser</p>
+      <!-- Den Inhalt baut src/ui/statistikView.ts. -->
+      <div id="stats-view" class="stats"></div>
+      <button type="button" class="button" data-item data-command="back">Zurück (Esc)</button>
+      <p class="keys">Links und Rechts: Reiter wählen · Auf und Ab: blättern · Esc: zurück</p>
     </div>
 
     <div id="help" class="overlay" hidden>
@@ -111,6 +121,11 @@
             Eine Nacht dauert 15 Minuten. Überlebe sie von der Abendglocke bis zum Sonnenaufgang, wenn Sor aufgeht.
             In den letzten vier Minuten erscheint der Verschlinger. Fällt er, springt seine Kiste auf, und eine Höhere Macht
             antwortet mit einem Segen; gewonnen hast du erst, wenn die Sonne aufgeht.
+          </p>
+          <p>
+            Die <b>Statistik</b> im Startbildschirm zählt deine Nächte: wie oft du welche Klasse gespielt hast, wie sie endeten,
+            wie lange du überlebt hast und welche Fertigkeiten, Stärkungen und Segen du gewählt hast. Abgebrochene Nächte zählen
+            ab einer Minute. Sie liegt in diesem Browser und bleibt auch bei „Neues Spiel“ erhalten.
           </p>
         </section>
         <section>

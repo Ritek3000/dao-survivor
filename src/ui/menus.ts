@@ -8,13 +8,15 @@
  */
 
 import type { Volumes } from '../audio';
+import type { Auswertung } from '../core/auswertung';
 import { VITALS_POSITIONS, type VitalsPosition } from '../core/settings';
 import { element } from './dom';
+import { StatistikView } from './statistikView';
 
 /** Was ein Knopf in einem Menü auslöst. */
-export type MenuCommand = 'new' | 'continue' | 'options' | 'help' | 'resume' | 'abort' | 'back' | 'yes' | 'no';
+export type MenuCommand = 'new' | 'continue' | 'options' | 'stats' | 'help' | 'resume' | 'abort' | 'back' | 'yes' | 'no';
 
-export type MenuScreen = 'title' | 'pause' | 'options' | 'help' | 'confirm';
+export type MenuScreen = 'title' | 'pause' | 'options' | 'stats' | 'help' | 'confirm';
 
 /** Eine Rückfrage mit zwei Antworten; `no` ist die sichere und steht vorn und vorgewählt. */
 export interface ConfirmView {
@@ -52,6 +54,7 @@ export class Menus {
     title: element('title'),
     pause: element('pause'),
     options: element('options'),
+    stats: element('stats'),
     help: element('help'),
     confirm: element('confirm'),
   };
@@ -65,6 +68,7 @@ export class Menus {
     effects: element('vol-effects-value'),
     music: element('vol-music-value'),
   };
+  private readonly stats = new StatistikView(element('stats-view'), element('stats'));
   private readonly muteBox = element<HTMLInputElement>('vol-mute');
   private readonly spots = [...element('position-picker').querySelectorAll<HTMLButtonElement>('.spot')];
   private readonly positionName = element('position-name');
@@ -130,13 +134,20 @@ export class Menus {
     this.roots.help.scrollTop = 0;
   }
 
+  /** Die Statistik, ausgerechnet aus dem Protokoll der Nächte (siehe `core/statistik.ts`); undurchsichtig, denn dahinter liegt kein Spiel. */
+  showStats(data: Auswertung): void {
+    this.stats.show(data);
+    this.show('stats', 0, false, true);
+    this.roots.stats.scrollTop = 0;
+  }
+
   /**
-   * Auf und Ab blättern die Anleitung: Sie ist länger als mancher Bildschirm, und die Pfeiltasten gehören dem Spiel, scrollen also
-   * nicht von allein. `direction` ist -1 (hoch) oder 1 (runter); gibt zurück, ob es etwas zu blättern gab.
+   * Auf und Ab blättern die Anleitung und die Statistik: Sie sind länger als mancher Bildschirm, und die Pfeiltasten gehören dem Spiel,
+   * scrollen also nicht von allein. `direction` ist -1 (hoch) oder 1 (runter); gibt zurück, ob es etwas zu blättern gab.
    */
-  scrollHelp(direction: -1 | 1): boolean {
-    if (this.current !== 'help') return false;
-    const page = this.roots.help;
+  scrollPage(direction: -1 | 1): boolean {
+    if (this.current !== 'help' && this.current !== 'stats') return false;
+    const page = this.roots[this.current];
     if (page.scrollHeight <= page.clientHeight) return false;
     page.scrollBy({ top: direction * page.clientHeight * HELP_SCROLL_SHARE, behavior: 'smooth' });
     return true;
@@ -189,9 +200,10 @@ export class Menus {
     return true;
   }
 
-  /** Links und Rechts: verstellt Regler und Stelle der Lebensgruppe, wählt in der Rückfrage; gibt zurück, ob sich etwas getan hat. */
+  /** Links und Rechts: verstellt Regler und Stelle der Lebensgruppe, wählt in der Rückfrage und den Reiter der Statistik; gibt zurück, ob sich etwas getan hat. */
   adjust(delta: number): boolean {
     if (this.current === 'confirm') return this.step(delta);
+    if (this.current === 'stats') return this.stats.stepTab(delta);
     if (this.current !== 'options') return false;
     const row = this.items()[this.selected]?.dataset.row;
     switch (row) {
