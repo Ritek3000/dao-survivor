@@ -123,7 +123,7 @@ body[data-vitals='bottom-left'] #debug {
 }
 
 #level .label {
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -208,11 +208,11 @@ body[data-vitals='bottom-left'] #debug {
 
 /* Lange Zahlen schrumpfen, damit sie im Beutel bleiben. */
 #gold-text[data-long='1'] {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 #gold-text[data-long='2'] {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .bar {
@@ -252,7 +252,7 @@ body[data-vitals='bottom-left'] #debug {
 #hp-text {
   position: absolute;
   inset: 0;
-  font: 11px/18px ui-monospace, Consolas, monospace;
+  font: 13px/18px ui-monospace, Consolas, monospace;
   text-align: center;
   color: #efe9dc;
   text-shadow: 0 0 3px #000;
@@ -282,7 +282,7 @@ body[data-vitals='bottom-left'] #debug {
 }
 
 #clock-label {
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -295,7 +295,7 @@ body[data-vitals='bottom-left'] #debug {
 }
 
 #zone {
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -311,7 +311,7 @@ body[data-vitals='bottom-left'] #debug {
 
 #trait {
   margin-top: 3px;
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: 0.1em;
   color: var(--text);
 }
@@ -378,8 +378,13 @@ body[data-vitals='bottom-left'] #debug {
   }
 }
 
-/* Zeiger zur nächsten Feuerschale, kreist um die Bildmitte. */
+/*
+ * Zeiger zur nächsten Feuerschale, kreist um die Bildmitte. Die Größe wächst mit dem Fenster (Mindestgröße, damit er auf
+ * kleinen Fenstern nicht untergeht; Obergrenze, damit er auf großen nicht zum Klotz wird). Er ist deckend, hat einen dunklen
+ * Rand und einen Schein in Glutfarbe: Auf dem orangen Boden im Lichtkreis und auf dem dunklen in der Nacht bleibt er lesbar.
+ */
 #compass {
+  --arrow: clamp(28px, 3.2vmin, 44px);
   left: 50%;
   top: 50%;
   width: 0;
@@ -388,16 +393,21 @@ body[data-vitals='bottom-left'] #debug {
 
 #compass-arrow {
   position: absolute;
-  left: -8px;
+  left: calc(var(--arrow) / -2);
   top: calc(-1 * min(36vh, 36vw));
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-bottom: 15px solid #b4532a;
-  opacity: 0.75;
+  border-left: calc(var(--arrow) / 2) solid transparent;
+  border-right: calc(var(--arrow) / 2) solid transparent;
+  border-bottom: calc(var(--arrow) * 0.93) solid var(--ember);
+  /* Vier versetzte Schatten ergeben den dunklen Rand (ein Dreieck aus Rahmenlinien hat keinen eigenen), der letzte den Schein. */
+  filter: drop-shadow(2px 0 0 #000) drop-shadow(-2px 0 0 #000) drop-shadow(0 2px 0 #000) drop-shadow(0 -2px 0 #000)
+    drop-shadow(0 0 6px rgba(255, 180, 94, 0.6));
 }
 
+/* Brennt die Schale schon, ist der Zeiger heller und glüht stärker; sonst zeigt er auf eine, die noch zu entzünden ist. */
 #compass.burning #compass-arrow {
-  border-bottom-color: var(--ember);
+  border-bottom-color: #ffe2b0;
+  filter: drop-shadow(2px 0 0 #000) drop-shadow(-2px 0 0 #000) drop-shadow(0 2px 0 #000) drop-shadow(0 -2px 0 #000)
+    drop-shadow(0 0 10px rgba(255, 200, 120, 0.85));
 }
 
 #ignite {
@@ -405,7 +415,7 @@ body[data-vitals='bottom-left'] #debug {
   bottom: 64px;
   width: 180px;
   transform: translateX(-50%);
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   text-align: center;
   text-shadow: 0 0 4px #000;
@@ -425,7 +435,7 @@ body[data-vitals='bottom-left'] #debug {
   left: 50%;
   bottom: 18px;
   transform: translateX(-50%);
-  font-size: 14px;
+  font-size: 15px;
   letter-spacing: 0.04em;
   opacity: 0.45;
   white-space: nowrap;
@@ -435,7 +445,7 @@ body[data-vitals='bottom-left'] #debug {
 #sound-off {
   right: 16px;
   bottom: 18px;
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   color: var(--text-dim);
 }
@@ -443,6 +453,7 @@ body[data-vitals='bottom-left'] #debug {
 #debug {
   bottom: 10px;
   left: 12px;
+  /* Entwickleranzeige (FPS, Gegnerzahl): bleibt klein und zählt nicht zur angehobenen Mindestgröße. */
   font: 12px/1.4 ui-monospace, Consolas, monospace;
   opacity: 0.6;
 }
@@ -503,7 +514,7 @@ body[data-vitals='bottom-left'] #debug {
 
 .overlay .keys {
   margin-top: 14px;
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.08em;
 }
 
@@ -554,12 +565,12 @@ body[data-vitals='bottom-left'] #debug {
 }
 
 .card .key {
-  font: 12px ui-monospace, Consolas, monospace;
+  font: 14px ui-monospace, Consolas, monospace;
   color: var(--text-dim);
 }
 
 .card .note {
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.35;
   color: var(--text-dim);
 }
@@ -574,7 +585,7 @@ body[data-vitals='bottom-left'] #debug {
 
 .card .text {
   min-height: 2.6em;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.3;
   color: var(--text-dim);
 }
@@ -662,7 +673,7 @@ body[data-vitals='bottom-left'] #debug {
 
 .option-group h2 {
   margin: 0 0 2px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: normal;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -675,7 +686,7 @@ body[data-vitals='bottom-left'] #debug {
   gap: 12px;
   padding: 5px 8px;
   border: 1px solid transparent;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .option .option-label {
@@ -692,7 +703,7 @@ body[data-vitals='bottom-left'] #debug {
 .option output {
   flex: none;
   width: 44px;
-  font: 12px ui-monospace, Consolas, monospace;
+  font: 14px ui-monospace, Consolas, monospace;
   text-align: right;
   color: var(--text-dim);
 }
@@ -712,7 +723,7 @@ body[data-vitals='bottom-left'] #debug {
 
 .option-group .option-note {
   margin: 2px 8px 0;
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.4;
 }
 
@@ -742,7 +753,7 @@ body[data-vitals='bottom-left'] #debug {
   top: 8px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -842,7 +853,7 @@ body[data-vitals='bottom-left'] #debug {
   border: 1px solid var(--line);
   color: var(--text);
   font: inherit;
-  font-size: 15px;
+  font-size: 16px;
   letter-spacing: 0.08em;
   cursor: pointer;
 }
@@ -900,7 +911,7 @@ body[data-vitals='bottom-left'] #debug {
   position: absolute;
   right: 16px;
   bottom: 12px;
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.16em;
   opacity: 0.75;
 }
@@ -937,7 +948,7 @@ body[data-vitals='bottom-left'] #debug {
 
 .help-grid h2 {
   margin: 0 0 6px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: normal;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -946,7 +957,7 @@ body[data-vitals='bottom-left'] #debug {
 
 .help-grid p,
 .help-grid li {
-  font-size: 14.5px;
+  font-size: 15px;
   line-height: 1.45;
 }
 
@@ -977,7 +988,7 @@ kbd {
   background: rgba(201, 193, 177, 0.08);
   border: 1px solid var(--line);
   border-radius: 3px;
-  font: 12px/1.5 ui-monospace, Consolas, monospace;
+  font: 14px/1.5 ui-monospace, Consolas, monospace;
   text-align: center;
   color: var(--text);
 }
@@ -994,7 +1005,7 @@ kbd {
 #choice-note {
   max-width: min(560px, 88vw);
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.4;
   color: var(--ember);
 }
@@ -1021,7 +1032,7 @@ kbd {
 }
 
 #end-loot .title {
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -1047,7 +1058,7 @@ kbd {
 
 #end-loot .detail,
 #end-loot .note {
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: 0.04em;
   color: var(--text-dim);
 }
@@ -1067,7 +1078,7 @@ kbd {
   align-items: center;
   gap: 5px;
   padding: 1px 8px 1px 6px;
-  font-size: 13px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
   color: var(--rarity, #b9b3a5);
   background: rgba(10, 8, 6, 0.88);
