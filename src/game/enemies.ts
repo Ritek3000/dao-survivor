@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG, type EnemyStrike, type EnemyType } from '../config';
-import { createRandom, type Random } from '../core/random';
+import { createRandom, deriveSeed, type Random } from '../core/random';
 import { SpatialGrid } from '../core/spatialGrid';
 import { swallowedByFinsternis } from './darkness';
 import type { CombatEvents, Source } from './events';
@@ -119,7 +119,6 @@ export class Enemies {
   private readonly grid = new SpatialGrid<Enemy>(2);
   private random: Random = createRandom(0);
   private spawnBudget = 0;
-  private night = 0;
   /** Der Gegner, für den gerade Nachbarn abgefragt werden. */
   private current: Enemy | null = null;
   /** Die Köder, die gerade locken: feste Plätze, die ersten `lureCount` gelten. */
@@ -135,7 +134,7 @@ export class Enemies {
       this.adopt(type, new THREE.InstancedMesh(geometry, material, CONFIG.enemies.max), null, PLACEHOLDER_CLIP, null, null);
     }
     for (let i = 0; i < LURE_CAPACITY; i++) this.lures.push({ x: 0, z: 0, radius: 0 });
-    this.reset();
+    this.reset(0);
   }
 
   /** Ersetzt den Platzhalter einer Gegnerart durch ihr Modell. */
@@ -185,7 +184,8 @@ export class Enemies {
     this.group.add(mesh);
   }
 
-  reset(): void {
+  /** Beginnt eine Nacht; aus dem Seed des Laufs ziehen Art, Ort und Zeitpunkt der Gegner ihren Zufall. */
+  reset(seed: number): void {
     this.pool.push(...this.alive, ...this.fading);
     this.alive.length = 0;
     this.fading.length = 0;
@@ -193,7 +193,7 @@ export class Enemies {
     this.kills = 0;
     this.spawnBudget = 0;
     this.lureCount = 0;
-    this.random = createRandom(CONFIG.world.seed + 500 + this.night++);
+    this.random = createRandom(deriveSeed(seed, 500));
     for (const horde of this.hordes.values()) {
       horde.count = 0;
       horde.lit = 0;

@@ -36,6 +36,7 @@ import type { Zone } from '../game/zones';
 /** Die Teile des Spiels, in die der Messlauf hineingreift; im Spiel selbst sind sie nicht öffentlich. */
 interface Internals {
   recordStats: boolean;
+  nextSeed: number | null;
   phase: string;
   time: number;
   offers: { name: string; note: string }[];
@@ -69,7 +70,6 @@ interface Internals {
   boerse: Boerse;
   ausruestung: Ausruestung;
   beute: {
-    fixedSeed: number | null;
     settle(): { gold: number; items: { item: { rarity: Rarity } }[] };
   };
   input: { getMove(out: MoveVector): MoveVector };
@@ -445,8 +445,8 @@ export function installMesslauf(game: Game): void {
       const ausruestung = (game as unknown as Internals).ausruestung;
       ausruestung.persist = false;
       const itemRandom = createRandom((options.seed ?? 12345) + 777);
-      // Die Beute würfelt sonst mit der Uhrzeit; für die Messung bekommt sie einen festen, in jeder Nacht weitergezählten Anfang.
-      (game as unknown as Internals).beute.fixedSeed = (options.seed ?? 12345) + 4242;
+      // Jeder Lauf würfelt sonst mit der Uhrzeit; für die Messung bekommt jede Nacht einen festen, weitergezählten Seed.
+      let runSeed = (options.seed ?? 12345) + 4242;
       const focus = options.evolution ?? options.fokus;
       const owner = focus ? CLASSES.find((candidate) => candidate.weapons.includes(focus)) : undefined;
       if (options.evolution && !weaponById(options.evolution).evolution) throw new Error(`${options.evolution} hat keine Evolution.`);
@@ -464,6 +464,7 @@ export function installMesslauf(game: Game): void {
         for (const classIndex of classes) {
           for (let night = 1; night <= nights; night++) {
             api.status = `${CLASSES[classIndex]?.name ?? '?'}, Nacht ${night} von ${nights}`;
+            (game as unknown as Internals).nextSeed = runSeed++;
             api.results.push(await playNight(game, classIndex, random, options.maxSeconds ?? Infinity, owner === CLASSES[classIndex] ? focus : undefined));
           }
         }
@@ -479,7 +480,7 @@ export function installMesslauf(game: Game): void {
         boerse.reload();
         ausruestung.persist = true;
         ausruestung.reload();
-        (game as unknown as Internals).beute.fixedSeed = null;
+        (game as unknown as Internals).nextSeed = null;
         (game as unknown as Internals).hud.hideEnd();
         (game as unknown as Internals).openSelect();
       }

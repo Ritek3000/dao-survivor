@@ -522,6 +522,11 @@ body[data-vitals='bottom-left'] #debug {
   color: var(--text);
 }
 
+/* Der Seed gehört unter die Tastenzeile, nicht neben sie. */
+#end-seed {
+  margin-top: 4px;
+}
+
 #choice-cards {
   display: flex;
   flex-wrap: wrap;

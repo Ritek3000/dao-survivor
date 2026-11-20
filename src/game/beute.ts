@@ -2,8 +2,8 @@
  * Die Beute: welche Gegenstände aus Gegnern und aus der Kiste des Verschlingers fallen.
  *
  * Gewürfelt wird mit einem eigenen Zufallsstrom, nicht mit dem der Welt: Der feste Seed der Welt würde nach jedem Neustart
- * dieselben Gegenstände würfeln. Der Strom beginnt mit der Uhrzeit des Nachtbeginns; der Messlauf legt dagegen einen festen
- * Anfang fest (`fixedSeed`), damit seine Nächte vergleichbar bleiben.
+ * dieselben Gegenstände würfeln. Der Strom wächst aus dem Seed des Laufs (siehe `runSeed.ts`); der Messlauf gibt feste Seeds
+ * vor, damit seine Nächte vergleichbar bleiben.
  *
  * Während der Nacht sammelt die Figur die Gegenstände nur im Beutel (`bag`). Erst am Ende der Nacht wandern sie ins Inventar
  * der gespielten Klasse (`settle`); was nicht mehr hineinpasst, kommt auf den ersten freien Platz der Truhe, und erst was auch
@@ -11,7 +11,7 @@
  */
 
 import { CONFIG } from '../config';
-import { createRandom, type Random } from '../core/random';
+import { createRandom, deriveSeed, type Random } from '../core/random';
 import type { Ausruestung } from './ausruestung';
 import type { ClassId } from './classes';
 import { evolutionChoices, itemValue, ITEM_SLOTS, LEGENDARY_SLOTS, rollItem, sellPrice, type Item, type Rarity, RARITIES } from './items';
@@ -71,8 +71,6 @@ export function rollChestRarities(random: Random, pity: number): { rarities: Rar
 export class Beute {
   /** Die Gegenstände dieser Nacht, die die Figur schon aufgesammelt hat. */
   readonly bag: Item[] = [];
-  /** Nur für den Messlauf: fester Anfang des Zufallsstroms; jede Nacht zählt ihn um eins weiter. */
-  fixedSeed: number | null = null;
   private random: Random = createRandom(1);
   private classId: ClassId = 'kaempfer';
   /** Der Rang, den ein Angriff in dieser Nacht hat (0: nicht gewählt); das Spiel setzt es, damit die Beute den Verlauf kennt. */
@@ -80,11 +78,11 @@ export class Beute {
 
   constructor(private readonly ausruestung: Ausruestung) {}
 
-  /** Beginnt eine Nacht der Klasse: leerer Beutel, neuer Zufallsstrom. */
-  start(classId: ClassId): void {
+  /** Beginnt eine Nacht der Klasse: leerer Beutel, neuer Zufallsstrom aus dem Seed des Laufs. */
+  start(classId: ClassId, seed: number): void {
     this.classId = classId;
     this.bag.length = 0;
-    this.random = createRandom(this.fixedSeed !== null ? this.fixedSeed++ : Date.now());
+    this.random = createRandom(deriveSeed(seed, 300));
   }
 
   /** Fällt aus einem Gegner mit dieser Chance (0 bis 1) etwas? Jede Frage zieht eine Zahl aus dem Strom. */
