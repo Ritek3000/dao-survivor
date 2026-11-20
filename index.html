@@ -281,6 +281,17 @@
         </div>
       </section>
       <section class="option-group">
+        <h2>Spielstand</h2>
+        <button type="button" id="save-export" class="button" data-item data-command="save-export">Spielstand als Datei sichern</button>
+        <button type="button" id="save-import" class="button" data-item data-command="save-import">Spielstand aus Datei laden</button>
+        <p id="save-import-hint" class="option-note" hidden>Einen Spielstand laden kannst du nur im Hauptmenü, nicht mitten in der Nacht.</p>
+        <p class="option-note">
+          Gold, Gegenstände, Truhe und Händler liegen im Speicher deines Browsers und gehen verloren, wenn du dessen Daten löschst.
+          Die Datei ist deine Sicherung: Du kannst damit auch in einen anderen Browser umziehen. Beim Laden ersetzt sie den jetzigen
+          Stand; die Optionen und die Statistik bleiben.
+        </p>
+      </section>
+      <section class="option-group">
         <h2>Daten</h2>
         <label class="option mute" data-item data-row="share">
           <input id="data-share" type="checkbox" />

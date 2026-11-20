@@ -11,6 +11,10 @@
  *
  * Bevor ein älterer Stand gehoben wird, legt `loadSavegame` seinen Text unverändert in einer Sicherung ab; so lässt sich nach
  * einem Umbau, der Daten verwirft, der alte Stand zurückholen.
+ *
+ * Zum Wegsichern gibt es die Sicherungsdatei: `writeSavegameFile` macht aus dem Stand den Text einer Datei, `readSavegameFile`
+ * liest ihn wieder ein (auch von einer älteren Fassung, dann wird er gehoben). Die Datei zu speichern und zu wählen ist Sache von
+ * `dateien.ts`; dieser Teil kennt nur den Text.
  */
 
 import { browserTextStore, type TextStore } from './storage';
@@ -130,7 +134,12 @@ export function parseSavegame(text: string | null): Savegame {
     // Beschädigter Text: Es beginnt ein leerer Stand. Überschrieben wird erst beim nächsten Speichern.
     return save;
   }
-  if (!isRecord(parsed)) return save;
+  return isRecord(parsed) ? savegameFromRecord(parsed) : save;
+}
+
+/** Macht aus einem gelesenen JSON-Objekt einen Spielstand und hebt ihn dabei auf die Fassung dieses Codes. */
+function savegameFromRecord(parsed: Record<string, unknown>): Savegame {
+  const save = emptySavegame();
   // Ältere Fassungen werden Schritt für Schritt auf die nächste gehoben.
   const version = typeof parsed.version === 'number' && Number.isFinite(parsed.version) ? parsed.version : 1;
   let raw = parsed;
@@ -298,4 +307,75 @@ export function loadSavegame(): Savegame {
 
 export function writeSavegame(save: Savegame): void {
   store.write(JSON.stringify(save));
+}
+
+/** Was ein Stand dem Spieler wert ist, in zwei Zahlen: das Gold und die Gegenstände (angelegt, im Inventar und in der Truhe). */
+export interface SavegameSummary {
+  gold: number;
+  items: number;
+}
+
+export function summarizeSavegame(save: Savegame): SavegameSummary {
+  let items = 0;
+  for (const perClass of Object.values(save.items.classes)) {
+    items += perClass.inventory.filter(isRecord).length + Object.values(perClass.equipment).filter(isRecord).length;
+  }
+  for (const tab of save.items.chest.tabs) items += tab.slots.filter(isRecord).length;
+  return { gold: save.gold, items };
+}
+
+/** So große Dateien liest das Spiel höchstens als Spielstand ein; ein echter ist weit kleiner (auch eingerückt nur einige Hundert KB). */
+export const MAX_SAVEGAME_FILE_BYTES = 8 * 1024 * 1024;
+
+/** Die Kennung im Feld `datei` der Sicherungsdatei; eine fremde JSON-Datei soll sich nicht als Spielstand einlesen lassen. */
+const FILE_KIND = 'dao-survivor-spielstand';
+
+/**
+ * Der Text der Sicherungsdatei: der Spielstand, wie er im Speicher liegt, in einem Umschlag mit Kennung, Fassung des Spiels und
+ * Zeitpunkt. Der Umschlag hat keine eigene Versionsnummer; die Fassung des Formats steht im Spielstand selbst (`version`).
+ * Eingerückt, damit man in die Datei sehen kann.
+ */
+export function writeSavegameFile(save: Savegame, gameVersion: string, now: Date = new Date()): string {
+  return JSON.stringify(
+    { datei: FILE_KIND, spiel: 'DAO-Survivor', spielversion: gameVersion, gesichert: now.toISOString(), spielstand: save },
+    null,
+    2,
+  );
+}
+
+/** Was `readSavegameFile` aus einer Datei liest. */
+export interface SavegameFile {
+  /** Der Stand, schon auf die Fassung dieses Codes gehoben. */
+  save: Savegame;
+  /** Wann die Datei gesichert wurde (Millisekunden seit 1970); `null`, wenn sie es nicht sagt. */
+  savedAt: number | null;
+  /** Stammt der Stand aus einer neueren Fassung des Spiels? Was dieser Code nicht kennt, bleibt dann stehen, wird aber nicht angezeigt. */
+  newer: boolean;
+}
+
+/** Sieht ein Objekt wie ein Spielstand aus? `parseSavegame` nimmt zur Not auch Unsinn, eine gewählte Datei soll aber nie still einen leeren Stand ergeben. */
+function looksLikeSavegame(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value)) return false;
+  const { version, gold, items } = value;
+  return typeof version === 'number' && Number.isInteger(version) && version >= 1 && (typeof gold === 'number' || isRecord(items));
+}
+
+/**
+ * Liest den Text einer Sicherungsdatei. Auch ein nackter Spielstand ohne Umschlag (etwa aus `localStorage` kopiert) wird genommen.
+ * Gibt `null` zurück, wenn der Text kein Spielstand ist; ein beschädigter Stand soll nie einen vorhandenen ersetzen.
+ */
+export function readSavegameFile(text: string): SavegameFile | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed)) return null;
+  const wrapped = parsed.datei === FILE_KIND;
+  const inner = wrapped ? parsed.spielstand : parsed;
+  if (!looksLikeSavegame(inner)) return null;
+  const save = savegameFromRecord(inner);
+  const stamp = wrapped && typeof parsed.gesichert === 'string' ? Date.parse(parsed.gesichert) : Number.NaN;
+  return { save, savedAt: Number.isFinite(stamp) ? stamp : null, newer: save.version > SAVEGAME_VERSION };
 }

@@ -2,10 +2,21 @@ import * as THREE from 'three';
 import { audio, type Duck, type MusicId } from '../audio';
 import { CONFIG } from '../config';
 import { evaluate } from '../core/auswertung';
+import { pickTextFile, saveTextFile } from '../core/dateien';
 import { Input, type MoveVector } from '../core/input';
 import { createRandom } from '../core/random';
 import { loadSettings, saveSettings, type Settings, type VitalsPosition } from '../core/settings';
 import { sendRun } from '../core/sammelstelle';
+import {
+  loadSavegame,
+  MAX_SAVEGAME_FILE_BYTES,
+  readSavegameFile,
+  summarizeSavegame,
+  writeSavegame,
+  writeSavegameFile,
+  type Savegame,
+  type SavegameSummary,
+} from '../core/savegame';
 import { loadRuns, newRunId, recordRun, type RunOutcome, type RunRecord } from '../core/statistik';
 import { formatTime, type EndLoot, type Hud } from '../ui/hud';
 import { LagerView } from '../ui/lagerView';
@@ -131,8 +142,13 @@ export class Game {
   private won = false;
   /** Wurde die Nacht über das Pausenmenü abgebrochen? Dann spielt zum Ende die Musik des Menüs. */
   private aborted = false;
-  /** Worauf die offene Rückfrage antwortet: das Abbrechen der Nacht oder das Löschen des Spielstands. */
-  private confirming: 'abort' | 'new' | 'notice' | null = null;
+  /**
+   * Worauf die offene Rückfrage antwortet: das Abbrechen der Nacht, das Löschen des Spielstands, das Ersetzen durch eine Datei (`import`,
+   * der Stand daraus wartet in `pendingImport`) oder ein Hinweis. `info` und `import` führen mit Esc zurück in die Optionen, von denen sie
+   * ausgingen; `imported` (der Stand ist geladen) und alle anderen zur Hauptseite des Menüs.
+   */
+  private confirming: 'abort' | 'new' | 'notice' | 'import' | 'info' | 'imported' | null = null;
+  private pendingImport: Savegame | null = null;
   private settings: Settings;
   /**
    * Schreibt jede Nacht ins Protokoll der Statistik (`core/statistik.ts`)? Der Messlauf spielt Nächte im Zeitraffer und
@@ -583,7 +599,11 @@ export class Game {
         break;
       default:
         if (this.confirming === 'notice') this.closeDataNotice();
-        else {
+        else if (this.confirming === 'import' || this.confirming === 'info') {
+          this.confirming = null;
+          this.pendingImport = null;
+          this.menus.showOptions(this.phase === 'title');
+        } else {
           this.confirming = null;
           this.showMenuHome(true);
         }
@@ -614,6 +634,12 @@ export class Game {
       case 'help':
         this.menus.showHelp();
         audio.play('auswahl');
+        break;
+      case 'save-export':
+        this.exportSavegame();
+        break;
+      case 'save-import':
+        void this.chooseSavegameFile();
         break;
       case 'new':
         if (this.boerse.hasGold() || this.ausruestung.hasAny()) this.confirmNewGame();
@@ -646,6 +672,10 @@ export class Game {
           audio.play('bestaetigen');
           break;
         }
+        if (this.confirming === 'import') {
+          this.applyImport();
+          break;
+        }
         const confirmed = this.confirming;
         this.confirming = null;
         this.menus.hide();
@@ -658,6 +688,105 @@ export class Game {
         this.menuBack();
         break;
     }
+  }
+
+  /** Ein Hinweis mit einem Knopf; Esc und der Knopf führen zurück in die Optionen (`confirming: 'info'`). */
+  private showInfo(title: string, text: string): void {
+    this.confirming = 'info';
+    this.menus.showConfirm({ title, text, no: 'Weiter' }, this.phase === 'title');
+    audio.play('auswahl');
+  }
+
+  /** Was ein Stand enthält, für die Rückfragen: "120 Gold und 5 Gegenstände". */
+  private describeSavegame({ gold, items }: SavegameSummary): string {
+    return `${gold} Gold und ${items} ${items === 1 ? 'Gegenstand' : 'Gegenstände'}`;
+  }
+
+  /**
+   * Legt den Spielstand als Datei ab (Optionen, "Spielstand als Datei sichern"). Gesichert wird, was im Speicher liegt; jede Änderung von
+   * Börse und Ausrüstung ist dort schon angekommen. Ein leerer Stand wird nicht gesichert: Die Datei könnte später einen echten ersetzen.
+   */
+  private exportSavegame(): void {
+    const save = loadSavegame();
+    const summary = summarizeSavegame(save);
+    if (summary.gold === 0 && summary.items === 0) {
+      this.showInfo('Noch nichts zu sichern', 'Dein Spielstand ist noch leer: Du hast weder Gold noch Gegenstände. Spiele zuerst eine Nacht.');
+      return;
+    }
+    const now = new Date();
+    const pad = (value: number): string => String(value).padStart(2, '0');
+    const day = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const name = `dao-survivor-spielstand-${day}_${pad(now.getHours())}-${pad(now.getMinutes())}.json`;
+    saveTextFile(name, writeSavegameFile(save, __GAME_VERSION__, now));
+    this.showInfo(
+      'Spielstand gesichert',
+      `${this.describeSavegame(summary)} stehen in der Datei „${name}“. Dein Browser legt sie in seinen Download-Ordner oder fragt dich, wohin. ` +
+        'Hebe sie gut auf; über „Spielstand aus Datei laden“ holst du den Stand zurück.',
+    );
+  }
+
+  /**
+   * Lässt den Spieler eine Sicherungsdatei wählen (nur im Hauptmenü, siehe `Menus.showOptions`), prüft sie und fragt, ob sie den jetzigen
+   * Stand ersetzen soll. Geschrieben wird erst nach der Antwort (`applyImport`).
+   */
+  private async chooseSavegameFile(): Promise<void> {
+    if (this.phase !== 'title') return;
+    audio.play('auswahl');
+    const picked = await pickTextFile(MAX_SAVEGAME_FILE_BYTES);
+    // Wer abbricht, bleibt in den Optionen. Hat sich das Menü inzwischen geändert, gilt die Antwort nicht mehr.
+    if (picked === null || this.phase !== 'title' || this.menus.screen !== 'options') return;
+    if ('error' in picked) {
+      this.showInfo('Datei nicht geladen', picked.error);
+      return;
+    }
+    const file = readSavegameFile(picked.text);
+    if (!file) {
+      this.showInfo('Kein Spielstand', 'Diese Datei ist kein Spielstand von DAO-Survivor. Gewählt werden muss eine Datei, die das Spiel mit „Spielstand als Datei sichern“ angelegt hat.');
+      return;
+    }
+    this.pendingImport = file.save;
+    this.confirming = 'import';
+    const when = file.savedAt === null ? '' : ` (gesichert am ${new Date(file.savedAt).toLocaleDateString('de-DE')})`;
+    const newer = file.newer
+      ? ' Sie stammt aus einer neueren Fassung des Spiels; was diese Fassung nicht kennt, bleibt erhalten, wird aber nicht angezeigt.'
+      : '';
+    this.menus.showConfirm(
+      {
+        title: 'Spielstand ersetzen?',
+        text:
+          `Die Datei${when} enthält ${this.describeSavegame(summarizeSavegame(file.save))}. Dein jetziger Stand hat ` +
+          `${this.describeSavegame(summarizeSavegame(loadSavegame()))}; er wird ersetzt und lässt sich nicht zurückholen. ` +
+          `Sichere ihn vorher, wenn du ihn noch brauchst. Die Optionen und die Statistik bleiben.${newer}`,
+        no: 'Abbrechen',
+        yes: 'Stand ersetzen',
+      },
+      true,
+    );
+    audio.play('auswahl');
+  }
+
+  /** Die Antwort "Stand ersetzen": schreibt den Stand aus der Datei und lässt Börse und Ausrüstung ihn neu lesen. */
+  private applyImport(): void {
+    const save = this.pendingImport;
+    this.pendingImport = null;
+    if (!save) {
+      this.confirming = null;
+      this.showMenuHome(true);
+      return;
+    }
+    writeSavegame(save);
+    this.boerse.reload();
+    this.ausruestung.reload();
+    this.confirming = 'imported';
+    this.menus.showConfirm(
+      {
+        title: 'Spielstand geladen',
+        text: `Dein Spielstand ist jetzt der aus der Datei: ${this.describeSavegame(summarizeSavegame(save))}. „Spiel fortsetzen“ führt dich weiter.`,
+        no: 'Weiter',
+      },
+      true,
+    );
+    audio.play('bestaetigen');
   }
 
   /** Warnt vor dem Löschen des Spielstands und nennt, was verloren ginge. */

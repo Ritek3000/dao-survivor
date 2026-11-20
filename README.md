@@ -83,7 +83,7 @@ src/
   main.ts             Einstieg: baut das Spiel und hängt Entwicklungswerkzeuge nur im Dev-Modus an
   statistikGlobal.ts  Einstieg der globalen Statistik (statistik-global.html, nicht verlinkt)
   config.ts           Zentrale Stellschrauben: Nachtdauer, Welt, Gegnerarten, Kulisse
-  core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Gegenstände), Protokoll der Nächte und seine Auswertung (Statistik), Sammelstelle (Senden und Lesen über Supabase)
+  core/               Eingabe, deterministischer Zufall, Raumgitter, Einstellungen (Ton, Stelle der Lebensgruppe), Spielstand (Gold, Gegenstände) und seine Sicherungsdatei, Zugriff auf Dateien (`dateien.ts`), Protokoll der Nächte und seine Auswertung (Statistik), Sammelstelle (Senden und Lesen über Supabase)
   audio/              Ton und Musik: Engine, Ereignisnamen, Lesen von audio.json
   game/               Spiellogik und Darstellung (siehe unten)
   ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Statistik, Anleitung, Rückfragen; statistikView.ts und statistik.css: die Anzeige der Statistik; lagerView.ts und lager.css: Lager (Ausrüstung, Truhe und Händler)
@@ -123,7 +123,7 @@ Gegenstände, Beute und das Lager (Text in `index.html`; sie ist länger als man
 **Pause** (Esc oder P): *Weiter*, *Optionen* und *Lauf abbrechen*. Wer den Lauf abbricht, bestätigt zuerst eine Rückfrage; die Nacht endet dann
 wie bei einem Sturz (Ertrag nach `CONFIG.gold.deathKeep`) mit der Endanzeige „Lauf abgebrochen“.
 
-**Optionen** haben zwei Gruppen: *Ton* (Regler und „Ton aus“) und *Oberfläche* mit **Lebensbalken platzieren**. Gewählt wird die Stelle der
+**Optionen** haben vier Gruppen: *Ton* (Regler und „Ton aus“), *Oberfläche* mit **Lebensbalken platzieren**, *Spielstand* (als Datei sichern und laden, siehe unten) und *Daten*. Gewählt wird die Stelle der
 Lebensgruppe (Stufe im Kreis, Lebensbalken, Gold im Geldbeutel): oben links, oben rechts, unten links, unten Mitte oder unten rechts. Die Gruppe
 wandert als Ganzes; was dort sonst stünde (Hinweis, Tonmeldung, Feuer entzünden), weicht aus. Bedienung mit der Maus oder mit den Tasten
 (Auf und Ab wählen die Zeile, Links und Rechts ändern, Enter schaltet um, Esc geht zurück).
@@ -212,6 +212,14 @@ Gold zurück. Es gibt keine dauerhaften Steigerungen mehr: Die Werte der Figur k
 (`version`, jetzt 7). Der Zugriff steckt hinter `TextStore` in `src/core/storage.ts` und `src/core/savegame.ts`; wo `localStorage` fehlt oder
 gesperrt ist, gilt der Stand nur für die Sitzung. Eine Desktop-Fassung kann mit `useSavegameStore` eine Datei an die Stelle setzen (und als zweiten Speicher
 eine für die Sicherung). Ein unlesbarer Stand beginnt bei null; was das Spiel nicht kennt (etwa die Gegenstände einer neueren Fassung), bleibt beim Speichern erhalten.
+**Sichern und Laden als Datei.** Die *Optionen* haben die Gruppe *Spielstand* mit zwei Knöpfen. *Spielstand als Datei sichern* lädt `dao-survivor-spielstand-<Datum>_<Uhrzeit>.json` herunter;
+darin liegt der Spielstand (Gold, Gegenstände jeder Klasse, Truhe, Händler) in einem Umschlag mit Kennung (`datei`), Fassung des Spiels (`spielversion`) und Zeitpunkt (`gesichert`).
+Die Optionen und das Protokoll der Statistik sind nicht enthalten. *Spielstand aus Datei laden* gibt es nur im Hauptmenü (mitten in der Nacht würde der laufende Lauf später über den
+geladenen Stand schreiben): Das Spiel prüft die Datei (`readSavegameFile`; auch ältere Fassungen werden gehoben, ein nackter Spielstand ohne Umschlag wird genommen, alles andere abgelehnt,
+Dateien über 8 MB nicht gelesen), zeigt in einer Rückfrage, was in der Datei steht und was der jetzige Stand hat, und ersetzt ihn erst nach „Stand ersetzen“. Ein leerer Stand wird nicht gesichert.
+Gesichert wird, was im Speicher liegt; das Gold der laufenden Nacht kommt erst am Ende der Nacht dazu. Der Zugriff auf Dateien steckt hinter `FileAccess` in `src/core/dateien.ts`
+(Download-Link und Dateiwähler im Browser); eine Desktop-Fassung setzt mit `useFileAccess` eigene Dialoge ein.
+
 Zurücksetzen lässt sich der Stand mit „Neues Spiel“ im Startbildschirm (mit Rückfrage); in den Entwicklerwerkzeugen genügt auch `localStorage.removeItem('dao-survivor.spielstand')`.
 
 **Umstellung von Fassung 5 auf 6 (entfallene Steigerungen).** Wer vor Version 0.7.0 Ränge gekauft hatte, bekommt das Gold dafür zurück: `von5auf6` in `src/core/savegame.ts`
