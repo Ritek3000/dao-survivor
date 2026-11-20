@@ -3,7 +3,7 @@ import { audio, type Duck, type MusicId } from '../audio';
 import { CONFIG } from '../config';
 import { evaluate } from '../core/auswertung';
 import { pickTextFile, saveTextFile } from '../core/dateien';
-import { Input, type MoveVector } from '../core/input';
+import { CHOICE_ACTIONS, Input, type MoveVector } from '../core/input';
 import { createRandom, deriveSeed, type Random } from '../core/random';
 import { formatSeed, newRunSeed, seedFromAddress } from '../core/runSeed';
 import { loadSettings, saveSettings, type Settings, type VitalsPosition } from '../core/settings';
@@ -28,7 +28,7 @@ import { Boerse } from './boerse';
 import { Beute, type LootSettlement } from './beute';
 import { Boss } from './boss';
 import { CameraRig } from './cameraRig';
-import { CLASSES, TRAITS, type ClassDef } from './classes';
+import { CLASSES, TRAITS, type ClassDef, type ClassId } from './classes';
 import { Coins } from './coins';
 import { finsternisUniforms } from './darkness';
 import { Chest, Drops } from './drops';
@@ -43,7 +43,7 @@ import { Pickups } from './pickups';
 import { Player } from './player';
 import { Progression, SEGEN_EVERY_LEVELS, UPGRADES } from './progression';
 import { Threats } from './threats';
-import { MAX_RANK } from './weapons';
+import { MAX_RANK, weaponById } from './weapons';
 import { World } from './world';
 import { Zones, type IslandBearing, type Site, type Zone } from './zones';
 
@@ -58,14 +58,16 @@ const SEGEN_SUBTITLE = 'Eine Höhere Macht antwortet. Wähle einen Segen';
 const BOSS_SEGEN_SECONDS = 3;
 
 /**
- * 'loading' = Modelle werden geladen, 'title' = Startbildschirm, 'select' = Klassenwahl vor der Nacht,
+ * 'loading' = Modelle werden geladen, 'title' = Startbildschirm, 'select' = Klassenwahl vor der Nacht, 'start' = Wahl des Startangriffs,
  * 'levelup' = Wahl einer Stärkung, 'lager' = Lager (Ausrüstung, Truhe und Händler) zwischen den Nächten. Der Startbildschirm und die Pause
  * tragen die Menüs (Optionen, Anleitung, Rückfragen) als Unterseiten.
  */
-type Phase = 'loading' | 'title' | 'select' | 'playing' | 'paused' | 'levelup' | 'lager' | 'ended';
+type Phase = 'loading' | 'title' | 'select' | 'start' | 'playing' | 'paused' | 'levelup' | 'lager' | 'ended';
 
 /** Eine wählbare Stärkung beim Stufenaufstieg: neuer Angriff, höherer Rang oder Segen. */
 interface Offer {
+  /** Woran das Spiel die Karte wiedererkennt, wenn sie verbannt wurde: Art und Kennung, etwa `staerkung:harte-hand`. */
+  key: string;
   name: string;
   text: string;
   note: string;
@@ -143,6 +145,22 @@ export class Game {
   /** Reichweite des Lichtscheins, die den übrigen Systemen zuletzt gemeldet wurde. */
   private shownLight = 0;
   private offers: Offer[] = [];
+  /** Alle Karten, aus denen das jetzige Angebot gezogen wurde; Neuwurf und Verbannen schöpfen daraus. */
+  private pool: Offer[] = [];
+  /** Titel und Unterzeile des Angebots, damit ein Neuwurf es neu zeigen kann. */
+  private offerTitle = '';
+  private offerSubtitle = '';
+  /** Neuwürfe und Verbannungen, die in dieser Nacht noch bleiben. */
+  private rerolls = 0;
+  private banishes = 0;
+  /** Die in dieser Nacht verbannten Karten (`Offer.key`); sie kommen bis zum Morgen nicht wieder ins Angebot. */
+  private readonly banished = new Set<string>();
+  /** Wartet die Wahl darauf, dass die Karte zum Verbannen gewählt wird? */
+  private banishing = false;
+  /** Die Klasse, deren Startangriff gerade gewählt wird (Phase 'start'). */
+  private pendingClass: ClassDef | null = null;
+  /** Mit welchem Angriff jede Klasse zuletzt begann; nur für diese Sitzung, es wird nichts gespeichert. */
+  private readonly lastStart = new Map<ClassId, string>();
   private selected = 0;
   /** Gold, das in dieser Nacht eingesammelt wurde, schon mit dem Goldfaktor der Figur. */
   private goldRun = 0;
@@ -292,6 +310,7 @@ export class Game {
         this.updateMenu();
         break;
       case 'select':
+      case 'start':
       case 'levelup':
         this.updateChoice();
         break;
@@ -865,7 +884,33 @@ export class Game {
     this.boerse.acknowledgeRefund();
   }
 
-  private startRun(playerClass: ClassDef): void {
+  /**
+   * Nach der Klasse die Wahl des Startangriffs: Alle sieben Angriffe der Klasse stehen offen, einer beginnt die Nacht auf Rang 1.
+   * Vorgewählt ist der, mit dem die Klasse zuletzt begann, sonst ihr üblicher erster; Enter bestätigt ihn also gleich.
+   */
+  private openStart(playerClass: ClassDef): void {
+    this.phase = 'start';
+    this.pendingClass = playerClass;
+    const [usual] = playerClass.weapons;
+    const remembered = this.lastStart.get(playerClass.id) ?? usual;
+    this.selected = Math.max(0, playerClass.weapons.indexOf(remembered ?? ''));
+    this.hud.showChoice(
+      playerClass.name,
+      'Mit welchem Angriff beginnst du die Nacht?',
+      playerClass.weapons.map((id) => {
+        const def = weaponById(id);
+        return { name: def.name, text: def.text, note: id === usual ? 'Der übliche Beginn' : 'Beginnt auf Rang 1' };
+      }),
+      this.selected,
+      null,
+      '',
+      true,
+    );
+    this.hud.setChoiceKeys('1 bis 7 oder Pfeiltasten und Enter: Nacht beginnen · Esc: zurück zur Klassenwahl');
+    audio.play('auswahl');
+  }
+
+  private startRun(playerClass: ClassDef, startWeapon: string = playerClass.weapons[0] ?? ''): void {
     this.runSeed = this.nextSeed ?? newRunSeed();
     this.nextSeed = null;
     this.stream = createRandom(deriveSeed(this.runSeed, 900));
@@ -874,6 +919,10 @@ export class Game {
     this.pendingLevels = 0;
     this.pendingSegen = 0;
     this.segenIn = 0;
+    this.rerolls = CONFIG.run.rerolls;
+    this.banishes = CONFIG.run.banishes;
+    this.banished.clear();
+    this.banishing = false;
     this.searIn = 0;
     this.shownLight = 0;
     this.wasInLight = false;
@@ -902,7 +951,7 @@ export class Game {
     this.threats.reset();
     this.boss.reset();
     this.hud.setBoss(null);
-    this.arsenal.reset(playerClass, this.ausruestung.evolutionsOf(playerClass.id));
+    this.arsenal.reset(playerClass, this.ausruestung.evolutionsOf(playerClass.id), startWeapon);
     finsternisUniforms.uSense.value = playerClass.id === 'wildnislaeufer' ? 1 : 0;
     this.traitLabel = '';
     this.rig.snapTo(this.player.position);
@@ -922,25 +971,104 @@ export class Game {
 
   /** Stellt bis zu drei Segen zur Wahl; gibt false zurück, wenn in dieser Nacht keiner mehr offen ist. */
   private offerSegen(title: string): boolean {
-    const candidates = this.progression.openSegen();
-    if (candidates.length === 0) return false;
-    this.offers = [];
-    while (this.offers.length < 3 && candidates.length > 0) {
-      const [segen] = candidates.splice(Math.floor(this.random() * candidates.length), 1);
-      if (!segen) break;
-      this.offers.push({
+    const pool = this.progression.openSegen().map(
+      (segen): Offer => ({
+        key: `segen:${segen.id}`,
         name: segen.name,
         text: segen.text,
         note: segen.macht,
         segen: true,
         take: () => this.progression.bless(segen),
-      });
-    }
-    this.selected = 0;
-    this.phase = 'levelup';
-    this.hud.showChoice(title, SEGEN_SUBTITLE, this.offers, this.selected);
+      }),
+    );
+    if (!this.deal(pool)) return false;
+    this.showOffers(title, SEGEN_SUBTITLE);
     audio.play('segen');
     return true;
+  }
+
+  /**
+   * Zieht das Angebot aus den Karten, die in dieser Nacht nicht verbannt sind; gibt false zurück, wenn keine bleibt.
+   * `pool` merkt sich das Spiel für Neuwurf und Verbannen.
+   */
+  private deal(pool: Offer[]): boolean {
+    this.pool = pool.filter((offer) => !this.banished.has(offer.key));
+    this.offers = this.draw(this.pool);
+    return this.offers.length > 0;
+  }
+
+  /**
+   * Zieht bis zu drei Karten aus dem Vorrat. Karten aus `avoid` kommen nur dann wieder, wenn der Vorrat sonst nicht für drei reicht,
+   * damit ein Neuwurf möglichst etwas Neues zeigt.
+   */
+  private draw(pool: readonly Offer[], avoid: readonly Offer[] = []): Offer[] {
+    const sources = [pool.filter((offer) => !avoid.includes(offer)), pool.filter((offer) => avoid.includes(offer))];
+    const drawn: Offer[] = [];
+    for (const source of sources) {
+      while (drawn.length < 3 && source.length > 0) drawn.push(...source.splice(Math.floor(this.random() * source.length), 1));
+    }
+    return drawn;
+  }
+
+  /** Zeigt das gezogene Angebot samt Neuwurf und Verbannen und hält die Wahl an. */
+  private showOffers(title: string, subtitle: string): void {
+    this.offerTitle = title;
+    this.offerSubtitle = subtitle;
+    this.banishing = false;
+    this.selected = 0;
+    this.phase = 'levelup';
+    this.hud.showChoice(title, subtitle, this.offers, this.selected);
+    this.showTools();
+  }
+
+  /** Gibt es Karten im Vorrat, die gerade nicht zu sehen sind? Nur dann haben Neuwurf und Verbannen etwas zu tun. */
+  private canSwap(): boolean {
+    return this.pool.length > this.offers.length;
+  }
+
+  private showTools(): void {
+    this.hud.setChoiceTools({
+      rerolls: this.rerolls,
+      banishes: this.banishes,
+      swappable: this.canSwap(),
+      banishing: this.banishing,
+    });
+  }
+
+  /** Würfelt die Karten neu; sie kosten einen der Neuwürfe dieser Nacht. */
+  private reroll(): void {
+    if (this.phase !== 'levelup' || this.rerolls <= 0 || !this.canSwap()) return;
+    this.rerolls--;
+    this.offers = this.draw(this.pool, this.offers);
+    this.showOffers(this.offerTitle, this.offerSubtitle);
+    audio.play('auswahl');
+  }
+
+  /** Schaltet um, ob die nächste gewählte Karte verbannt statt genommen wird. */
+  private toggleBanishing(): void {
+    if (this.phase !== 'levelup') return;
+    if (!this.banishing && (this.banishes <= 0 || !this.canSwap())) return;
+    this.banishing = !this.banishing;
+    this.hud.setChoiceSubtitle(this.banishing ? 'Welche Karte soll bis zum Morgen verschwinden?' : this.offerSubtitle);
+    this.showTools();
+    audio.play('auswahl');
+  }
+
+  /** Streicht die Karte für den Rest der Nacht aus dem Angebot; eine andere aus dem Vorrat tritt an ihre Stelle. */
+  private banish(index: number): void {
+    const gone = this.offers[index];
+    if (!gone || this.banishes <= 0 || !this.canSwap()) return;
+    this.banishes--;
+    this.banished.add(gone.key);
+    this.pool = this.pool.filter((offer) => offer !== gone);
+    const [replacement] = this.draw(this.pool.filter((offer) => !this.offers.includes(offer)));
+    if (replacement) this.offers[index] = replacement;
+    else this.offers.splice(index, 1);
+    this.selected = Math.min(index, this.offers.length - 1);
+    this.banishing = false;
+    this.hud.showChoice(this.offerTitle, this.offerSubtitle, this.offers, this.selected);
+    this.showTools();
+    audio.play('bestaetigen');
   }
 
   /** Der Segen für den erschlagenen Verschlinger. */
@@ -958,6 +1086,7 @@ export class Game {
     }
     const candidates: Offer[] = [
       ...this.arsenal.open().map(({ def, rank }) => ({
+        key: `angriff:${def.id}`,
         name: def.name,
         // Was der nächste Rang bringt, steht auf der Karte; ohne Angabe die Kurzbeschreibung.
         text: def.rankText?.[rank] ?? def.text,
@@ -969,36 +1098,28 @@ export class Game {
         take: () => this.arsenal.take(def),
       })),
       ...this.progression.open().map((upgrade) => ({
+        key: `staerkung:${upgrade.id}`,
         name: upgrade.name,
         text: upgrade.text,
         note: `Rang ${this.progression.rank(upgrade) + 1} von ${upgrade.max}`,
         take: () => this.progression.take(upgrade),
       })),
     ];
-    this.offers = [];
-    while (this.offers.length < 3 && candidates.length > 0) {
-      this.offers.push(...candidates.splice(Math.floor(this.random() * candidates.length), 1));
-    }
-    if (this.offers.length === 0) {
-      // Alles ausgereizt: es gibt nichts mehr zu wählen.
+    if (!this.deal(candidates)) {
+      // Alles ausgereizt (oder verbannt): es gibt nichts mehr zu wählen.
       this.pendingLevels = 0;
       return;
     }
     this.pendingLevels--;
-    this.selected = 0;
-    this.phase = 'levelup';
-    this.hud.showChoice(
-      `Stufe ${this.progression.level - this.pendingLevels}`,
-      'Wähle eine Stärkung',
-      this.offers,
-      this.selected,
-    );
+    this.showOffers(`Stufe ${this.progression.level - this.pendingLevels}`, 'Wähle eine Stärkung');
     audio.play('stufe');
   }
 
-  /** Gemeinsame Bedienung beider Auswahlen: Klasse und Stärkung. */
+  /** Gemeinsame Bedienung der Auswahlen: Klasse, Startangriff und Stärkung. */
   private updateChoice(): void {
-    const count = this.phase === 'select' ? CLASSES.length : this.offers.length;
+    const count =
+      this.phase === 'select' ? CLASSES.length : this.phase === 'start' ? (this.pendingClass?.weapons.length ?? 0) : this.offers.length;
+    if (count === 0) return;
     const before = this.selected;
     if (this.input.wasPressed('left')) this.selected = (this.selected + count - 1) % count;
     if (this.input.wasPressed('right')) this.selected = (this.selected + 1) % count;
@@ -1013,9 +1134,27 @@ export class Game {
       this.openTitle();
       return;
     }
-    if (this.input.wasPressed('choice1')) this.pick(0);
-    else if (this.input.wasPressed('choice2')) this.pick(1);
-    else if (this.input.wasPressed('choice3')) this.pick(2);
+    if (this.phase === 'start' && this.input.wasPressed('pause')) {
+      this.openSelect(Math.max(0, CLASSES.findIndex((entry) => entry === this.pendingClass)));
+      return;
+    }
+    if (this.phase === 'levelup') {
+      if (this.input.wasPressed('reroll')) {
+        this.reroll();
+        return;
+      }
+      if (this.input.wasPressed('banish')) {
+        this.toggleBanishing();
+        return;
+      }
+      // Wer verbannen wollte und es sich anders überlegt, bricht mit Esc ab; die Pause gibt es hier nicht.
+      if (this.banishing && this.input.wasPressed('pause')) {
+        this.toggleBanishing();
+        return;
+      }
+    }
+    const choice = CHOICE_ACTIONS.findIndex((action) => this.input.wasPressed(action));
+    if (choice >= 0) this.pick(choice);
     else if (this.input.wasPressed('confirm')) this.pick(this.selected);
   }
 
@@ -1023,11 +1162,24 @@ export class Game {
     if (this.phase === 'select') {
       const playerClass = CLASSES[index];
       if (!playerClass) return;
+      this.openStart(playerClass);
+      return;
+    }
+    if (this.phase === 'start') {
+      const playerClass = this.pendingClass;
+      const start = playerClass?.weapons[index];
+      if (!playerClass || !start) return;
+      this.lastStart.set(playerClass.id, start);
+      this.pendingClass = null;
       this.hud.hideChoice();
-      this.startRun(playerClass);
+      this.startRun(playerClass, start);
       return;
     }
 
+    if (this.phase === 'levelup' && this.banishing) {
+      this.banish(index);
+      return;
+    }
     const offer = this.offers[index];
     if (this.phase !== 'levelup' || !offer) return;
     const stats = this.progression.stats;
@@ -1188,6 +1340,7 @@ export class Game {
       case 'loading':
       case 'title':
       case 'select':
+      case 'start':
       case 'lager':
         return 'menue';
       case 'ended':

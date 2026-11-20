@@ -59,7 +59,7 @@ export interface ClassDef {
   gear: GearDef;
   /** Was die andere Hand hält, etwa der Schild des Kämpfers; er greift nicht ein, sondern schmückt die Figur. */
   offhand?: GearDef;
-  /** Der erste Eintrag ist der Startangriff, die übrigen kommen beim Stufenaufstieg dazu. */
+  /** Der erste Eintrag ist der übliche Startangriff; vor der Nacht lässt sich jeder der sieben wählen. Die übrigen kommen beim Stufenaufstieg dazu. */
   weapons: readonly string[];
   /** Welche Animation zu welchem Angriff gehört. Angriffe ohne Eintrag wirken ohne Bewegung der Figur. */
   swings: Readonly<Record<string, SwingDef>>;

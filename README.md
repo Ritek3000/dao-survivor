@@ -52,7 +52,8 @@ Nach jedem Merge auf `main` baut GitHub das Spiel und veröffentlicht den Stand 
 | WASD oder Pfeiltasten      | Bewegen                                 |
 | Esc oder P                 | Pause (Weiter, Optionen, Lauf abbrechen); in Menüs zurück; bei der Klassenwahl und am Ende der Nacht zum Startbildschirm |
 | M                          | Ton an oder aus                         |
-| 1, 2, 3 oder Pfeile, Enter (auch Leertaste) | Klasse und Stärkungen wählen, Bestätigen; in der Anleitung blättern Auf und Ab |
+| 1, 2, 3 oder Pfeile, Enter (auch Leertaste) | Klasse und Stärkungen wählen, Bestätigen; beim Startangriff gelten 1 bis 7; in der Anleitung blättern Auf und Ab |
+| R, X (beim Stufenaufstieg) | Karten neu würfeln; eine Karte verbannen (danach die Karte wählen, X oder Esc bricht ab) |
 | L oder U                   | Lager öffnen: Ausrüstung, Truhe und Händler (bei der Klassenwahl und am Ende der Nacht; sobald es Gegenstände oder Gold gibt, siehe [Gegenstände](#gegenstände)). U war die Taste der entfallenen Steigerungen |
 | Tab, E (im Lager)          | Ansicht wechseln (Ausrüstung, Truhe, Händler); Gegenstand gleich anlegen, umräumen, beim Händler kaufen oder verkaufen |
 
@@ -142,6 +143,19 @@ und Anteil. Links und Rechts wechseln den Reiter, Auf und Ab blättern (`Menus.s
 Alle Einstellungen bleiben erhalten (`localStorage`, Schlüssel `dao-survivor.einstellungen`, siehe `src/core/settings.ts`); Stände ohne die Stelle der
 Lebensgruppe gelten als „oben links“. Die Menüs stehen in `index.html`, bedient werden sie von `src/ui/menus.ts`; was ein Knopf bewirkt,
 entscheidet `Game.onMenuCommand`.
+
+## Stufenaufstieg und Startangriff
+
+**Startangriff.** Nach der Klasse folgt eine zweite Wahl: Alle sieben Angriffe der Klasse stehen offen, einer beginnt die Nacht auf Rang 1 (`Game.openStart`, `Arsenal.reset(..., startId)`).
+Vorgewählt ist der, mit dem die Klasse in dieser Sitzung zuletzt begann, sonst ihr üblicher erster (`ClassDef.weapons[0]`); Enter bestätigt ihn also gleich. Esc führt zurück zur Klassenwahl.
+Die Wahl wird nicht gespeichert (kein Eingriff in den Spielstand). Wer nicht mit dem ersten beginnt, bekommt ihn beim Stufenaufstieg wie jeden anderen angeboten. Der Messlauf nimmt immer den üblichen.
+
+**Neu würfeln und Verbannen.** Beim Stufenaufstieg und bei der Wahl eines Segens stehen unter den drei Karten zwei Knöpfe (Tasten R und X). Beide haben einen Vorrat je Nacht
+(`CONFIG.run.rerolls` und `CONFIG.run.banishes`, beide 2; später könnten Gegenstände ihn erhöhen) und sind gesperrt, wenn der Vorrat leer ist oder es keine anderen Karten gibt, die an die Stelle der gezeigten träten.
+- *Neu würfeln* ersetzt alle Karten durch andere aus dem Vorrat; nur wenn der Vorrat nicht für drei reicht, kehren gezeigte Karten wieder.
+- *Verbannen* wartet auf die Wahl einer Karte (rot gerahmt; X oder Esc bricht ab): Sie kommt bis zum Morgen nicht mehr ins Angebot, eine andere nimmt ihren Platz ein. Verbannt wird, was das Spiel als Karte kennt:
+  ein Angriff (neu oder höherer Rang), eine Stärkung oder ein Segen (`Offer.key`, etwa `staerkung:harte-hand`).
+- Der Zufall dafür kommt aus dem Strom des Laufs (siehe [Lauf-Seed](#technik)); derselbe Seed und dieselben Wahlen ergeben dieselben Karten.
 
 ## Statistik
 
