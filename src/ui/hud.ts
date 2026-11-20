@@ -72,6 +72,7 @@ export class Hud {
   private readonly gold = element('gold-text');
   private readonly loot = element('loot');
   private readonly lootText = element('loot-text');
+  private readonly clockLabel = element('clock-label');
   private readonly clockTime = element('clock-time');
   private readonly zone = element('zone');
   private readonly trait = element('trait');
@@ -202,6 +203,11 @@ export class Hud {
     if (name === null) return;
     this.text(this.bossName, name);
     this.style(this.bossFill, 'width', percent(fraction));
+  }
+
+  /** Setzt den Namen der Nachtart über die Uhr („Rotnacht · Sonnenaufgang in“); `null` für die gewöhnliche Nacht. */
+  setNightName(name: string | null): void {
+    this.clockLabel.textContent = name === null ? 'Sonnenaufgang in' : `${name} · Sonnenaufgang in`;
   }
 
   /** Zeigt für einige Sekunden eine Meldung in der oberen Bildhälfte. */
