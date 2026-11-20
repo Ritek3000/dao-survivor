@@ -39,6 +39,7 @@ import { Fields } from './fields';
 import { itemName, RARITIES, RARITY_LABELS, slotLabel, type Item, type Rarity } from './items';
 import { Lager } from './lager';
 import { loadModels, type Models } from './models';
+import { applyNightStats, NIGHTS, USUAL_NIGHT, type NightDef, type NightId } from './nights';
 import { Pickups } from './pickups';
 import { Player } from './player';
 import { Progression, SEGEN_EVERY_LEVELS, UPGRADES } from './progression';
@@ -58,11 +59,11 @@ const SEGEN_SUBTITLE = 'Eine Höhere Macht antwortet. Wähle einen Segen';
 const BOSS_SEGEN_SECONDS = 3;
 
 /**
- * 'loading' = Modelle werden geladen, 'title' = Startbildschirm, 'select' = Klassenwahl vor der Nacht, 'start' = Wahl des Startangriffs,
+ * 'loading' = Modelle werden geladen, 'title' = Startbildschirm, 'select' = Klassenwahl vor der Nacht, 'start' = Wahl des Startangriffs, 'night' = Wahl der Nachtart,
  * 'levelup' = Wahl einer Stärkung, 'lager' = Lager (Ausrüstung, Truhe und Händler) zwischen den Nächten. Der Startbildschirm und die Pause
  * tragen die Menüs (Optionen, Anleitung, Rückfragen) als Unterseiten.
  */
-type Phase = 'loading' | 'title' | 'select' | 'start' | 'playing' | 'paused' | 'levelup' | 'lager' | 'ended';
+type Phase = 'loading' | 'title' | 'select' | 'start' | 'night' | 'playing' | 'paused' | 'levelup' | 'lager' | 'ended';
 
 /** Eine wählbare Stärkung beim Stufenaufstieg: neuer Angriff, höherer Rang oder Segen. */
 interface Offer {
@@ -161,6 +162,12 @@ export class Game {
   private pendingClass: ClassDef | null = null;
   /** Mit welchem Angriff jede Klasse zuletzt begann; nur für diese Sitzung, es wird nichts gespeichert. */
   private readonly lastStart = new Map<ClassId, string>();
+  /** Der gewählte Startangriff, solange die Nachtart gewählt wird (Phase 'night'). */
+  private pendingStart = '';
+  /** Welche Nachtart zuletzt gewählt wurde; nur für diese Sitzung. */
+  private lastNight: NightId = USUAL_NIGHT.id;
+  /** Die Nachtart der laufenden (oder zuletzt gespielten) Nacht. */
+  private night: NightDef = USUAL_NIGHT;
   private selected = 0;
   /** Gold, das in dieser Nacht eingesammelt wurde, schon mit dem Goldfaktor der Figur. */
   private goldRun = 0;
@@ -311,6 +318,7 @@ export class Game {
         break;
       case 'select':
       case 'start':
+      case 'night':
       case 'levelup':
         this.updateChoice();
         break;
@@ -910,7 +918,26 @@ export class Game {
     audio.play('auswahl');
   }
 
-  private startRun(playerClass: ClassDef, startWeapon: string = playerClass.weapons[0] ?? ''): void {
+  /** Nach dem Startangriff die Wahl der Nachtart (siehe `nights.ts`); vorgewählt ist die zuletzt gewählte. */
+  private openNight(): void {
+    this.phase = 'night';
+    this.selected = Math.max(0, NIGHTS.findIndex((night) => night.id === this.lastNight));
+    this.hud.showChoice(
+      'Was für eine Nacht?',
+      'Schwerere Nächte zahlen besser',
+      NIGHTS.map((night) => ({ name: night.name, text: night.text, note: night.note, extra: night.reward })),
+      this.selected,
+    );
+    this.hud.setChoiceKeys(`1 bis ${NIGHTS.length} oder Pfeiltasten und Enter: Nacht beginnen · Esc: zurück zum Startangriff`);
+    audio.play('auswahl');
+  }
+
+  private startRun(
+    playerClass: ClassDef,
+    startWeapon: string = playerClass.weapons[0] ?? '',
+    night: NightDef = USUAL_NIGHT,
+  ): void {
+    this.night = night;
     this.runSeed = this.nextSeed ?? newRunSeed();
     this.nextSeed = null;
     this.stream = createRandom(deriveSeed(this.runSeed, 900));
@@ -929,7 +956,10 @@ export class Game {
     this.weakened = 0;
     this.goldRun = 0;
     this.hud.setGold(0);
-    this.progression.reset(playerClass, (stats) => this.ausruestung.apply(playerClass.id, stats));
+    this.progression.reset(playerClass, (stats) => {
+      this.ausruestung.apply(playerClass.id, stats);
+      applyNightStats(night.rules, stats);
+    });
     this.player.setClass(playerClass, this.models?.heroes.get(playerClass.id) ?? null);
     this.player.reset();
     this.dust.setLightColor(playerClass.lightColor);
@@ -937,7 +967,7 @@ export class Game {
     this.fields.reset();
     this.events.add(this.fields);
     this.events.add(this.arsenal.listener);
-    this.enemies.reset(this.runSeed);
+    this.enemies.reset(this.runSeed, night.rules);
     this.pickups.reset();
     this.coins.reset();
     this.drops.reset();
@@ -945,7 +975,7 @@ export class Game {
     this.beute.start(playerClass.id, this.runSeed);
     this.lootBest = null;
     this.hud.setLoot(0, null);
-    this.zones.reset(this.runSeed);
+    this.zones.reset(this.runSeed, night.rules.clouds);
     this.syncLight();
     this.applyBlessings();
     this.threats.reset();
@@ -959,6 +989,10 @@ export class Game {
     this.refreshHud();
     this.phase = 'playing';
     audio.play('abendglocke');
+    // Eine besondere Nacht nennt sich: im Bild kurz und über der Uhr, solange sie dauert.
+    const special = night !== USUAL_NIGHT;
+    this.hud.setNightName(special ? night.name : null);
+    if (special) this.hud.announce(night.name);
   }
 
   /** Überträgt, was Klasse und Segen an den Feuerschalen ändern. */
@@ -1118,7 +1152,13 @@ export class Game {
   /** Gemeinsame Bedienung der Auswahlen: Klasse, Startangriff und Stärkung. */
   private updateChoice(): void {
     const count =
-      this.phase === 'select' ? CLASSES.length : this.phase === 'start' ? (this.pendingClass?.weapons.length ?? 0) : this.offers.length;
+      this.phase === 'select'
+        ? CLASSES.length
+        : this.phase === 'start'
+          ? (this.pendingClass?.weapons.length ?? 0)
+          : this.phase === 'night'
+            ? NIGHTS.length
+            : this.offers.length;
     if (count === 0) return;
     const before = this.selected;
     if (this.input.wasPressed('left')) this.selected = (this.selected + count - 1) % count;
@@ -1136,6 +1176,10 @@ export class Game {
     }
     if (this.phase === 'start' && this.input.wasPressed('pause')) {
       this.openSelect(Math.max(0, CLASSES.findIndex((entry) => entry === this.pendingClass)));
+      return;
+    }
+    if (this.phase === 'night' && this.input.wasPressed('pause')) {
+      if (this.pendingClass) this.openStart(this.pendingClass);
       return;
     }
     if (this.phase === 'levelup') {
@@ -1170,9 +1214,18 @@ export class Game {
       const start = playerClass?.weapons[index];
       if (!playerClass || !start) return;
       this.lastStart.set(playerClass.id, start);
+      this.pendingStart = start;
+      this.openNight();
+      return;
+    }
+    if (this.phase === 'night') {
+      const playerClass = this.pendingClass;
+      const night = NIGHTS[index];
+      if (!playerClass || !night) return;
+      this.lastNight = night.id;
       this.pendingClass = null;
       this.hud.hideChoice();
-      this.startRun(playerClass, start);
+      this.startRun(playerClass, this.pendingStart, night);
       return;
     }
 
@@ -1202,7 +1255,8 @@ export class Game {
     this.aborted = outcome === 'aborted';
     // Der letzte Frame läuft knapp über das Ende der Nacht hinaus.
     const survived = Math.min(this.time, CONFIG.run.nightSeconds);
-    const stats = `${this.playerClass.name} · Überlebt: ${formatTime(survived)} · Stufe ${this.progression.level} · Erschlagen: ${this.enemies.kills}`;
+    const nightName = this.night === USUAL_NIGHT ? '' : ` · ${this.night.name}`;
+    const stats = `${this.playerClass.name}${nightName} · Überlebt: ${formatTime(survived)} · Stufe ${this.progression.level} · Erschlagen: ${this.enemies.kills}`;
     this.recordNight(outcome, survived);
     this.hud.setEndSeed(formatSeed(this.runSeed));
     const loot = this.settleLoot();
@@ -1341,6 +1395,7 @@ export class Game {
       case 'title':
       case 'select':
       case 'start':
+      case 'night':
       case 'lager':
         return 'menue';
       case 'ended':

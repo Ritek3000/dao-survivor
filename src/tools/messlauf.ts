@@ -6,6 +6,7 @@
  * Nur für die Entwicklung. In der Browser-Konsole:
  *   __messlauf.start()                               alle Klassen, je drei Nächte
  *   __messlauf.start({ nights: 5, classes: [2] })    nur der Magier, fünf Nächte
+ *   __messlauf.start({ nacht: 'rotnacht' })          alle Nächte in der Rotnacht (siehe `nights.ts`)
  *   __messlauf.start({ ausruestung: 'rar' })         alle neun Plätze jeder Klasse mit rar gewürfelten Gegenständen belegt
  *   __messlauf.start({ evolution: 'axthieb', classes: [0] })   der Kämpfer trägt den legendären Ring der Evolution des Axthiebs und beginnt mit diesem Angriff auf Rang 4
  *   __messlauf.start({ fokus: 'axthieb', classes: [0] })       dasselbe ohne Ring: Der Angriff endet bei Rang 5 (zum Vergleich mit der Evolution)
@@ -30,6 +31,7 @@ import type { Stats } from '../game/progression';
 import type { Ausruestung } from '../game/ausruestung';
 import type { Boerse } from '../game/boerse';
 import { ITEM_SLOTS, rollItem, type Rarity } from '../game/items';
+import { NIGHTS, type NightId } from '../game/nights';
 import { weaponById, type WeaponDef } from '../game/weapons';
 import type { Zone } from '../game/zones';
 
@@ -165,6 +167,8 @@ interface Options {
   evolution?: string;
   /** Wie `evolution`, nur ohne den Ring: Der Angriff beginnt auf Rang 4 und endet bei Rang 5. Der Vergleichswert zur Evolution. */
   fokus?: string;
+  /** Die Nachtart, in der alle Nächte der Messung spielen (`'rotnacht'`, `'blaunacht'`, `'regenlicht'`); ohne Angabe die gewöhnliche. */
+  nacht?: NightId;
   seed?: number;
 }
 
@@ -252,7 +256,14 @@ function steer(g: Internals, style: Style, previous: number, out: MoveVector): n
 /** Der Rang, mit dem ein Angriff im Blick (`evolution`, `fokus`) in die Nacht geht. */
 const FOCUS_RANK = 4;
 
-async function playNight(game: Game, classIndex: number, random: Random, maxSeconds: number, focus?: string): Promise<NightResult> {
+async function playNight(
+  game: Game,
+  classIndex: number,
+  random: Random,
+  maxSeconds: number,
+  nightId: NightId,
+  focus?: string,
+): Promise<NightResult> {
   const g = game as unknown as Internals;
   const playerClass = CLASSES[classIndex];
   if (!playerClass) throw new Error(`Keine Klasse an Stelle ${classIndex}.`);
@@ -295,6 +306,8 @@ async function playNight(game: Game, classIndex: number, random: Random, maxSeco
   g.pick(classIndex);
   // Nach der Klasse folgt die Wahl des Startangriffs; die Messung nimmt den üblichen, den ersten der Klasse.
   if (g.phase === 'start') g.pick(0);
+  // Dann die Nachtart: die gewöhnliche, wenn die Messung keine andere verlangt.
+  if (g.phase === 'night') g.pick(Math.max(0, NIGHTS.findIndex((night) => night.id === nightId)));
   // Mit einem Angriff im Blick beginnt die Nacht mit ihm auf Rang 4: Sonst käme er in einer Nacht selten bis Rang 5, und es ließe sich nichts messen.
   // Der nächste Rang ist dann die Evolution (mit dem Ring) oder Rang 5 (ohne).
   if (focus) {
@@ -467,7 +480,7 @@ export function installMesslauf(game: Game): void {
           for (let night = 1; night <= nights; night++) {
             api.status = `${CLASSES[classIndex]?.name ?? '?'}, Nacht ${night} von ${nights}`;
             (game as unknown as Internals).nextSeed = runSeed++;
-            api.results.push(await playNight(game, classIndex, random, options.maxSeconds ?? Infinity, owner === CLASSES[classIndex] ? focus : undefined));
+            api.results.push(await playNight(game, classIndex, random, options.maxSeconds ?? Infinity, options.nacht ?? 'gewoehnlich', owner === CLASSES[classIndex] ? focus : undefined));
           }
         }
         api.status = 'fertig';

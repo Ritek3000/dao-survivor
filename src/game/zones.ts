@@ -124,8 +124,8 @@ export class Zones {
     this.reset(0);
   }
 
-  /** Neue Nacht: alle Feuer aus, Schwaden aus dem Seed des Laufs neu verteilt. */
-  reset(seed: number): void {
+  /** Neue Nacht: alle Feuer aus, `cloudCount` Schwaden aus dem Seed des Laufs neu verteilt (die Nachtart kann weniger verlangen). */
+  reset(seed: number, cloudCount: number = CONFIG.finsternis.clouds): void {
     this.random = createRandom(deriveSeed(seed, 100));
     this.igniting = null;
     this.igniteProgress = 0;
@@ -138,9 +138,9 @@ export class Zones {
     this.fire.reset();
     this.smoke.reset();
 
-    const { clouds, minRadius, maxRadius, startDistance } = CONFIG.finsternis;
+    const { minRadius, maxRadius, startDistance } = CONFIG.finsternis;
     this.clouds.length = 0;
-    for (let i = 0; i < clouds; i++) {
+    for (let i = 0; i < cloudCount; i++) {
       const angle = this.random() * Math.PI * 2;
       const fromCenter = startDistance + this.random() * (CONFIG.world.radius - 5 - startDistance);
       const cloud: Cloud = {

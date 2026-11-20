@@ -53,6 +53,7 @@ Nach jedem Merge auf `main` baut GitHub das Spiel und veröffentlicht den Stand 
 | Esc oder P                 | Pause (Weiter, Optionen, Lauf abbrechen); in Menüs zurück; bei der Klassenwahl und am Ende der Nacht zum Startbildschirm |
 | M                          | Ton an oder aus                         |
 | 1, 2, 3 oder Pfeile, Enter (auch Leertaste) | Klasse und Stärkungen wählen, Bestätigen; beim Startangriff gelten 1 bis 7; in der Anleitung blättern Auf und Ab |
+| 1 bis 4 (bei der Nachtart) | Nachtart wählen; Esc führt jeweils einen Schritt zurück |
 | R, X (beim Stufenaufstieg) | Karten neu würfeln; eine Karte verbannen (danach die Karte wählen, X oder Esc bricht ab) |
 | L oder U                   | Lager öffnen: Ausrüstung, Truhe und Händler (bei der Klassenwahl und am Ende der Nacht; sobald es Gegenstände oder Gold gibt, siehe [Gegenstände](#gegenstände)). U war die Taste der entfallenen Steigerungen |
 | Tab, E (im Lager)          | Ansicht wechseln (Ausrüstung, Truhe, Händler); Gegenstand gleich anlegen, umräumen, beim Händler kaufen oder verkaufen |
@@ -156,6 +157,27 @@ Die Wahl wird nicht gespeichert (kein Eingriff in den Spielstand). Wer nicht mit
 - *Verbannen* wartet auf die Wahl einer Karte (rot gerahmt; X oder Esc bricht ab): Sie kommt bis zum Morgen nicht mehr ins Angebot, eine andere nimmt ihren Platz ein. Verbannt wird, was das Spiel als Karte kennt:
   ein Angriff (neu oder höherer Rang), eine Stärkung oder ein Segen (`Offer.key`, etwa `staerkung:harte-hand`).
 - Der Zufall dafür kommt aus dem Strom des Laufs (siehe [Lauf-Seed](#technik)); derselbe Seed und dieselben Wahlen ergeben dieselben Karten.
+
+## Nachtarten
+
+Nach dem Startangriff wählt man die **Nachtart** (neue Phase `'night'`, `Game.openNight`). Jede hat eine Regel, ein Risiko und einen Lohn; schwerere Nächte zahlen besser, so dass die Schwierigkeit eine Entscheidung ist
+und kein Pech. Vorgewählt ist die zuletzt gewählte der Sitzung (nicht gespeichert), sonst die gewöhnliche. Eine besondere Nacht nennt sich im Bild und über der Uhr („Rotnacht · Sonnenaufgang in“) und im Endbild.
+
+| Nachtart | Anlass (Wiki) | Regel | Lohn |
+| -------- | ------------- | ----- | ---- |
+| Gewöhnliche Nacht | – | unverändert | wie gewohnt |
+| Rotnacht | Kalender: Dundar steht voll am Himmel | Gegner 20 % schneller, du schlägst 20 % schneller zu (Abklingzeit × 1/1,2), die Rast im Licht heilt nur halb | Gold × 1,3 |
+| Blaunacht | Kalender: Branjur steht voll am Himmel | Gegner 30 % seltener (Rate × 0,7), mit 40 % mehr Leben; Dhargass-Priester ab 120 s statt 240 s | Erfahrung × 1,3 |
+| Regenlicht | Wetter: nach kräftigem Regen ist der Himmel heller | Verstaubung halb so schnell, vier statt sieben Schwaden, Gegner mit 20 % mehr Leben | Gold × 0,9 |
+
+**Abweichung von der Lore, Vorschläge.** Im Wiki bestimmt der Kalender, wann Rot- und Blaunacht sind; im Spiel wählt man die Nacht. Die Wirkungen und Zahlen sind Vorschläge und Startwerte für den Messlauf, nicht aus dem Wiki.
+
+**Aufbau.** Eine Nachtart ist ein Eintrag in `NIGHTS` (`src/game/nights.ts`): Name, Text für die Karte und `NightRules`. Die Regeln lesen die Gegner (`Enemies.reset(seed, rules)`: Tempo, Leben, Rate, früheres Erscheinen einer Art),
+die Zonen (`Zones.reset(seed, clouds)`: Zahl der Schwaden) und die Figur (`applyNightStats` auf `Progression.reset`: Faktoren auf `cooldown`, `restHeal`, `verstaubung`, `xp` und `gold`). `CONFIG` bleibt unverändert; eine neue
+Nachtart braucht, solange sie nur diese Faktoren verlangt, nur einen weiteren Eintrag. `__messlauf.start({ nacht: 'rotnacht' })` misst eine Nachtart; ohne Angabe spielt der Messlauf die gewöhnliche.
+
+**Statistik.** Die Nachtart steht (noch) nicht im Protokoll der Nächte und geht nicht an die Sammelstelle: Ein neues Feld bräuchte eine neue Fassung des Protokolls (`STATISTIK_VERSION`) und eine Spalte samt Prüfregel in `tools/supabase/statistik.sql`,
+die man einmal im Supabase-Dashboard ausführen müsste, sonst scheitert das Senden. Bis dahin mischen sich besondere Nächte in die Zahlen der Statistik.
 
 ## Statistik
 

@@ -5,6 +5,7 @@ import { SpatialGrid } from '../core/spatialGrid';
 import { swallowedByFinsternis } from './darkness';
 import type { CombatEvents, Source } from './events';
 import type { HordeClip, HordeModel } from './models';
+import type { NightRules } from './nights';
 import type { Player } from './player';
 import { DOT_KINDS, attackRate, clearStatuses, createStatusSet, dealtFactor, dotAmount, slowFactor, tickStatuses, type StatusSet } from './status';
 import { animatedByTexture, shadowByTexture } from './vat';
@@ -119,6 +120,11 @@ export class Enemies {
   private readonly grid = new SpatialGrid<Enemy>(2);
   private random: Random = createRandom(0);
   private spawnBudget = 0;
+  /** Was die Nachtart an den Gegnern ändert (siehe `nights.ts`); 1 heißt: nichts. */
+  private speedFactor = 1;
+  private hpFactor = 1;
+  private rateFactor = 1;
+  private appearFrom: Readonly<Record<string, number>> = {};
   /** Der Gegner, für den gerade Nachbarn abgefragt werden. */
   private current: Enemy | null = null;
   /** Die Köder, die gerade locken: feste Plätze, die ersten `lureCount` gelten. */
@@ -184,14 +190,21 @@ export class Enemies {
     this.group.add(mesh);
   }
 
-  /** Beginnt eine Nacht; aus dem Seed des Laufs ziehen Art, Ort und Zeitpunkt der Gegner ihren Zufall. */
-  reset(seed: number): void {
+  /**
+   * Beginnt eine Nacht; aus dem Seed des Laufs ziehen Art, Ort und Zeitpunkt der Gegner ihren Zufall.
+   * Die Nachtart ändert Tempo, Leben, Zahl und das Erscheinen der Arten.
+   */
+  reset(seed: number, rules: NightRules = {}): void {
     this.pool.push(...this.alive, ...this.fading);
     this.alive.length = 0;
     this.fading.length = 0;
     this.carriers.length = 0;
     this.kills = 0;
     this.spawnBudget = 0;
+    this.speedFactor = rules.enemySpeed ?? 1;
+    this.hpFactor = rules.enemyHp ?? 1;
+    this.rateFactor = rules.spawnRate ?? 1;
+    this.appearFrom = rules.appearFrom ?? {};
     this.lureCount = 0;
     this.random = createRandom(deriveSeed(seed, 500));
     for (const horde of this.hordes.values()) {
@@ -238,7 +251,7 @@ export class Enemies {
       const status = enemy.status;
       const held = status.hold.time > 0;
       const afraid = status.fear.time > 0;
-      const speed = enemy.type.speed * slowFactor(status);
+      const speed = enemy.type.speed * this.speedFactor * slowFactor(status);
       const rate = attackRate(status);
       const silenced = status.silence.time > 0;
       if (status.live > 0) {
@@ -469,12 +482,12 @@ export class Enemies {
 
   private spawn(dt: number, time: number, player: Player): void {
     const { max, baseRate, ratePerMinute, hpDoubleSeconds } = CONFIG.enemies;
-    this.spawnBudget += (baseRate + (ratePerMinute * time) / 60) * dt;
+    this.spawnBudget += (baseRate + (ratePerMinute * time) / 60) * this.rateFactor * dt;
     while (this.spawnBudget >= 1) {
       this.spawnBudget -= 1;
       if (this.alive.length >= max) continue;
       const type = this.pickType(time);
-      const enemy = this.fresh(type, type.hp * (1 + time / hpDoubleSeconds));
+      const enemy = this.fresh(type, type.hp * (1 + time / hpDoubleSeconds) * this.hpFactor);
       if (this.place(enemy, player)) this.alive.push(enemy);
       else this.pool.push(enemy);
     }
@@ -563,7 +576,7 @@ export class Enemies {
 
   /** Ist seine Zeit gekommen, und sind noch nicht zu viele seiner Art unterwegs? */
   private mayAppear(type: EnemyType, time: number): boolean {
-    if (type.from > time) return false;
+    if ((this.appearFrom[type.id] ?? type.from) > time) return false;
     if (type.maxAlive === undefined) return true;
     let count = 0;
     for (const enemy of this.alive) if (enemy.type === type) count++;
