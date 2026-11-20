@@ -727,6 +727,11 @@ body[data-vitals='bottom-left'] #debug {
   line-height: 1.4;
 }
 
+/* Knöpfe in einer Gruppe (Spielstand sichern und laden): so breit wie die Gruppe, ohne den Abstand der freistehenden Knöpfe. */
+.option-group .button {
+  margin-top: 0;
+}
+
 /* Lebensgruppe platzieren: ein kleiner Bildschirm, auf dem man die Stelle anklickt. */
 .option.position {
   flex-direction: column;

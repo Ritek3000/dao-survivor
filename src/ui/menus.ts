@@ -14,7 +14,19 @@ import { element } from './dom';
 import { StatistikView } from './statistikView';
 
 /** Was ein Knopf in einem Menü auslöst. */
-export type MenuCommand = 'new' | 'continue' | 'options' | 'stats' | 'help' | 'resume' | 'abort' | 'back' | 'yes' | 'no';
+export type MenuCommand =
+  | 'new'
+  | 'continue'
+  | 'options'
+  | 'stats'
+  | 'help'
+  | 'resume'
+  | 'abort'
+  | 'back'
+  | 'yes'
+  | 'no'
+  | 'save-export'
+  | 'save-import';
 
 export type MenuScreen = 'title' | 'pause' | 'options' | 'stats' | 'help' | 'confirm';
 
@@ -75,6 +87,9 @@ export class Menus {
   private readonly stats = new StatistikView(element('stats-view'), element('stats'));
   private readonly muteBox = element<HTMLInputElement>('vol-mute');
   private readonly shareBox = element<HTMLInputElement>('data-share');
+  /** Der Knopf zum Laden eines Spielstands und sein Ersatzhinweis; geladen wird nur im Hauptmenü (siehe `showOptions`). */
+  private readonly importButton = element<HTMLButtonElement>('save-import');
+  private readonly importHint = element('save-import-hint');
   private readonly spots = [...element('position-picker').querySelectorAll<HTMLButtonElement>('.spot')];
   private readonly positionName = element('position-name');
   private readonly continueButton = element('title-continue');
@@ -160,9 +175,14 @@ export class Menus {
     return true;
   }
 
-  /** `solid`: undurchsichtiger Grund, wenn dahinter kein Spiel zu sehen sein soll (vom Startbildschirm aus). */
-  showOptions(solid = false): void {
-    this.show('options', 0, false, solid);
+  /**
+   * `fromTitle`: Die Optionen kommen vom Startbildschirm; dahinter ist kein Spiel zu sehen (undurchsichtiger Grund), und einen Spielstand
+   * laden darf man nur hier: Mitten in der Nacht schriebe der laufende Lauf später über den geladenen Stand.
+   */
+  showOptions(fromTitle = false): void {
+    this.importButton.hidden = !fromTitle;
+    this.importHint.hidden = fromTitle;
+    this.show('options', 0, false, fromTitle);
   }
 
   showConfirm(view: ConfirmView, solid = false): void {
