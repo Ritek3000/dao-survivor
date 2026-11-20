@@ -59,18 +59,18 @@ export const NIGHTS: readonly NightDef[] = [
   {
     id: 'rotnacht',
     name: 'Rotnacht',
-    text: 'Die Gegner laufen 20 % schneller, und du schlägst 20 % schneller zu. Die Rast im Licht heilt nur halb so viel.',
+    text: 'Die Gegner laufen 20 % schneller, und du schlägst 10 % schneller zu. Die Rast im Licht heilt nur halb so viel.',
     note: 'Dundar steht voll am Himmel: Unter rotem Mond ist keiner, wer er ist.',
     reward: 'Lohn: Gold × 1,3',
-    rules: { enemySpeed: 1.2, stats: { cooldown: 1 / 1.2, restHeal: 0.5, gold: 1.3 } },
+    rules: { enemySpeed: 1.2, stats: { cooldown: 1 / 1.1, restHeal: 0.5, gold: 1.3 } },
   },
   {
     id: 'blaunacht',
     name: 'Blaunacht',
-    text: 'Weniger Gegner, aber zähere: 30 % seltener, mit 40 % mehr Leben. Die Dhargass-Priester kommen schon nach zwei Minuten.',
+    text: 'Weniger Gegner, aber zähere: 20 % seltener, mit 50 % mehr Leben. Die Dhargass-Priester kommen schon nach zwei Minuten.',
     note: 'Branjur steht voll am Himmel, und die Nacht ist still.',
     reward: 'Lohn: Erfahrung × 1,3',
-    rules: { spawnRate: 0.7, enemyHp: 1.4, appearFrom: { priester: 120 }, stats: { xp: 1.3 } },
+    rules: { spawnRate: 0.8, enemyHp: 1.5, appearFrom: { priester: 120 }, stats: { xp: 1.3 } },
   },
   {
     id: 'regenlicht',
