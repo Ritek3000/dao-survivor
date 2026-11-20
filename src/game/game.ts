@@ -246,6 +246,8 @@ export class Game {
     this.hud.onLager = () => this.openLagerFromMenu();
     this.hud.onPick = (index) => this.pick(index);
     this.hud.onMainMenu = () => this.openTitle();
+    this.hud.onReroll = () => this.reroll();
+    this.hud.onBanish = () => this.toggleBanishing();
     this.settings = loadSettings({
       sound: { ...CONFIG.audio.defaults, muted: false },
       ui: { vitalsPosition: 'top-left' },
