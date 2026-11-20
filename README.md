@@ -166,8 +166,8 @@ und kein Pech. Vorgewählt ist die zuletzt gewählte der Sitzung (nicht gespeich
 | Nachtart | Anlass (Wiki) | Regel | Lohn |
 | -------- | ------------- | ----- | ---- |
 | Gewöhnliche Nacht | – | unverändert | wie gewohnt |
-| Rotnacht | Kalender: Dundar steht voll am Himmel | Gegner 20 % schneller, du schlägst 20 % schneller zu (Abklingzeit × 1/1,2), die Rast im Licht heilt nur halb | Gold × 1,3 |
-| Blaunacht | Kalender: Branjur steht voll am Himmel | Gegner 30 % seltener (Rate × 0,7), mit 40 % mehr Leben; Dhargass-Priester ab 120 s statt 240 s | Erfahrung × 1,3 |
+| Rotnacht | Kalender: Dundar steht voll am Himmel | Gegner 20 % schneller, du schlägst 10 % schneller zu (Abklingzeit × 1/1,1), die Rast im Licht heilt nur halb | Gold × 1,3 |
+| Blaunacht | Kalender: Branjur steht voll am Himmel | Gegner 20 % seltener (Rate × 0,8), mit 50 % mehr Leben; Dhargass-Priester ab 120 s statt 240 s | Erfahrung × 1,3 |
 | Regenlicht | Wetter: nach kräftigem Regen ist der Himmel heller | Verstaubung halb so schnell, vier statt sieben Schwaden, Gegner mit 20 % mehr Leben | Gold × 0,9 |
 
 **Abweichung von der Lore, Vorschläge.** Im Wiki bestimmt der Kalender, wann Rot- und Blaunacht sind; im Spiel wählt man die Nacht. Die Wirkungen und Zahlen sind Vorschläge und Startwerte für den Messlauf, nicht aus dem Wiki.
