@@ -293,6 +293,8 @@ async function playNight(game: Game, classIndex: number, random: Random, maxSeco
   g.hud.hideEnd();
   g.openSelect();
   g.pick(classIndex);
+  // Nach der Klasse folgt die Wahl des Startangriffs; die Messung nimmt den üblichen, den ersten der Klasse.
+  if (g.phase === 'start') g.pick(0);
   // Mit einem Angriff im Blick beginnt die Nacht mit ihm auf Rang 4: Sonst käme er in einer Nacht selten bis Rang 5, und es ließe sich nichts messen.
   // Der nächste Rang ist dann die Evolution (mit dem Ring) oder Rang 5 (ohne).
   if (focus) {

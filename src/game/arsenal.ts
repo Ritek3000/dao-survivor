@@ -271,10 +271,11 @@ export class Arsenal {
   }
 
   /**
-   * Neue Nacht: nur der Startangriff der Klasse. `evolutions` sind die Angriffe, deren Evolution ein angelegter legendärer Ring
-   * freischaltet; sie werden Rang 6, sobald sie Rang 5 erreichen (`take`).
+   * Neue Nacht: nur der Startangriff; ohne Angabe ist es der erste der Klasse, sonst der gewählte (`startId`, einer der sieben der Klasse).
+   * `evolutions` sind die Angriffe, deren Evolution ein angelegter legendärer Ring freischaltet; sie werden Rang 6, sobald sie Rang 5
+   * erreichen (`take`).
    */
-  reset(playerClass: ClassDef, evolutions: ReadonlySet<string> = NO_EVOLUTIONS): void {
+  reset(playerClass: ClassDef, evolutions: ReadonlySet<string> = NO_EVOLUTIONS, startId: string = playerClass.weapons[0] ?? ''): void {
     this.available = playerClass.weapons.map(weaponById);
     this.evolved = evolutions;
     this.relic = null;
@@ -308,7 +309,7 @@ export class Arsenal {
     this.player.shieldCharges = 0;
     this.projectiles.reset();
     this.effects.reset();
-    const start = this.available[0];
+    const start = this.available.find((def) => def.id === startId) ?? this.available[0];
     if (start) this.take(start);
   }
 

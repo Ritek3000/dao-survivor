@@ -17,9 +17,21 @@ export type Action =
   | 'use'
   /** Im Lager: zwischen Ausrüstung, Truhe und Händler wechseln. */
   | 'switch'
+  /** Beim Stufenaufstieg: die Karten neu würfeln. */
+  | 'reroll'
+  /** Beim Stufenaufstieg: eine Karte bis zum Ende der Nacht aus dem Angebot streichen. */
+  | 'banish'
+  /** Die Karten einer Auswahl der Reihe nach; sieben gibt es bei der Wahl des Startangriffs. */
   | 'choice1'
   | 'choice2'
-  | 'choice3';
+  | 'choice3'
+  | 'choice4'
+  | 'choice5'
+  | 'choice6'
+  | 'choice7';
+
+/** Die Wahlaktionen in der Reihenfolge der Karten. */
+export const CHOICE_ACTIONS: readonly Action[] = ['choice1', 'choice2', 'choice3', 'choice4', 'choice5', 'choice6', 'choice7'];
 
 export interface MoveVector {
   /** Rechts ist positiv. */
@@ -60,6 +72,8 @@ const ACTION_KEYS: Readonly<Record<string, Action>> = {
   KeyU: 'lager',
   KeyL: 'lager',
   KeyE: 'use',
+  KeyR: 'reroll',
+  KeyX: 'banish',
   Tab: 'switch',
   Digit1: 'choice1',
   Numpad1: 'choice1',
@@ -67,6 +81,14 @@ const ACTION_KEYS: Readonly<Record<string, Action>> = {
   Numpad2: 'choice2',
   Digit3: 'choice3',
   Numpad3: 'choice3',
+  Digit4: 'choice4',
+  Numpad4: 'choice4',
+  Digit5: 'choice5',
+  Numpad5: 'choice5',
+  Digit6: 'choice6',
+  Numpad6: 'choice6',
+  Digit7: 'choice7',
+  Numpad7: 'choice7',
 };
 
 /** Ist das Ziel eines Tastendrucks ein Feld, in das man Text schreibt? */

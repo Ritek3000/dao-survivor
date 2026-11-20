@@ -134,7 +134,11 @@
           <h2>Steuerung</h2>
           <ul>
             <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> oder Pfeiltasten: bewegen. Angegriffen wird von selbst.</li>
-            <li><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> oder Pfeile und <kbd>Enter</kbd>: wählen und bestätigen.</li>
+            <li>
+              <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> oder Pfeile und <kbd>Enter</kbd>: wählen und bestätigen; beim Startangriff gelten
+              <kbd>1</kbd> bis <kbd>7</kbd>.
+            </li>
+            <li><kbd>R</kbd>: Karten beim Stufenaufstieg neu würfeln · <kbd>X</kbd>: eine Karte verbannen.</li>
             <li><kbd>Esc</kbd> oder <kbd>P</kbd>: Pause · <kbd>M</kbd>: Ton an oder aus.</li>
             <li>
               <kbd>L</kbd>: Lager, bei der Klassenwahl und am Ende der Nacht. Dort wechselt <kbd>Tab</kbd> die Ansicht,
@@ -161,19 +165,23 @@
             den nächsten Rang eines Angriffs oder eine Stärkung für diese Nacht. Auf jeder fünften Stufe und nach dem Verschlinger
             antwortet eine Höhere Macht mit einem Segen; jeden Segen gibt es je Nacht nur einmal.
           </p>
+          <p>
+            Gefällt dir kein Angebot, kannst du je Nacht zweimal die Karten <b>neu würfeln</b> (R) und zweimal eine Karte <b>verbannen</b> (X):
+            Wähle dann die Karte; sie kommt bis zum Morgen nicht wieder, und eine andere nimmt ihren Platz ein.
+          </p>
         </section>
         <section>
           <h2>Die Klassen</h2>
           <ul>
             <li>
-              <b>Kämpfer:</b> stark im Licht der Feuer. Axthieb (zu Beginn), Banner, Wurfaxt, Wirbelschlag, Wuchthieb, Kriegsschrei, Dornenschild.
+              <b>Kämpfer:</b> stark im Licht der Feuer. Axthieb (üblicher Beginn), Banner, Wurfaxt, Wirbelschlag, Wuchthieb, Kriegsschrei, Dornenschild.
             </li>
             <li>
-              <b>Wildnisläufer:</b> zu Hause am Rand der Finsternis. Bogenschuss (zu Beginn), Pfeilhagel, Fangeisen, Wurfmesser-Fächer,
+              <b>Wildnisläufer:</b> zu Hause am Rand der Finsternis. Bogenschuss (üblicher Beginn), Pfeilhagel, Fangeisen, Wurfmesser-Fächer,
               Sporenfalle, Köderpuppe, Netz.
             </li>
             <li>
-              <b>Magier:</b> wirkt am schnellsten mitten in der Finsternis. Hitze werfen (zu Beginn), Sorlanze, Glut formen, Erdstoß,
+              <b>Magier:</b> wirkt am schnellsten mitten in der Finsternis. Hitze werfen (üblicher Beginn), Sorlanze, Glut formen, Erdstoß,
               Wurzelgriff, Sturmböe, Schild.
             </li>
           </ul>
@@ -181,7 +189,7 @@
         <section>
           <h2>Angriffe und Evolutionen</h2>
           <p>
-            Jede Klasse hat sieben Angriffe und beginnt mit einem; die übrigen kommen beim Stufenaufstieg dazu. Jeder Angriff wächst bis Rang 5.
+            Jede Klasse hat sieben Angriffe und beginnt mit einem, den du nach der Klasse wählst; die übrigen kommen beim Stufenaufstieg dazu. Jeder Angriff wächst bis Rang 5.
           </p>
           <p>
             Ein <b>legendärer Ring</b> verwandelt einen Angriff auf Rang 5 in seine Evolution (Rang 6): Sie ersetzt den Angriff und
@@ -329,6 +337,10 @@
       <div id="choice-cards"></div>
       <p id="choice-gold" hidden></p>
       <p id="choice-note" hidden></p>
+      <div id="choice-tools" class="buttons" hidden>
+        <button id="choice-reroll" class="button" type="button"></button>
+        <button id="choice-banish" class="button" type="button"></button>
+      </div>
       <div class="buttons">
         <button id="choice-lager" class="button" type="button" hidden>Lager (L)</button>
         <button id="choice-main-menu" class="button" type="button" hidden>Hauptmenü (Esc)</button>

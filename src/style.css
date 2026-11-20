@@ -535,6 +535,16 @@ body[data-vitals='bottom-left'] #debug {
   margin-top: 14px;
 }
 
+/* Die sieben Angriffe zur Wahl des Startangriffs: schmalere Karten, damit sie in zwei Reihen passen. */
+#choice-cards.dense {
+  max-width: min(1240px, 96vw);
+}
+
+#choice-cards.dense .card {
+  width: 160px;
+  padding: 14px 10px;
+}
+
 .card {
   display: flex;
   flex-direction: column;
@@ -552,6 +562,16 @@ body[data-vitals='bottom-left'] #debug {
 .card.selected {
   border-color: var(--ember);
   box-shadow: 0 0 18px rgba(255, 180, 94, 0.25);
+}
+
+/* Solange eine Karte zum Verbannen gesucht wird, rahmt das Bild alle in Rot. */
+#choice-cards.banishing .card {
+  border-color: #8f3d33;
+}
+
+#choice-cards.banishing .card.selected {
+  border-color: #d06a54;
+  box-shadow: 0 0 18px rgba(208, 106, 84, 0.3);
 }
 
 /* Ein Segen einer Höheren Macht hebt sich von den gewöhnlichen Stärkungen ab. */
@@ -868,7 +888,12 @@ body[data-vitals='bottom-left'] #debug {
   cursor: pointer;
 }
 
-.button:hover {
+.button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.button:hover:not(:disabled) {
   border-color: var(--ember);
 }
 

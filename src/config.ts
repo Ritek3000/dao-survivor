@@ -131,6 +131,10 @@ export const CONFIG = {
     nightSeconds: 900,
     /** So lange vor Sonnenaufgang beginnt es zu dämmern. */
     dawnSeconds: 30,
+    /** Wie oft je Nacht beim Stufenaufstieg die Karten neu gewürfelt werden dürfen (siehe `Game.reroll`). */
+    rerolls: 2,
+    /** Wie viele Karten je Nacht bis zu ihrem Ende aus dem Angebot gestrichen werden dürfen (siehe `Game.banish`). */
+    banishes: 2,
   },
   world: {
     /** Begehbarer Bereich; die Steinmale stehen an seinem Rand. */

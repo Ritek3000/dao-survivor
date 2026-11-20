@@ -3,7 +3,7 @@ import type { Rarity } from '../game/items';
 import type { IslandBearing, Zone } from '../game/zones';
 import { element, span } from './dom';
 
-/** Eine Karte in einer Auswahl: Klasse zu Beginn, Stärkung beim Stufenaufstieg. */
+/** Eine Karte in einer Auswahl: Klasse und Startangriff zu Beginn, Stärkung beim Stufenaufstieg. */
 export interface ChoiceCard {
   name: string;
   text: string;
@@ -13,6 +13,16 @@ export interface ChoiceCard {
   segen?: boolean;
   /** Zweites Kleingedrucktes, etwa wie viele Gegenstände die Klasse trägt. */
   extra?: string;
+}
+
+/** Was beim Stufenaufstieg unter den Karten steht: Neuwurf und Verbannen mit ihren Vorräten. */
+export interface ChoiceTools {
+  rerolls: number;
+  banishes: number;
+  /** Gibt es andere Karten, die an die Stelle der gezeigten treten könnten? Ohne sie bleibt beides wirkungslos und ist gesperrt. */
+  swappable: boolean;
+  /** Die Wahl wartet darauf, dass eine Karte zum Verbannen angeklickt wird. */
+  banishing: boolean;
 }
 
 /** Ein Gegenstand der Nacht in der Endanzeige und was aus ihm wurde. */
@@ -51,6 +61,9 @@ export class Hud {
   onLager: () => void = () => {};
   /** Der Knopf "Hauptmenü" bei der Klassenwahl und am Ende der Nacht. */
   onMainMenu: () => void = () => {};
+  /** Die Knöpfe "Neu würfeln" und "Verbannen" beim Stufenaufstieg. */
+  onReroll: () => void = () => {};
+  onBanish: () => void = () => {};
   private readonly hpFill = element('hp-fill');
   private readonly hpDust = element('hp-dust');
   private readonly hpText = element('hp-text');
@@ -80,6 +93,9 @@ export class Hud {
   private readonly choiceCards = element('choice-cards');
   private readonly choiceGold = element('choice-gold');
   private readonly choiceNote = element('choice-note');
+  private readonly choiceTools = element('choice-tools');
+  private readonly choiceReroll = element<HTMLButtonElement>('choice-reroll');
+  private readonly choiceBanish = element<HTMLButtonElement>('choice-banish');
   private readonly choiceLager = element('choice-lager');
   private readonly endLager = element('end-lager');
   private readonly endKeys = element('end-keys');
@@ -105,6 +121,8 @@ export class Hud {
       ['choice-lager', () => this.onLager()],
       ['end-lager', () => this.onLager()],
       ['choice-main-menu', () => this.onMainMenu()],
+      ['choice-reroll', () => this.onReroll()],
+      ['choice-banish', () => this.onBanish()],
       ['end-main-menu', () => this.onMainMenu()],
     ] as const) {
       const button = element(id);
@@ -219,7 +237,8 @@ export class Hud {
 
   /**
    * Zeigt eine Auswahl. Mit `gold` (der Klassenwahl) steht darunter die Geldbörse samt Knopf zum Lager, und `note` ist ein Hinweis
-   * darunter (leer: keiner); bei der Wahl einer Stärkung gibt es das alles nicht.
+   * darunter (leer: keiner); bei der Wahl einer Stärkung gibt es das alles nicht. `dense` setzt die Karten enger, damit die
+   * sieben Angriffe der Klasse gut Platz haben. Neuwurf und Verbannen zeigt erst `setChoiceTools`.
    */
   showChoice(
     title: string,
@@ -228,8 +247,12 @@ export class Hud {
     selected: number,
     gold: number | null = null,
     note = '',
+    dense = false,
   ): void {
     this.choiceTitle.textContent = title;
+    this.choiceCards.classList.toggle('dense', dense);
+    this.choiceCards.classList.remove('banishing');
+    this.choiceTools.hidden = true;
     this.choiceSubtitle.textContent = subtitle;
     this.cards = cards.map((card, index) => {
       const button = document.createElement('button');
@@ -258,6 +281,32 @@ export class Hud {
         : `1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen${this.lagerEnabled ? ' · L: Lager' : ''} · Esc: Hauptmenü`;
     this.select(selected);
     this.choice.hidden = false;
+  }
+
+  /** Ersetzt die Unterzeile der Auswahl, etwa während eine Karte zum Verbannen gesucht wird. */
+  setChoiceSubtitle(text: string): void {
+    this.choiceSubtitle.textContent = text;
+  }
+
+  /** Ersetzt die Tastenzeile unter den Karten. */
+  setChoiceKeys(text: string): void {
+    this.choiceKeys.textContent = text;
+  }
+
+  /** Zeigt unter den Karten Neuwurf und Verbannen mit den Vorräten der Nacht. */
+  setChoiceTools(tools: ChoiceTools): void {
+    const { rerolls, banishes, swappable, banishing } = tools;
+    this.choiceTools.hidden = false;
+    this.choiceCards.classList.toggle('banishing', banishing);
+    this.choiceReroll.textContent = `Neu würfeln (R) · ${rerolls}`;
+    this.choiceReroll.disabled = rerolls <= 0 || !swappable;
+    this.choiceReroll.title = 'Ersetzt die Karten durch andere, wenn es welche gibt.';
+    this.choiceBanish.textContent = banishing ? 'Abbrechen (X)' : `Verbannen (X) · ${banishes}`;
+    this.choiceBanish.disabled = !banishing && (banishes <= 0 || !swappable);
+    this.choiceBanish.title = 'Streicht eine Karte bis zum Ende der Nacht aus dem Angebot; eine andere nimmt ihren Platz ein.';
+    this.choiceKeys.textContent = banishing
+      ? '1 · 2 · 3 oder Pfeiltasten und Enter: Karte verbannen · X oder Esc: abbrechen'
+      : '1 · 2 · 3 oder Pfeiltasten und Enter · R: Neu würfeln · X: Verbannen';
   }
 
   /** Zeigt die Knöpfe zum Lager oder versteckt sie; wirkt ab dem nächsten Bild der Klassenwahl und des Endes. */
