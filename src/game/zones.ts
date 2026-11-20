@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { audio } from '../audio';
 import { CONFIG } from '../config';
-import { createRandom, type Random } from '../core/random';
+import { createRandom, deriveSeed, type Random } from '../core/random';
 import { MAX_CLOUDS, clearCloudUniform, cloudAmount, finsternisUniforms, swallowedByFinsternis } from './darkness';
 import type { PropModel } from './models';
 import { Particles, type Particle } from './particles';
@@ -110,7 +110,6 @@ export class Zones {
   private readonly viewerTint = new THREE.Color(1, 1, 1);
   private igniting: Island | null = null;
   private random: Random = createRandom(0);
-  private night = 0;
 
   constructor(sites: readonly Site[]) {
     if (CONFIG.finsternis.clouds > MAX_CLOUDS) throw new Error(`Höchstens ${MAX_CLOUDS} Schwaden.`);
@@ -122,12 +121,12 @@ export class Zones {
       this.lights.push(light);
       this.group.add(light);
     }
-    this.reset();
+    this.reset(0);
   }
 
-  /** Neue Nacht: alle Feuer aus, Schwaden neu verteilt. */
-  reset(): void {
-    this.random = createRandom(CONFIG.world.seed + 100 + this.night++);
+  /** Neue Nacht: alle Feuer aus, Schwaden aus dem Seed des Laufs neu verteilt. */
+  reset(seed: number): void {
+    this.random = createRandom(deriveSeed(seed, 100));
     this.igniting = null;
     this.igniteProgress = 0;
     for (const island of this.islands) {

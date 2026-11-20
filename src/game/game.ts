@@ -4,7 +4,8 @@ import { CONFIG } from '../config';
 import { evaluate } from '../core/auswertung';
 import { pickTextFile, saveTextFile } from '../core/dateien';
 import { Input, type MoveVector } from '../core/input';
-import { createRandom } from '../core/random';
+import { createRandom, deriveSeed, type Random } from '../core/random';
+import { formatSeed, newRunSeed, seedFromAddress } from '../core/runSeed';
 import { loadSettings, saveSettings, type Settings, type VitalsPosition } from '../core/settings';
 import { sendRun } from '../core/sammelstelle';
 import {
@@ -80,7 +81,19 @@ export class Game {
   private readonly fog = new THREE.Fog(NIGHT_BACKGROUND, 28, 60);
   private readonly input = new Input();
   private readonly menus = new Menus();
-  private readonly random = createRandom(CONFIG.world.seed + 900);
+  /**
+   * Der Zufall des Laufs für Angebote, Boss und Angriffe. Jeder Lauf beginnt einen neuen Strom aus seinem Seed (`startRun`);
+   * die Hand, die ihn weitergibt, bleibt dieselbe, damit Arsenal und Boss ihn nicht neu bekommen müssen.
+   */
+  private stream: Random = createRandom(deriveSeed(0, 900));
+  private readonly random: Random = () => this.stream();
+  /** Der Seed des laufenden (oder zuletzt gespielten) Laufs; er steht im Endbild. */
+  private runSeed = 0;
+  /**
+   * Der Seed für den nächsten Lauf, wenn er nicht aus der Uhrzeit kommen soll: von der Adresse (`?seed=`) vorgegeben oder,
+   * nur für den Messlauf, von diesem. Der Lauf nimmt ihn und leert das Feld; danach würfelt wieder die Uhr.
+   */
+  private nextSeed: number | null = seedFromAddress();
   private readonly progression = new Progression();
   private readonly world = new World();
   private readonly zones: Zones;
@@ -853,6 +866,9 @@ export class Game {
   }
 
   private startRun(playerClass: ClassDef): void {
+    this.runSeed = this.nextSeed ?? newRunSeed();
+    this.nextSeed = null;
+    this.stream = createRandom(deriveSeed(this.runSeed, 900));
     this.playerClass = playerClass;
     this.time = 0;
     this.pendingLevels = 0;
@@ -872,15 +888,15 @@ export class Game {
     this.fields.reset();
     this.events.add(this.fields);
     this.events.add(this.arsenal.listener);
-    this.enemies.reset();
+    this.enemies.reset(this.runSeed);
     this.pickups.reset();
     this.coins.reset();
     this.drops.reset();
     this.chest.reset();
-    this.beute.start(playerClass.id);
+    this.beute.start(playerClass.id, this.runSeed);
     this.lootBest = null;
     this.hud.setLoot(0, null);
-    this.zones.reset();
+    this.zones.reset(this.runSeed);
     this.syncLight();
     this.applyBlessings();
     this.threats.reset();
@@ -1036,6 +1052,7 @@ export class Game {
     const survived = Math.min(this.time, CONFIG.run.nightSeconds);
     const stats = `${this.playerClass.name} · Überlebt: ${formatTime(survived)} · Stufe ${this.progression.level} · Erschlagen: ${this.enemies.kills}`;
     this.recordNight(outcome, survived);
+    this.hud.setEndSeed(formatSeed(this.runSeed));
     const loot = this.settleLoot();
     const gold = this.settle(won, survived, loot.gold);
     const lines = this.lootLines(loot);

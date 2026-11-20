@@ -83,6 +83,7 @@ export class Hud {
   private readonly choiceLager = element('choice-lager');
   private readonly endLager = element('end-lager');
   private readonly endKeys = element('end-keys');
+  private readonly endSeed = element('end-seed');
   private readonly choiceMainMenu = element('choice-main-menu');
   private readonly choiceKeys = element('choice-keys');
   private readonly end = element('end');
@@ -297,6 +298,12 @@ export class Hud {
           ]),
     );
     this.end.hidden = false;
+  }
+
+  /** Der Seed des Laufs unter dem Endbild; mit `?seed=` hinter der Adresse beginnt ein Lauf mit demselben Seed. */
+  setEndSeed(seed: string): void {
+    this.endSeed.textContent = `Lauf-Seed: ${seed}`;
+    this.endSeed.title = `Mit ?seed=${seed} hinter der Adresse beginnt der erste Lauf mit diesem Seed.`;
   }
 
   hideEnd(): void {

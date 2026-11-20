@@ -11,3 +11,16 @@ export function createRandom(seed: number): Random {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+/**
+ * Leitet aus einem Seed einen zweiten ab, der mit ihm nichts gemein hat. `salt` unterscheidet die Ströme eines Laufs
+ * (Gegner, Schwaden, Beute, Angebote). Ohne das Mischen glichen sich die Ströme benachbarter Seeds, und Läufe mit den
+ * Seeds 7 und 8 spielten sich fast gleich.
+ */
+export function deriveSeed(seed: number, salt: number): number {
+  let h = Math.imul((seed ^ Math.imul(salt, 0x9e3779b1)) >>> 0, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
