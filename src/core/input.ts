@@ -21,6 +21,9 @@ export type Action =
   | 'reroll'
   /** Beim Stufenaufstieg: eine Karte bis zum Ende der Nacht aus dem Angebot streichen. */
   | 'banish'
+  /** Bei der Wahl der Nachtart: den Grad der gewählten Nacht um eins erhöhen oder senken (neben Pfeil hoch und runter). */
+  | 'gradeUp'
+  | 'gradeDown'
   /** Die Karten einer Auswahl der Reihe nach; sieben gibt es bei der Wahl des Startangriffs. */
   | 'choice1'
   | 'choice2'
@@ -91,6 +94,12 @@ const ACTION_KEYS: Readonly<Record<string, Action>> = {
   Numpad7: 'choice7',
 };
 
+// Die Zeichen + und - liegen je nach Tastatur an anderer Stelle (und am Ziffernblock); darum zählt für sie das Zeichen, nicht die Taste.
+const CHAR_ACTIONS: Readonly<Record<string, Action>> = {
+  '+': 'gradeUp',
+  '-': 'gradeDown',
+};
+
 /** Ist das Ziel eines Tastendrucks ein Feld, in das man Text schreibt? */
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -144,7 +153,7 @@ export class Input {
     // Tippt jemand in ein Eingabefeld (etwa den Namen eines Reiters der Truhe), gehören die Tasten dem Feld und nicht dem Spiel.
     if (isTypingTarget(event.target)) return;
     const isMove = event.code in MOVE_KEYS;
-    const action = ACTION_KEYS[event.code];
+    const action = ACTION_KEYS[event.code] ?? CHAR_ACTIONS[event.key];
     if (!isMove && !action) return;
     event.preventDefault();
     if (event.repeat) return;

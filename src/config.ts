@@ -136,6 +136,19 @@ export const CONFIG = {
     /** Wie viele Karten je Nacht bis zu ihrem Ende aus dem Angebot gestrichen werden dürfen (siehe `Game.banish`). */
     banishes: 2,
   },
+  /**
+   * Grade der Nächte (`game/grade.ts`, Regeln in `game/nights.ts`): Wer eine Nachtart geschafft hat, darf sie beim nächsten Mal einen Grad
+   * höher wählen. Jeder Grad macht die Gegner stärker, und zwar additiv: Grad 5 ist fünfmal der Zuschlag, nicht 1,05 hoch 5. Die Zuschläge
+   * kommen auf die Regeln der Nachtart obendrauf (Blaunacht, Grad 2: Leben × 1,5 × 1,1).
+   */
+  grade: {
+    /** Höchster Grad. Nur ein Schutz vor Unsinn in einer bearbeiteten Datei, kein Ziel. */
+    max: 99,
+    /** Zuschlag je Grad auf das Leben der Gegner, auch des Verschlingers (0,05 = +5 %). */
+    enemyHp: 0.05,
+    /** Zuschlag je Grad auf den Schaden, den Gegner, Verschlinger und Schwarzer Sog der Figur zufügen (0,025 = +2,5 %). */
+    enemyDamage: 0.025,
+  },
   world: {
     /** Begehbarer Bereich; die Steinmale stehen an seinem Rand. */
     radius: 90,

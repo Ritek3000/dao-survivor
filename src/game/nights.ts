@@ -9,21 +9,26 @@
  *
  * Wie eine Nachtart wirkt, steht in `NightRules`: Die Gegner (`Enemies.reset`), die Schwaden (`Zones.reset`) und die Werte der Figur
  * (`Progression.reset`) lesen es beim Start der Nacht. Nichts davon ändert `CONFIG`.
+ *
+ * Auf jede Nachtart kann ein Grad kommen (`rulesAt`, die Grade selbst verwaltet `grade.ts`): Er macht die Gegner stärker und ändert sonst nichts.
  */
 
+import { CONFIG } from '../config';
 import type { Stats } from './progression';
 
 export type NightId = 'gewoehnlich' | 'rotnacht' | 'blaunacht' | 'regenlicht';
 
 /** Die Werte der Figur, die eine Nachtart mit einem Faktor verändern darf. */
-export type NightStat = 'cooldown' | 'restHeal' | 'verstaubung' | 'xp' | 'gold';
+export type NightStat = 'cooldown' | 'restHeal' | 'verstaubung' | 'xp' | 'gold' | 'taken';
 
 /** Was eine Nachtart verändert; fehlt eine Angabe, gilt der gewohnte Wert. Faktoren beginnen bei 1. */
 export interface NightRules {
   /** Faktor auf das Tempo der Gegner. */
   enemySpeed?: number;
-  /** Faktor auf das Leben der Gegner (nicht des Verschlingers). */
+  /** Faktor auf das Leben der Gegner (nicht des Verschlingers; dessen Leben ändert nur `bossHp`). */
   enemyHp?: number;
+  /** Faktor auf das Leben des Verschlingers. Die Nachtarten rühren es nicht an; der Grad (`rulesAt`) schon. */
+  bossHp?: number;
   /** Faktor auf die Zahl der Gegner, die je Sekunde entstehen. */
   spawnRate?: number;
   /** Gegnerarten (`EnemyType.id`), die schon nach so vielen Sekunden erscheinen statt erst zu ihrer gewohnten Zeit. */
@@ -87,6 +92,25 @@ export const USUAL_NIGHT: NightDef = NIGHTS[0] as NightDef;
 
 export function nightById(id: string): NightDef | undefined {
   return NIGHTS.find((night) => night.id === id);
+}
+
+/**
+ * Die Regeln einer Nacht im gewählten Grad (siehe `grade.ts`): die der Nachtart, dazu der Zuschlag des Grads auf das Leben der Gegner
+ * und des Verschlingers und auf den Schaden, den die Figur erleidet (`taken`). Die Zuschläge sind additiv je Grad
+ * (`CONFIG.grade`) und werden mit den Faktoren der Nachtart malgenommen. Grad 0 ergibt die Regeln der Nachtart unverändert.
+ */
+export function rulesAt(night: NightDef, grade: number): NightRules {
+  if (grade <= 0) return night.rules;
+  const { enemyHp, enemyDamage } = CONFIG.grade;
+  const hp = 1 + grade * enemyHp;
+  const damage = 1 + grade * enemyDamage;
+  const { rules } = night;
+  return {
+    ...rules,
+    enemyHp: (rules.enemyHp ?? 1) * hp,
+    bossHp: (rules.bossHp ?? 1) * hp,
+    stats: { ...rules.stats, taken: (rules.stats?.taken ?? 1) * damage },
+  };
 }
 
 /** Legt die Faktoren der Nachtart auf die Werte der Figur. */

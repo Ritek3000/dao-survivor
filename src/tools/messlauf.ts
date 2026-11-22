@@ -7,6 +7,7 @@
  *   __messlauf.start()                               alle Klassen, je drei Nächte
  *   __messlauf.start({ nights: 5, classes: [2] })    nur der Magier, fünf Nächte
  *   __messlauf.start({ nacht: 'rotnacht' })          alle Nächte in der Rotnacht (siehe `nights.ts`)
+ *   __messlauf.start({ nacht: 'blaunacht', grad: 3 })  dasselbe im Grad 3 (siehe `grade.ts`; der Grad muss nicht freigeschaltet sein)
  *   __messlauf.start({ ausruestung: 'rar' })         alle neun Plätze jeder Klasse mit rar gewürfelten Gegenständen belegt
  *   __messlauf.start({ evolution: 'axthieb', classes: [0] })   der Kämpfer trägt den legendären Ring der Evolution des Axthiebs und beginnt mit diesem Angriff auf Rang 4
  *   __messlauf.start({ fokus: 'axthieb', classes: [0] })       dasselbe ohne Ring: Der Angriff endet bei Rang 5 (zum Vergleich mit der Evolution)
@@ -70,6 +71,9 @@ interface Internals {
   events: { add(listener: CombatListener): void };
   progression: { level: number; stats: Stats; blessed: { name: string }[] };
   boerse: Boerse;
+  /** Die Grade der Nächte; die Messung schreibt sie nicht in den Spielstand und wählt den Grad der Probenacht selbst. */
+  grade: { persist: boolean; reload(): void };
+  chosenGrade: Map<string, number>;
   ausruestung: Ausruestung;
   beute: {
     settle(): { gold: number; items: { item: { rarity: Rarity } }[] };
@@ -117,6 +121,8 @@ export interface MinuteSample {
 
 export interface NightResult {
   klasse: string;
+  /** Der Grad der Nacht (0 ist der Grundgrad). */
+  grad: number;
   /** Überlebte Sekunden; eine volle Nacht hat `CONFIG.run.nightSeconds`. */
   ueberlebt: number;
   gewonnen: boolean;
@@ -169,6 +175,8 @@ interface Options {
   fokus?: string;
   /** Die Nachtart, in der alle Nächte der Messung spielen (`'rotnacht'`, `'blaunacht'`, `'regenlicht'`); ohne Angabe die gewöhnliche. */
   nacht?: NightId;
+  /** Der Grad, in dem alle Nächte der Messung spielen (siehe `grade.ts`); ohne Angabe 0. Er muss nicht freigeschaltet sein. */
+  grad?: number;
   seed?: number;
 }
 
@@ -262,6 +270,7 @@ async function playNight(
   random: Random,
   maxSeconds: number,
   nightId: NightId,
+  grade: number,
   focus?: string,
 ): Promise<NightResult> {
   const g = game as unknown as Internals;
@@ -270,6 +279,7 @@ async function playNight(
   const style = STYLES[playerClass.id];
   const result: NightResult = {
     klasse: playerClass.name,
+    grad: grade,
     ueberlebt: 0,
     gewonnen: false,
     todesursache: '',
@@ -307,7 +317,11 @@ async function playNight(
   // Nach der Klasse folgt die Wahl des Startangriffs; die Messung nimmt den üblichen, den ersten der Klasse.
   if (g.phase === 'start') g.pick(0);
   // Dann die Nachtart: die gewöhnliche, wenn die Messung keine andere verlangt.
-  if (g.phase === 'night') g.pick(Math.max(0, NIGHTS.findIndex((night) => night.id === nightId)));
+  if (g.phase === 'night') {
+    // Die Wahl der Nacht beginnt beim höchsten freien Grad; die Messung nimmt ihren eigenen.
+    g.chosenGrade.set(nightId, grade);
+    g.pick(Math.max(0, NIGHTS.findIndex((night) => night.id === nightId)));
+  }
   // Mit einem Angriff im Blick beginnt die Nacht mit ihm auf Rang 4: Sonst käme er in einer Nacht selten bis Rang 5, und es ließe sich nichts messen.
   // Der nächste Rang ist dann die Evolution (mit dem Ring) oder Rang 5 (ohne).
   if (focus) {
@@ -454,6 +468,9 @@ export function installMesslauf(game: Game): void {
       // Das Gold der Messung wird nicht gespeichert; am Ende gilt wieder der echte Spielstand.
       const boerse = (game as unknown as Internals).boerse;
       boerse.persist = false;
+      // Ebenso die Grade: Gewonnene Probenächte schalten nichts frei.
+      const grade = (game as unknown as Internals).grade;
+      grade.persist = false;
       // Auch die Statistik soll die Probenächte nicht zählen.
       (game as unknown as Internals).recordStats = false;
       // Dasselbe für die Gegenstände: Die Ausrüstung der Messung ersetzt die echte, bis der Spielstand neu gelesen wird.
@@ -480,7 +497,7 @@ export function installMesslauf(game: Game): void {
           for (let night = 1; night <= nights; night++) {
             api.status = `${CLASSES[classIndex]?.name ?? '?'}, Nacht ${night} von ${nights}`;
             (game as unknown as Internals).nextSeed = runSeed++;
-            api.results.push(await playNight(game, classIndex, random, options.maxSeconds ?? Infinity, options.nacht ?? 'gewoehnlich', owner === CLASSES[classIndex] ? focus : undefined));
+            api.results.push(await playNight(game, classIndex, random, options.maxSeconds ?? Infinity, options.nacht ?? 'gewoehnlich', options.grad ?? 0, owner === CLASSES[classIndex] ? focus : undefined));
           }
         }
         api.status = 'fertig';
@@ -491,8 +508,10 @@ export function installMesslauf(game: Game): void {
         api.running = false;
         audio.silenced = false;
         boerse.persist = true;
+        grade.persist = true;
         (game as unknown as Internals).recordStats = true;
         boerse.reload();
+        grade.reload();
         ausruestung.persist = true;
         ausruestung.reload();
         (game as unknown as Internals).nextSeed = null;

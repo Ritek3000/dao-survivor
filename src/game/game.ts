@@ -19,7 +19,7 @@ import {
   type SavegameSummary,
 } from '../core/savegame';
 import { loadRuns, newRunId, recordRun, type RunOutcome, type RunRecord } from '../core/statistik';
-import { formatTime, type EndLoot, type Hud } from '../ui/hud';
+import { formatTime, type ChoiceGrade, type EndLoot, type Hud } from '../ui/hud';
 import { LagerView } from '../ui/lagerView';
 import { Menus, type MenuCommand } from '../ui/menus';
 import { Arsenal, type CombatTraits } from './arsenal';
@@ -36,10 +36,11 @@ import { Dust } from './dust';
 import { Enemies, type EnemyHooks } from './enemies';
 import { CombatEvents } from './events';
 import { Fields } from './fields';
+import { Grade, describeGrade } from './grade';
 import { itemName, RARITIES, RARITY_LABELS, slotLabel, type Item, type Rarity } from './items';
 import { Lager } from './lager';
 import { loadModels, type Models } from './models';
-import { applyNightStats, NIGHTS, USUAL_NIGHT, type NightDef, type NightId } from './nights';
+import { applyNightStats, NIGHTS, rulesAt, USUAL_NIGHT, type NightDef, type NightId } from './nights';
 import { Pickups } from './pickups';
 import { Player } from './player';
 import { Progression, SEGEN_EVERY_LEVELS, UPGRADES } from './progression';
@@ -74,6 +75,12 @@ interface Offer {
   note: string;
   segen?: boolean;
   take(): void;
+}
+
+/** „a“, „a und b“, „a, b und c“. */
+function joinAnd(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} und ${parts[parts.length - 1]}`;
 }
 
 export class Game {
@@ -168,6 +175,12 @@ export class Game {
   private lastNight: NightId = USUAL_NIGHT.id;
   /** Die Nachtart der laufenden (oder zuletzt gespielten) Nacht. */
   private night: NightDef = USUAL_NIGHT;
+  /** Die Grade der Nächte (siehe `grade.ts`); sie liegen im Spielstand. */
+  private readonly grade = new Grade();
+  /** Der gewählte Grad je Nachtart, solange die Nachtart gewählt wird (Phase 'night'); jede Wahl beginnt beim höchsten freien Grad. */
+  private readonly chosenGrade = new Map<NightId, number>();
+  /** Der Grad der laufenden (oder zuletzt gespielten) Nacht. */
+  private runGrade = 0;
   private selected = 0;
   /** Gold, das in dieser Nacht eingesammelt wurde, schon mit dem Goldfaktor der Figur. */
   private goldRun = 0;
@@ -248,6 +261,12 @@ export class Game {
     this.hud.onMainMenu = () => this.openTitle();
     this.hud.onReroll = () => this.reroll();
     this.hud.onBanish = () => this.toggleBanishing();
+    this.hud.onGrade = (index, step) => {
+      // Wer auf + oder − einer Karte klickt, wählt sie mit, damit Enter dieselbe Nacht beginnt.
+      this.selected = index;
+      this.hud.select(index);
+      this.stepGrade(step, index);
+    };
     this.settings = loadSettings({
       sound: { ...CONFIG.audio.defaults, muted: false },
       ui: { vitalsPosition: 'top-left' },
@@ -684,7 +703,7 @@ export class Game {
         void this.chooseSavegameFile();
         break;
       case 'new':
-        if (this.boerse.hasGold() || this.ausruestung.hasAny()) this.confirmNewGame();
+        if (this.hasProgress()) this.confirmNewGame();
         else this.startNewGame();
         break;
       case 'continue':
@@ -740,8 +759,14 @@ export class Game {
   }
 
   /** Was ein Stand enthält, für die Rückfragen: "120 Gold und 5 Gegenstände". */
-  private describeSavegame({ gold, items }: SavegameSummary): string {
-    return `${gold} Gold und ${items} ${items === 1 ? 'Gegenstand' : 'Gegenstände'}`;
+  private describeSavegame({ gold, items, nights }: SavegameSummary): string {
+    const grades = nights > 0 ? `, dazu Grade in ${nights} ${nights === 1 ? 'Nachtart' : 'Nachtarten'}` : '';
+    return `${gold} Gold und ${items} ${items === 1 ? 'Gegenstand' : 'Gegenstände'}${grades}`;
+  }
+
+  /** Gibt es etwas, das ein neues Spiel löschen würde: Gold, Gegenstände oder geschaffte Grade? */
+  private hasProgress(): boolean {
+    return this.boerse.hasGold() || this.ausruestung.hasAny() || this.grade.hasAny();
   }
 
   /**
@@ -751,7 +776,7 @@ export class Game {
   private exportSavegame(): void {
     const save = loadSavegame();
     const summary = summarizeSavegame(save);
-    if (summary.gold === 0 && summary.items === 0) {
+    if (summary.gold === 0 && summary.items === 0 && summary.nights === 0) {
       this.showInfo('Noch nichts zu sichern', 'Dein Spielstand ist noch leer: Du hast weder Gold noch Gegenstände. Spiele zuerst eine Nacht.');
       return;
     }
@@ -819,6 +844,7 @@ export class Game {
     writeSavegame(save);
     this.boerse.reload();
     this.ausruestung.reload();
+    this.grade.reload();
     this.confirming = 'imported';
     this.menus.showConfirm(
       {
@@ -837,10 +863,12 @@ export class Game {
     const lost: string[] = [];
     if (this.boerse.gold > 0) lost.push(`${this.boerse.gold} Gold`);
     if (items > 0) lost.push(`${items} ${items === 1 ? 'Gegenstand' : 'Gegenstände'}`);
+    const nights = NIGHTS.filter((night) => this.grade.cleared(night.id) >= 0).length;
+    if (nights > 0) lost.push(`die Grade von ${nights} ${nights === 1 ? 'Nachtart' : 'Nachtarten'}`);
     this.confirming = 'new';
     this.menus.showConfirm({
       title: 'Neues Spiel beginnen?',
-      text: `Dein Fortschritt wird zurückgesetzt: ${lost.join(' und ')} gehen verloren. Das lässt sich nicht rückgängig machen. Die Optionen und die Statistik bleiben.`,
+      text: `Dein Fortschritt wird zurückgesetzt: ${joinAnd(lost)} gehen verloren. Das lässt sich nicht rückgängig machen. Die Optionen und die Statistik bleiben.`,
       no: 'Abbrechen',
       yes: 'Fortschritt löschen',
     }, true);
@@ -851,6 +879,7 @@ export class Game {
   private startNewGame(): void {
     this.boerse.reset();
     this.ausruestung.reset();
+    this.grade.reload();
     this.menus.hide();
     audio.play('bestaetigen');
     this.openSelect();
@@ -863,7 +892,7 @@ export class Game {
     this.hud.hideEnd();
     this.lager.close();
     this.confirming = null;
-    this.menus.showTitle(this.boerse.hasGold() || this.ausruestung.hasAny(), back);
+    this.menus.showTitle(this.hasProgress(), back);
   }
 
   /** Die Klassenwahl vor der Nacht; `selected` markiert eine Klasse, sonst die zuletzt gespielte. */
@@ -920,17 +949,61 @@ export class Game {
     audio.play('auswahl');
   }
 
-  /** Nach dem Startangriff die Wahl der Nachtart (siehe `nights.ts`); vorgewählt ist die zuletzt gewählte. */
+  /**
+   * Nach dem Startangriff die Wahl der Nachtart (siehe `nights.ts`); vorgewählt ist die zuletzt gewählte. Hat man eine Nachtart schon geschafft,
+   * zeigt ihre Karte den Grad (siehe `grade.ts`) und beginnt beim höchsten, den man wählen darf.
+   */
   private openNight(): void {
     this.phase = 'night';
     this.selected = Math.max(0, NIGHTS.findIndex((night) => night.id === this.lastNight));
+    this.grade.refresh();
+    this.chosenGrade.clear();
+    for (const night of NIGHTS) this.chosenGrade.set(night.id, this.grade.highest(night.id));
     this.hud.showChoice(
       'Was für eine Nacht?',
       'Schwerere Nächte zahlen besser',
-      NIGHTS.map((night) => ({ name: night.name, text: night.text, note: night.note, extra: night.reward })),
+      NIGHTS.map((night) => ({
+        name: night.name,
+        text: night.text,
+        note: night.note,
+        extra: night.reward,
+        grade: this.gradeCard(night.id),
+      })),
       this.selected,
     );
-    this.hud.setChoiceKeys(`1 bis ${NIGHTS.length} oder Pfeiltasten und Enter: Nacht beginnen · Esc: zurück zum Startangriff`);
+    this.hud.setChoiceKeys(
+      `1 bis ${NIGHTS.length} oder Pfeiltasten und Enter: Nacht beginnen · Pfeil hoch und runter oder + und −: Grad · Esc: zurück zum Startangriff`,
+    );
+    audio.play('auswahl');
+  }
+
+  /** Der Gradzähler auf der Karte einer Nachtart; `undefined`, solange man sie nie geschafft hat (dann gibt es nur Grad 0). */
+  private gradeCard(id: NightId): ChoiceGrade | undefined {
+    const cleared = this.grade.cleared(id);
+    if (cleared < 0) return undefined;
+    const value = this.chosenGrade.get(id) ?? 0;
+    return {
+      value,
+      max: this.grade.highest(id),
+      effect: describeGrade(value),
+      cleared: `Geschafft bis Grad ${cleared}`,
+    };
+  }
+
+  /**
+   * Stellt den Grad einer Nachtart um `step` ein, nie unter 0 und nie über den geschafften Grad plus 1. `index` ist die Karte der Nachtart;
+   * ohne Angabe gilt die gewählte (Pfeiltasten).
+   */
+  private stepGrade(step: number, index = this.selected): void {
+    if (this.phase !== 'night') return;
+    const night = NIGHTS[index];
+    if (!night || this.grade.cleared(night.id) < 0) return;
+    const before = this.chosenGrade.get(night.id) ?? 0;
+    const after = Math.min(this.grade.highest(night.id), Math.max(0, before + step));
+    if (after === before) return;
+    this.chosenGrade.set(night.id, after);
+    const card = this.gradeCard(night.id);
+    if (card) this.hud.setGrade(index, card);
     audio.play('auswahl');
   }
 
@@ -938,8 +1011,11 @@ export class Game {
     playerClass: ClassDef,
     startWeapon: string = playerClass.weapons[0] ?? '',
     night: NightDef = USUAL_NIGHT,
+    grade = 0,
   ): void {
     this.night = night;
+    this.runGrade = grade;
+    const rules = rulesAt(night, grade);
     this.runSeed = this.nextSeed ?? newRunSeed();
     this.nextSeed = null;
     this.stream = createRandom(deriveSeed(this.runSeed, 900));
@@ -960,7 +1036,7 @@ export class Game {
     this.hud.setGold(0);
     this.progression.reset(playerClass, (stats) => {
       this.ausruestung.apply(playerClass.id, stats);
-      applyNightStats(night.rules, stats);
+      applyNightStats(rules, stats);
     });
     this.player.setClass(playerClass, this.models?.heroes.get(playerClass.id) ?? null);
     this.player.reset();
@@ -969,7 +1045,7 @@ export class Game {
     this.fields.reset();
     this.events.add(this.fields);
     this.events.add(this.arsenal.listener);
-    this.enemies.reset(this.runSeed, night.rules);
+    this.enemies.reset(this.runSeed, rules);
     this.pickups.reset();
     this.coins.reset();
     this.drops.reset();
@@ -977,11 +1053,11 @@ export class Game {
     this.beute.start(playerClass.id, this.runSeed);
     this.lootBest = null;
     this.hud.setLoot(0, null);
-    this.zones.reset(this.runSeed, night.rules.clouds);
+    this.zones.reset(this.runSeed, rules.clouds);
     this.syncLight();
     this.applyBlessings();
     this.threats.reset();
-    this.boss.reset();
+    this.boss.reset(rules.bossHp);
     this.hud.setBoss(null);
     this.arsenal.reset(playerClass, this.ausruestung.evolutionsOf(playerClass.id), startWeapon);
     finsternisUniforms.uSense.value = playerClass.id === 'wildnislaeufer' ? 1 : 0;
@@ -991,10 +1067,17 @@ export class Game {
     this.refreshHud();
     this.phase = 'playing';
     audio.play('abendglocke');
-    // Eine besondere Nacht nennt sich: im Bild kurz und über der Uhr, solange sie dauert.
-    const special = night !== USUAL_NIGHT;
-    this.hud.setNightName(special ? night.name : null);
-    if (special) this.hud.announce(night.name);
+    // Eine besondere Nacht oder ein höherer Grad nennt sich: im Bild kurz und über der Uhr, solange die Nacht dauert.
+    const title = this.nightTitle();
+    this.hud.setNightName(title === '' ? null : title);
+    if (title !== '') this.hud.announce(title);
+  }
+
+  /** Wie sich die laufende Nacht nennt: „Rotnacht · Grad 2“; leer für die gewöhnliche Nacht im Grad 0. */
+  private nightTitle(): string {
+    const grade = this.runGrade > 0 ? ` · Grad ${this.runGrade}` : '';
+    if (this.night === USUAL_NIGHT && grade === '') return '';
+    return `${this.night.name}${grade}`;
   }
 
   /** Überträgt, was Klasse und Segen an den Feuerschalen ändern. */
@@ -1184,6 +1267,10 @@ export class Game {
       if (this.pendingClass) this.openStart(this.pendingClass);
       return;
     }
+    if (this.phase === 'night') {
+      if (this.input.wasPressed('up') || this.input.wasPressed('gradeUp')) this.stepGrade(1);
+      if (this.input.wasPressed('down') || this.input.wasPressed('gradeDown')) this.stepGrade(-1);
+    }
     if (this.phase === 'levelup') {
       if (this.input.wasPressed('reroll')) {
         this.reroll();
@@ -1227,7 +1314,7 @@ export class Game {
       this.lastNight = night.id;
       this.pendingClass = null;
       this.hud.hideChoice();
-      this.startRun(playerClass, this.pendingStart, night);
+      this.startRun(playerClass, this.pendingStart, night, this.chosenGrade.get(night.id) ?? 0);
       return;
     }
 
@@ -1257,9 +1344,12 @@ export class Game {
     this.aborted = outcome === 'aborted';
     // Der letzte Frame läuft knapp über das Ende der Nacht hinaus.
     const survived = Math.min(this.time, CONFIG.run.nightSeconds);
-    const nightName = this.night === USUAL_NIGHT ? '' : ` · ${this.night.name}`;
+    const title = this.nightTitle();
+    const nightName = title === '' ? '' : ` · ${title}`;
     const stats = `${this.playerClass.name}${nightName} · Überlebt: ${formatTime(survived)} · Stufe ${this.progression.level} · Erschlagen: ${this.enemies.kills}`;
     this.recordNight(outcome, survived);
+    // Nur der Sonnenaufgang zählt als geschafft; wer fällt oder abbricht, behält den Grad, den er schon hat.
+    const unlocked = won && this.grade.record(this.night.id, this.runGrade) ? this.grade.highest(this.night.id) : null;
     this.hud.setEndSeed(formatSeed(this.runSeed));
     const loot = this.settleLoot();
     const gold = this.settle(won, survived, loot.gold);
@@ -1278,7 +1368,8 @@ export class Game {
         : this.boss.appeared
           ? ` ${name} weicht mit der Finsternis.`
           : '';
-      this.hud.showEnd('Sor geht auf', `Du hast die Nacht vor der Mauer überstanden.${fate}`, stats, gold, lines);
+      const unlock = unlocked === null ? '' : ` Freigeschaltet: ${this.night.name}, Grad ${unlocked}.`;
+      this.hud.showEnd('Sor geht auf', `Du hast die Nacht vor der Mauer überstanden.${fate}${unlock}`, stats, gold, lines);
     } else {
       this.player.die();
       if (this.player.lastDamage === 'verstaubung') {
