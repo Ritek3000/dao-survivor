@@ -59,6 +59,8 @@ export class Boss {
   private readonly actions = new Map<ClipName, THREE.AnimationAction>();
   private playing: ClipName | null = null;
   private mode: Mode = 'walk';
+  /** Faktor der Nacht auf sein Leben; 1, solange kein Grad es erhöht. */
+  private hpFactor = 1;
   /** Restsekunden des laufenden Abschnitts. */
   private timer = 0;
   private heading = 0;
@@ -117,8 +119,9 @@ export class Boss {
     }
   }
 
-  /** Neue Nacht: Er ist noch nicht da. */
-  reset(): void {
+  /** Neue Nacht: Er ist noch nicht da. `hpFactor` ist der Faktor der Nacht auf sein Leben (der Grad, siehe `nights.ts`). */
+  reset(hpFactor = 1): void {
+    this.hpFactor = hpFactor;
     this.enemy = null;
     this.appeared = false;
     this.slain = false;
@@ -133,7 +136,7 @@ export class Boss {
 
   /** Anteil seines Lebens von 0 bis 1; 0, wenn er nicht da ist. */
   get hpFraction(): number {
-    return this.enemy ? Math.max(0, this.enemy.hp / TYPE.hp) : 0;
+    return this.enemy ? Math.max(0, this.enemy.hp / this.enemy.maxHp) : 0;
   }
 
   /** Was seit dem letzten Aufruf geschehen ist; jedes Ereignis wird einmal gemeldet. */
@@ -202,7 +205,7 @@ export class Boss {
       z = player.position.z + Math.sin(angle) * distance;
       if (Math.hypot(x, z) < CONFIG.world.radius - 3) break;
     }
-    this.enemy = enemies.summon(TYPE, x, z);
+    this.enemy = enemies.summon(TYPE, x, z, this.hpFactor);
     this.heading = Math.atan2(player.position.x - x, player.position.z - z);
     this.mode = 'walk';
     this.timer = 0;
@@ -229,7 +232,7 @@ export class Boss {
       }
       return;
     }
-    if (enemy.hp > TYPE.hp * belowHp) return;
+    if (enemy.hp > enemy.maxHp * belowHp) return;
     this.engulfIn -= dt;
     if (this.engulfIn > 0) return;
     this.engulfLeft = seconds;

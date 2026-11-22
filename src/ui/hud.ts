@@ -13,6 +13,20 @@ export interface ChoiceCard {
   segen?: boolean;
   /** Zweites Kleingedrucktes, etwa wie viele Gegenstände die Klasse trägt. */
   extra?: string;
+  /** Der Gradzähler einer Nachtart, die man schon geschafft hat (siehe `game/grade.ts`); fehlt er, hat die Karte keinen. */
+  grade?: ChoiceGrade;
+}
+
+/** Der Gradzähler auf der Karte einer Nachtart: `−  Grad 2  +`, darunter was der Grad ändert und was man geschafft hat. */
+export interface ChoiceGrade {
+  /** Der gewählte Grad. */
+  value: number;
+  /** Der höchste Grad, der zur Wahl steht; darüber ist der Knopf + gesperrt, unter 0 der Knopf −. */
+  max: number;
+  /** Was der gewählte Grad an den Gegnern ändert. */
+  effect: string;
+  /** Wie weit man die Nachtart geschafft hat. */
+  cleared: string;
 }
 
 /** Was beim Stufenaufstieg unter den Karten steht: Neuwurf und Verbannen mit ihren Vorräten. */
@@ -33,6 +47,16 @@ export interface EndLoot {
   detail: string;
   /** Im Inventar gelandet oder verkauft. */
   note: string;
+}
+
+/** Die Teile eines Gradzählers. */
+interface GradeParts {
+  row: HTMLElement;
+  less: HTMLButtonElement;
+  more: HTMLButtonElement;
+  value: HTMLElement;
+  effect: HTMLElement;
+  cleared: HTMLElement;
 }
 
 const ZONE_LABELS: Record<Zone, string> = {
@@ -64,6 +88,8 @@ export class Hud {
   /** Die Knöpfe "Neu würfeln" und "Verbannen" beim Stufenaufstieg. */
   onReroll: () => void = () => {};
   onBanish: () => void = () => {};
+  /** Die Knöpfe − und + im Gradzähler einer Karte: Nummer der Karte und Schritt (−1 oder +1). */
+  onGrade: (index: number, step: number) => void = () => {};
   private readonly hpFill = element('hp-fill');
   private readonly hpDust = element('hp-dust');
   private readonly hpText = element('hp-text');
@@ -111,7 +137,9 @@ export class Hud {
   private readonly endLoot = element('end-loot');
   private readonly debug: HTMLElement | null;
   private readonly shown = new Map<HTMLElement, string>();
-  private cards: HTMLButtonElement[] = [];
+  private cards: HTMLElement[] = [];
+  /** Die Teile des Gradzählers je Karte (nach Nummer), damit `setGrade` sie ändern kann. */
+  private gradeParts = new Map<number, GradeParts>();
   private lagerEnabled = false;
 
   constructor(showDebug: boolean) {
@@ -260,19 +288,28 @@ export class Hud {
     this.choiceCards.classList.remove('banishing');
     this.choiceTools.hidden = true;
     this.choiceSubtitle.textContent = subtitle;
+    this.gradeParts.clear();
     this.cards = cards.map((card, index) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = card.segen ? 'card segen' : 'card';
-      button.append(
+      // Ein Knopf darf keine Knöpfe enthalten: Eine Karte mit Gradzähler ist darum ein Feld mit der Rolle eines Knopfs.
+      const root = card.grade ? document.createElement('div') : document.createElement('button');
+      if (root instanceof HTMLButtonElement) root.type = 'button';
+      else root.setAttribute('role', 'button');
+      root.className = card.segen ? 'card segen' : 'card';
+      root.append(
         span('key', String(index + 1)),
         span('name', card.name),
         span('text', card.text),
         span('note', card.note),
         ...(card.extra ? [span('note extra', card.extra)] : []),
       );
-      button.addEventListener('click', () => this.onPick(index));
-      return button;
+      if (card.grade) {
+        const parts = this.gradeRow(index);
+        this.gradeParts.set(index, parts);
+        this.fillGrade(parts, card.grade);
+        root.append(parts.row);
+      }
+      root.addEventListener('click', () => this.onPick(index));
+      return root;
     });
     this.choiceCards.replaceChildren(...this.cards);
     this.choiceGold.hidden = gold === null;
@@ -287,6 +324,50 @@ export class Hud {
         : `1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen${this.lagerEnabled ? ' · L: Lager' : ''} · Esc: Hauptmenü`;
     this.select(selected);
     this.choice.hidden = false;
+  }
+
+  /** Baut den Gradzähler einer Karte; gefüllt wird er von `fillGrade`. */
+  private gradeRow(index: number): GradeParts {
+    const row = document.createElement('div');
+    row.className = 'grade';
+    const step = (label: string, title: string, delta: number): HTMLButtonElement => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'grade-step';
+      button.textContent = label;
+      button.title = title;
+      button.addEventListener('click', (event) => {
+        // Der Klick gehört dem Zähler und wählt nicht die Nacht; der Fokus bliebe sonst am Knopf hängen (Enter und Leertaste gehören dem Spiel).
+        event.stopPropagation();
+        button.blur();
+        this.onGrade(index, delta);
+      });
+      return button;
+    };
+    const less = step('−', 'Grad senken (Pfeil runter oder −)', -1);
+    const more = step('+', 'Grad erhöhen (Pfeil hoch oder +)', 1);
+    const value = span('grade-value', '');
+    const counter = document.createElement('div');
+    counter.className = 'grade-counter';
+    counter.append(less, value, more);
+    const effect = span('note grade-effect', '');
+    const cleared = span('note grade-cleared', '');
+    row.append(span('grade-title', 'Grad'), counter, effect, cleared);
+    return { row, less, more, value, effect, cleared };
+  }
+
+  private fillGrade(parts: GradeParts, grade: ChoiceGrade): void {
+    parts.value.textContent = String(grade.value);
+    parts.effect.textContent = grade.effect;
+    parts.cleared.textContent = grade.cleared;
+    parts.less.disabled = grade.value <= 0;
+    parts.more.disabled = grade.value >= grade.max;
+  }
+
+  /** Ändert den Gradzähler der Karte `index`, etwa nach den Pfeiltasten. */
+  setGrade(index: number, grade: ChoiceGrade): void {
+    const parts = this.gradeParts.get(index);
+    if (parts) this.fillGrade(parts, grade);
   }
 
   /** Ersetzt die Unterzeile der Auswahl, etwa während eine Karte zum Verbannen gesucht wird. */

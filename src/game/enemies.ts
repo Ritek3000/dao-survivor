@@ -469,10 +469,10 @@ export class Enemies {
 
   /**
    * Stellt einen einzelnen Gegner an eine feste Stelle, etwa den Verschlinger.
-   * Er zählt wie jeder andere als Ziel der Angriffe, bewegt sich aber nicht von selbst.
+   * Er zählt wie jeder andere als Ziel der Angriffe, bewegt sich aber nicht von selbst. `hpFactor` verändert sein Leben (der Grad der Nacht).
    */
-  summon(type: EnemyType, x: number, z: number): Enemy {
-    const enemy = this.fresh(type, type.hp);
+  summon(type: EnemyType, x: number, z: number, hpFactor = 1): Enemy {
+    const enemy = this.fresh(type, type.hp * hpFactor);
     enemy.x = x;
     enemy.z = z;
     enemy.driven = true;

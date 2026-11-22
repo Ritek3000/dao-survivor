@@ -54,6 +54,7 @@ Nach jedem Merge auf `main` baut GitHub das Spiel und veröffentlicht den Stand 
 | M                          | Ton an oder aus                         |
 | 1, 2, 3 oder Pfeile, Enter (auch Leertaste) | Klasse und Stärkungen wählen, Bestätigen; beim Startangriff gelten 1 bis 7; in der Anleitung blättern Auf und Ab |
 | 1 bis 4 (bei der Nachtart) | Nachtart wählen; Esc führt jeweils einen Schritt zurück |
+| Pfeil hoch und runter, W und S oder + und − (bei der Nachtart) | Grad der gewählten Nachtart ändern, sobald man sie einmal geschafft hat (siehe [Grade der Nächte](#grade-der-nächte)) |
 | R, X (beim Stufenaufstieg) | Karten neu würfeln; eine Karte verbannen (danach die Karte wählen, X oder Esc bricht ab) |
 | L oder U                   | Lager öffnen: Ausrüstung, Truhe und Händler (bei der Klassenwahl und am Ende der Nacht; sobald es Gegenstände oder Gold gibt, siehe [Gegenstände](#gegenstände)). U war die Taste der entfallenen Steigerungen |
 | Tab, E (im Lager)          | Ansicht wechseln (Ausrüstung, Truhe, Händler); Gegenstand gleich anlegen, umräumen, beim Händler kaufen oder verkaufen |
@@ -113,6 +114,7 @@ Wichtige Teile von `src/game/`:
 | `enemies.ts`, `boss.ts`, `threats.ts` | Horde, Verschlinger und die Zauber der Gegner                    |
 | `progression.ts`               | Stufen, Stärkungen und die Segen der Höheren Mächte                     |
 | `boerse.ts`, `coins.ts`        | Die Börse (das Gold im Spielstand) und die Münzen, die das Gold bringen |
+| `nights.ts`, `grade.ts`        | Die Nachtarten mit ihren Regeln; die Grade der Nächte (siehe [Nachtarten](#nachtarten)) |
 | `items.ts`, `ausruestung.ts`, `truhe.ts`, `haendler.ts`, `lager.ts` | Gegenstände (Eigenschaften, Würfeln), die Gegenstände jeder Klasse samt Truhe, das Angebot des Händlers und das Menü des Lagers |
 | `beute.ts`, `drops.ts`         | Beute: was aus Gegnern und der Kiste des Verschlingers fällt, der Beutel der Nacht, die Gegenstände am Boden und die Kiste |
 | `zones.ts`, `darkness.ts`, `dust.ts` | Lichtinseln, Finsternis und Verstaubung                           |
@@ -123,7 +125,7 @@ Wichtige Teile von `src/game/`:
 
 **Startbildschirm** (nach dem Laden): *Neues Spiel*, *Spiel fortsetzen*, *Optionen*, *Statistik* und *Anleitung*. „Spiel fortsetzen“ erscheint nur, wenn es einen
 Spielstand gibt (Gold in der Börse oder Gegenstände) und führt zur Klassenwahl. „Neues Spiel“ setzt den dauerhaften Fortschritt zurück
-(Gold, Gegenstände und Truhe; die Optionen und die Statistik bleiben). Gibt es einen Fortschritt, warnt davor eine Rückfrage, die nennt, was verloren ginge
+(Gold, Gegenstände, Truhe und die Grade der Nächte; die Optionen und die Statistik bleiben). Gibt es einen Fortschritt, warnt davor eine Rückfrage, die nennt, was verloren ginge
 (vorgewählt ist „Abbrechen“); ohne Fortschritt geht es sofort weiter. Von der Klassenwahl und vom Ende der Nacht führt **Esc** (oder der Knopf
 „Hauptmenü“) zurück zum Startbildschirm. Die **Anleitung** erklärt Ziel, Steuerung, Licht und Finsternis, Stufen und Segen, die Klassen mit ihren Angriffen, die Evolutionen, Gold,
 Gegenstände, Beute und das Lager (Text in `index.html`; sie ist länger als mancher Bildschirm, darum blättern Auf und Ab, siehe `Menus.scrollPage`).
@@ -178,6 +180,27 @@ Nachtart braucht, solange sie nur diese Faktoren verlangt, nur einen weiteren Ei
 
 **Statistik.** Die Nachtart steht (noch) nicht im Protokoll der Nächte und geht nicht an die Sammelstelle: Ein neues Feld bräuchte eine neue Fassung des Protokolls (`STATISTIK_VERSION`) und eine Spalte samt Prüfregel in `tools/supabase/statistik.sql`,
 die man einmal im Supabase-Dashboard ausführen müsste, sonst scheitert das Senden. Bis dahin mischen sich besondere Nächte in die Zahlen der Statistik.
+
+### Grade der Nächte
+
+Wer eine Nachtart geschafft hat (die Sonne geht auf), darf sie beim nächsten Mal einen **Grad** höher wählen. Jede Nachtart beginnt bei Grad 0 und zählt für sich; der Stand gilt für alle Klassen gemeinsam.
+Nach dem ersten Sieg in einer Nachtart zeigt ihre Karte einen Zähler `− Grad 2 +`, darunter was der Grad ändert und wie weit man sie geschafft hat; vorher sieht die Karte aus wie bisher. Vorgewählt ist immer der höchste Grad,
+den man wählen darf: der höchste geschaffte plus 1 (`Grade.highest`, höchstens `CONFIG.grade.max` = 99). Niedrigere Grade bleiben jederzeit wählbar. Verstellt wird er mit den Knöpfen, mit Pfeil hoch und runter (W und S)
+oder mit + und −; die Aktionen `gradeUp` und `gradeDown` in `src/core/input.ts` hängen am Zeichen und nicht an einer Taste, damit es auf jeder Tastatur geht. Ein Klick auf einen Knopf wählt die Karte mit.
+Nur ein Sieg schaltet frei: Fallen und Abbrechen ändern nichts, ebenso ein Sieg in einem Grad unter dem höchsten geschafften. Das Endbild nennt, was ein Sieg freigeschaltet hat; in der Nacht steht der Grad im Bild und über der Uhr
+(„Rotnacht · Grad 2 · Sonnenaufgang in“).
+
+**Wirkung.** Jeder Grad macht die Gegner um 10 % stärker, und zwar additiv (Grad 5 ist +50 %, nicht 1,1 hoch 5): Das **Leben** der Gegner und des Verschlingers (`CONFIG.grade.enemyHp`) und der **Schaden**, den die Figur erleidet
+(`CONFIG.grade.enemyDamage`, als Faktor `Stats.taken`; das gilt für Berührung, Hieb, den Schwarzen Sog und die Angriffe des Verschlingers, nicht für die Verstaubung durch die Finsternis). Die Zuschläge kommen auf die Regeln der
+Nachtart obendrauf (`rulesAt` in `nights.ts`; Blaunacht, Grad 2: Leben × 1,5 × 1,2). Tempo und Zahl der Gegner bleiben unberührt: Läufer (4,3 m/s) wären schon ab Grad 3 schneller als die Figur (5,5 m/s), und bei 350 gleichzeitigen
+Gegnern ist ohnehin Schluss. Der Lohn ändert sich mit dem Grad nicht. Das sind Vorschläge und Startwerte, keine Lore; die Zahlen stehen in `CONFIG.grade`.
+
+**Speicherung.** Die Grade liegen im Spielstand (Fassung 8, Feld `grades`: Nachtart → höchster geschaffter Grad; fehlt die Nachtart, wurde sie nie geschafft). Darum nehmen *Spielstand als Datei sichern* und *aus Datei laden* sie mit,
+und „Neues Spiel“ löscht sie (die Rückfrage nennt sie). `Grade` (`src/game/grade.ts`) folgt dem Muster der Börse: Sie liest vor jeder Änderung den gespeicherten Stand neu und schreibt nichts, solange `persist` aus ist (der Messlauf).
+
+**Messlauf.** `__messlauf.start({ nacht: 'blaunacht', grad: 3 })` spielt alle Nächte der Messung im Grad 3; der Grad muss nicht freigeschaltet sein und verändert den echten Spielstand nicht. Jedes Ergebnis trägt den Grad (`grad`).
+
+**Statistik.** Wie die Nachtart steht auch der Grad (noch) nicht im Protokoll der Nächte und geht nicht an die Sammelstelle (siehe oben); höhere Grade mischen sich in die Zahlen der Statistik.
 
 ## Statistik
 
@@ -255,7 +278,7 @@ Gold zurück. Es gibt keine dauerhaften Steigerungen mehr: Die Werte der Figur k
 gesperrt ist, gilt der Stand nur für die Sitzung. Eine Desktop-Fassung kann mit `useSavegameStore` eine Datei an die Stelle setzen (und als zweiten Speicher
 eine für die Sicherung). Ein unlesbarer Stand beginnt bei null; was das Spiel nicht kennt (etwa die Gegenstände einer neueren Fassung), bleibt beim Speichern erhalten.
 **Sichern und Laden als Datei.** Die *Optionen* haben die Gruppe *Spielstand* mit zwei Knöpfen. *Spielstand als Datei sichern* lädt `dao-survivor-spielstand-<Datum>_<Uhrzeit>.json` herunter;
-darin liegt der Spielstand (Gold, Gegenstände jeder Klasse, Truhe, Händler) in einem Umschlag mit Kennung (`datei`), Fassung des Spiels (`spielversion`) und Zeitpunkt (`gesichert`).
+darin liegt der Spielstand (Gold, Gegenstände jeder Klasse, Truhe, Händler, Grade der Nächte) in einem Umschlag mit Kennung (`datei`), Fassung des Spiels (`spielversion`) und Zeitpunkt (`gesichert`).
 Die Optionen und das Protokoll der Statistik sind nicht enthalten. *Spielstand aus Datei laden* gibt es nur im Hauptmenü (mitten in der Nacht würde der laufende Lauf später über den
 geladenen Stand schreiben): Das Spiel prüft die Datei (`readSavegameFile`; auch ältere Fassungen werden gehoben, ein nackter Spielstand ohne Umschlag wird genommen, alles andere abgelehnt,
 Dateien über 8 MB nicht gelesen), zeigt in einer Rückfrage, was in der Datei steht und was der jetzige Stand hat, und ersetzt ihn erst nach „Stand ersetzen“. Ein leerer Stand wird nicht gesichert.
@@ -376,9 +399,9 @@ in `Ausruestung` (er ändert Gold, Gegenstände und Angebot in einem Zug), die B
 - *Legendäre Ringe:* Jeder trägt die Evolution einer Fertigkeit seiner Klasse (siehe [Evolutionen](#evolutionen)). Welche, entscheidet der Wurf; Angriffe, die in
   der laufenden Nacht schon Rang 3 erreicht haben, werden dreimal so häufig gewürfelt (`CONFIG.skills.evolution.lootRank` und `lootWeight`), eine Hilfe und kein Zwang.
 
-**Speicherung.** Die Gegenstände liegen im selben Spielstand wie das Gold (Feld `items`; `src/game/ausruestung.ts`), Fassung 7 (neu: ein legendärer Ring trägt die Evolution einer Fertigkeit; Ringe aus Fassung 6 bekommen beim Lesen eine, ohne dass etwas verloren geht, und
+**Speicherung.** Die Gegenstände liegen im selben Spielstand wie das Gold (Feld `items`; `src/game/ausruestung.ts`), Fassung 8 (neu: die Grade der Nächte im Feld `grades`, siehe [Grade der Nächte](#grade-der-nächte); ältere Stände bekommen leere Grade; Fassung 7: ein legendärer Ring trägt die Evolution einer Fertigkeit; Ringe aus Fassung 6 bekommen beim Lesen eine, ohne dass etwas verloren geht, und
 die Sicherung aus Fassung 6 bleibt dabei unberührt; Fassung 6 erstattete die Ränge der entfallenen Steigerungen als Gold und legte den alten Stand als Sicherung bereit, siehe [Gold](#gold); Fassung 5 brachte den Stand des Händlers mit Angebot, Rückkauf und Zähler der Erneuerungen, Fassung 4 die Truhe,
-Fassung 3 den Pech-Schutz). Ältere Stände (Fassung 1 bis 6) werden Schritt für Schritt gehoben; Gold und Gegenstände bleiben unverändert. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
+Fassung 3 den Pech-Schutz). Ältere Stände (Fassung 1 bis 7) werden Schritt für Schritt gehoben; Gold und Gegenstände bleiben unverändert. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
 Name, unmögliche Eigenschaft), wird beim Lesen verworfen, Werte außerhalb des heutigen Bereichs rücken an dessen Rand.
 
 **Gleichgewicht.** `__items.verteilung('stark')`, `__items.kisten()` und `__items.angebote()` würfeln die Seltenheiten, den Pech-Schutz und das Angebot des Händlers in der Konsole tausendfach nach

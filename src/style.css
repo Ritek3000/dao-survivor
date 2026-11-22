@@ -549,6 +549,8 @@ body[data-vitals='bottom-left'] #debug {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Wie ein Knopf: Breite samt Rand und Abstand. Die Nachtkarte mit Gradzähler ist ein Feld und wäre sonst breiter als die anderen. */
+  box-sizing: border-box;
   width: 230px;
   padding: 16px 14px;
   background: var(--panel);
@@ -613,6 +615,63 @@ body[data-vitals='bottom-left'] #debug {
   font-size: 15px;
   line-height: 1.3;
   color: var(--text-dim);
+}
+
+/* Der Gradzähler einer Nachtkarte: − Grad + mit dem Zuschlag darunter. Er sitzt unten in der Karte, damit die Zähler nebeneinander fluchten. */
+.card .grade {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.card .grade-title {
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.card .grade-counter {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.card .grade-effect {
+  /* Zwei Zeilen reservieren, damit die Zähler nebeneinander auf einer Höhe bleiben, auch wenn der Zuschlag kürzer ist. */
+  min-height: 2.7em;
+}
+
+.card .grade-value {
+  min-width: 2ch;
+  font-size: 26px;
+  color: var(--ember);
+}
+
+.card .grade-step {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.card .grade-step:hover:not(:disabled) {
+  border-color: var(--ember);
+}
+
+.card .grade-step:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 /* Das Attribut "hidden" verliert sonst gegen "display: flex". */

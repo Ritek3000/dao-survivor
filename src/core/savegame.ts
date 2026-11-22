@@ -1,5 +1,6 @@
 /**
- * Der Spielstand, der den Neustart überdauern soll: das Gold, die Gegenstände jeder Klasse, die Truhe und der Stand des Händlers.
+ * Der Spielstand, der den Neustart überdauern soll: das Gold, die Gegenstände jeder Klasse, die Truhe, der Stand des Händlers und die
+ * Grade der Nächte.
  *
  * Wo er liegt, versteckt `TextStore` (siehe `storage.ts`): im Browser in `localStorage`, in einer Desktop-Hülle
  * später etwa in einer Datei; dafür gibt es `useSavegameStore`. Gespeichert wird als JSON mit Versionsnummer.
@@ -20,10 +21,10 @@
 import { browserTextStore, type TextStore } from './storage';
 
 /** Die Fassung des Formats, die dieser Code schreibt. */
-export const SAVEGAME_VERSION = 7;
+export const SAVEGAME_VERSION = 8;
 /**
- * Stände von einer älteren Fassung als dieser werden vor dem Heben gesichert. Das Heben von Fassung 6 auf 7 verwirft nichts; die
- * Sicherung aus der Umstellung auf Fassung 6 (die Ränge der Steigerungen) soll darum nicht davon überschrieben werden.
+ * Stände von einer älteren Fassung als dieser werden vor dem Heben gesichert. Das Heben von Fassung 6 auf 7 und von 7 auf 8 verwirft
+ * nichts; die Sicherung aus der Umstellung auf Fassung 6 (die Ränge der Steigerungen) soll darum nicht davon überschrieben werden.
  */
 const BACKUP_BELOW = 6;
 
@@ -41,6 +42,10 @@ const MAX_STORED_COLOR = 99;
 const MAX_STORED_SHOP = 40;
 /** Obergrenze für die Zahl der Erneuerungen des Angebots; der Preis wächst ohnehin ins Unbezahlbare. */
 const MAX_STORED_REROLLS = 99;
+/** Obergrenze für einen Grad beim Lesen (siehe `CONFIG.grade.max`) und für die Zahl der Nachtarten, die einen haben. */
+const MAX_STORED_GRADE = 99;
+const MAX_STORED_NIGHTS = 64;
+const MAX_STORED_NIGHT_ID = 40;
 
 /**
  * Die Gegenstände der Klassen, so wie sie im Spielstand liegen. Was ein Gegenstand ist, kennt `game/items.ts`; dieser Teil
@@ -86,6 +91,12 @@ export interface Savegame {
    * Das Spiel zeigt es einmal an und setzt es dann auf 0.
    */
   refund: number;
+  /**
+   * Seit Fassung 8: der höchste geschaffte Grad je Nachtart (Kennung → Grad, siehe `game/grade.ts`). Eine Nachtart ohne Eintrag wurde
+   * noch nie geschafft; Grad 0 ist der Grundgrad, also bedeutet ein Eintrag von 0: Grad 0 geschafft, Grad 1 wählbar. Kennungen, die das
+   * Spiel nicht kennt, bleiben stehen.
+   */
+  grades: Record<string, number>;
 }
 
 export type SavegameStore = TextStore;
@@ -104,7 +115,7 @@ export function useSavegameStore(next: SavegameStore, nextBackup: SavegameStore 
 }
 
 export function emptySavegame(): Savegame {
-  return { version: SAVEGAME_VERSION, gold: 0, items: emptyItems(), refund: 0 };
+  return { version: SAVEGAME_VERSION, gold: 0, items: emptyItems(), refund: 0, grades: {} };
 }
 
 function emptyItems(): StoredItems {
@@ -149,6 +160,7 @@ function savegameFromRecord(parsed: Record<string, unknown>): Savegame {
   if (version < 5) raw = von4auf5(raw);
   if (version < 6) raw = von5auf6(raw);
   if (version < 7) raw = von6auf7(raw);
+  if (version < 8) raw = von7auf8(raw);
 
   if (typeof raw.version === 'number' && Number.isFinite(raw.version)) {
     // Ein Stand aus einer neueren Fassung wird so gut gelesen wie möglich, seine Nummer aber nicht zurückgesetzt.
@@ -157,6 +169,7 @@ function savegameFromRecord(parsed: Record<string, unknown>): Savegame {
   save.gold = wholeNumber(raw.gold, Number.MAX_SAFE_INTEGER);
   save.refund = wholeNumber(raw.refund, Number.MAX_SAFE_INTEGER);
   save.items = parseItems(raw.items);
+  save.grades = parseGrades(raw.grades);
   return save;
 }
 
@@ -239,6 +252,23 @@ function von6auf7(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, version: 7 };
 }
 
+/** Fassung 8 kennt die Grade der Nächte; ältere Stände haben noch keine Nacht geschafft, die Grade beginnen bei null. */
+function von7auf8(raw: Record<string, unknown>): Record<string, unknown> {
+  return { ...raw, version: 8, grades: {} };
+}
+
+/** Liest die Grade; ein Eintrag, der keine Zahl ab 0 ist, fällt weg (er würde sonst als geschaffter Grad 0 gelten). */
+function parseGrades(raw: unknown): Record<string, number> {
+  const grades: Record<string, number> = {};
+  if (!isRecord(raw)) return grades;
+  for (const [id, value] of Object.entries(raw).slice(0, MAX_STORED_NIGHTS)) {
+    if (id.length === 0 || id.length > MAX_STORED_NIGHT_ID) continue;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) continue;
+    grades[id] = Math.min(MAX_STORED_GRADE, Math.floor(value));
+  }
+  return grades;
+}
+
 function parseShop(raw: unknown): StoredShop {
   const shop = emptyShop();
   if (!isRecord(raw)) return shop;
@@ -309,10 +339,12 @@ export function writeSavegame(save: Savegame): void {
   store.write(JSON.stringify(save));
 }
 
-/** Was ein Stand dem Spieler wert ist, in zwei Zahlen: das Gold und die Gegenstände (angelegt, im Inventar und in der Truhe). */
+/** Was ein Stand dem Spieler wert ist, in drei Zahlen: das Gold, die Gegenstände (angelegt, im Inventar und in der Truhe) und die Nachtarten mit einem geschafften Grad. */
 export interface SavegameSummary {
   gold: number;
   items: number;
+  /** Bei wie vielen Nachtarten schon ein Grad geschafft ist. */
+  nights: number;
 }
 
 export function summarizeSavegame(save: Savegame): SavegameSummary {
@@ -321,7 +353,7 @@ export function summarizeSavegame(save: Savegame): SavegameSummary {
     items += perClass.inventory.filter(isRecord).length + Object.values(perClass.equipment).filter(isRecord).length;
   }
   for (const tab of save.items.chest.tabs) items += tab.slots.filter(isRecord).length;
-  return { gold: save.gold, items };
+  return { gold: save.gold, items, nights: Object.keys(save.grades).length };
 }
 
 /** So große Dateien liest das Spiel höchstens als Spielstand ein; ein echter ist weit kleiner (auch eingerückt nur einige Hundert KB). */
