@@ -190,9 +190,9 @@ oder mit + und −; die Aktionen `gradeUp` und `gradeDown` in `src/core/input.ts
 Nur ein Sieg schaltet frei: Fallen und Abbrechen ändern nichts, ebenso ein Sieg in einem Grad unter dem höchsten geschafften. Das Endbild nennt, was ein Sieg freigeschaltet hat; in der Nacht steht der Grad im Bild und über der Uhr
 („Rotnacht · Grad 2 · Sonnenaufgang in“).
 
-**Wirkung.** Jeder Grad macht die Gegner um 10 % stärker, und zwar additiv (Grad 5 ist +50 %, nicht 1,1 hoch 5): Das **Leben** der Gegner und des Verschlingers (`CONFIG.grade.enemyHp`) und der **Schaden**, den die Figur erleidet
-(`CONFIG.grade.enemyDamage`, als Faktor `Stats.taken`; das gilt für Berührung, Hieb, den Schwarzen Sog und die Angriffe des Verschlingers, nicht für die Verstaubung durch die Finsternis). Die Zuschläge kommen auf die Regeln der
-Nachtart obendrauf (`rulesAt` in `nights.ts`; Blaunacht, Grad 2: Leben × 1,5 × 1,2). Tempo und Zahl der Gegner bleiben unberührt: Läufer (4,3 m/s) wären schon ab Grad 3 schneller als die Figur (5,5 m/s), und bei 350 gleichzeitigen
+**Wirkung.** Jeder Grad macht die Gegner stärker, und zwar additiv (Grad 10 ist +50 % Leben und +25 % Schaden, nicht 1,05 hoch 10): Das **Leben** der Gegner und des Verschlingers wächst um 5 % je Grad (`CONFIG.grade.enemyHp`) und der **Schaden**, den die Figur erleidet,
+um 2,5 % je Grad (`CONFIG.grade.enemyDamage`, als Faktor `Stats.taken`; das gilt für Berührung, Hieb, den Schwarzen Sog und die Angriffe des Verschlingers, nicht für die Verstaubung durch die Finsternis). Die Zuschläge kommen auf die Regeln der
+Nachtart obendrauf (`rulesAt` in `nights.ts`; Blaunacht, Grad 2: Leben × 1,5 × 1,1). Tempo und Zahl der Gegner bleiben unberührt: Läufer (4,3 m/s) wären schon ab Grad 3 schneller als die Figur (5,5 m/s), und bei 350 gleichzeitigen
 Gegnern ist ohnehin Schluss. Der Lohn ändert sich mit dem Grad nicht. Das sind Vorschläge und Startwerte, keine Lore; die Zahlen stehen in `CONFIG.grade`.
 
 **Speicherung.** Die Grade liegen im Spielstand (Fassung 8, Feld `grades`: Nachtart → höchster geschaffter Grad; fehlt die Nachtart, wurde sie nie geschafft). Darum nehmen *Spielstand als Datei sichern* und *aus Datei laden* sie mit,

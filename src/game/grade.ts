@@ -12,10 +12,11 @@
 import { CONFIG } from '../config';
 import { loadSavegame, writeSavegame, type Savegame } from '../core/savegame';
 
-/** Was ein Grad an den Gegnern ändert, für die Karte: „Gegner: Leben +20 %, Schaden +20 %“; Grad 0 ändert nichts. */
+/** Was ein Grad an den Gegnern ändert, für die Karte: „Gegner: Leben +10 %, Schaden +5 %“; Grad 0 ändert nichts. */
 export function describeGrade(grade: number): string {
   if (grade <= 0) return 'Grundgrad: ohne Zuschlag';
-  const percent = (perGrade: number): number => Math.round(grade * perGrade * 100);
+  // Auf eine Nachkommastelle gerundet, mit Komma (der Schaden wächst um 2,5 % je Grad).
+  const percent = (perGrade: number): string => String(Math.round(grade * perGrade * 1000) / 10).replace('.', ',');
   // Geschützte Leerzeichen: Auf der schmalen Karte soll die Zeile nur hinter dem Komma brechen.
   return `Gegner: Leben\u00a0+${percent(CONFIG.grade.enemyHp)}\u00a0%, Schaden\u00a0+${percent(CONFIG.grade.enemyDamage)}\u00a0%`;
 }
