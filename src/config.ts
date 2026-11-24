@@ -395,7 +395,7 @@ export const CONFIG = {
     type: {
       id: 'stachelboss',
       model: { file: 'stachelschwein.glb', height: 3.4, clip: 'Laufen', stride: 1.83 },
-      radius: 1.4, scale: 6, speed: 2.3, hp: 1800, damage: 0, xp: 0, color: 0x4a4038, from: 0, weight: 0,
+      radius: 1.4, scale: 6, speed: 3, hp: 2000, damage: 0, xp: 0, color: 0x4a4038, from: 0, weight: 0,
     } as EnemyType,
     /** Namen der Animationen in der Datei (ein Teil des Namens genügt; beide Würfe heißen gleich anfangend, darum genau). */
     clips: { idle: 'Stehen', walk: 'Laufen', wurf: 'Stachelwurf', wurf2: 'Stachelwurf2', salve: 'Stachelsalve', dead: 'Tod' },
@@ -453,7 +453,7 @@ export const CONFIG = {
      * zur Mitte des Bosses), gleich ob der Schaden von einem Hieb, einem Geschoss oder einem Feld kommt. Sein Kollisionskreis (1,4 m) lässt die
      * Figur bis auf 2,2 m heran: Wer ihm im Nahkampf an den Füßen steht, ist in der Aura. Die Rage ändert sie nicht.
      */
-    aura: { first: 3, interval: 6, duration: 3, radius: 2.5, outside: 0.25 },
+    aura: { first: 3, interval: 6, duration: 3, radius: 5, outside: 0.10 },
   },
   /**
    * Gold: Münzen aus Gegnern, Sold für die überlebte Zeit und die Siegprämie. Es bezahlt zwischen den Nächten beim Händler
