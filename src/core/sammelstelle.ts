@@ -3,8 +3,9 @@
  * Das Spiel schickt am Ende jeder Nacht einen anonymen Datensatz hin (`sendRun`); die globale Seite liest die Zähler zurück
  * (`fetchOverview`). Alles läuft über die REST-Schnittstelle von Supabase mit `fetch`, ohne Bibliothek.
  *
- * Was gesendet wird, ist die Nacht aus dem Protokoll (`statistik.ts`) ohne den Zeitpunkt (den setzt der Server): Klasse, Ausgang,
- * Zeit, Stufe, Stärkungen, Segen und Ränge der Fertigkeiten, dazu die zufällige Kennung der Nacht und die Fassung des Spiels.
+ * Was gesendet wird, ist die Nacht aus dem Protokoll (`statistik.ts`) ohne den Zeitpunkt (den setzt der Server): Klasse, Nachtart,
+ * Grad, Ausgang, Zeit, Stufe, Stärkungen, Segen und Ränge der Fertigkeiten, dazu die zufällige Kennung der Nacht und die Fassung
+ * des Spiels.
  * Kein Name, keine Kennung des Geräts, nichts vom Spielstand.
  *
  * Das Senden ist standardmäßig an, ohne Rückfrage, und lässt sich in den Optionen abschalten (`Settings.data.share`, siehe
@@ -42,6 +43,10 @@ export function sendRun(run: RunRecord): void {
     id: run.id,
     game_version: run.version,
     class_id: run.classId,
+    // Neue Nächte tragen immer eine Nachtart; die Spalten gibt es erst seit 0.25.0 (siehe `tools/supabase/statistik.sql`, die
+    // Datenbank muss vor dem Spiel dieser Fassung auf dem neuen Stand sein, sonst weist sie die Nacht ab).
+    night_id: run.night || null,
+    grade: run.night ? run.grade : null,
     outcome: run.outcome,
     seconds: run.seconds,
     level: run.level,

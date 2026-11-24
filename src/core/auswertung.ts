@@ -1,6 +1,7 @@
 /**
- * Die Auswertung des Protokolls (`statistik.ts`): zählt die Nächte einer Klasse zusammen. Das sind nur Zähler; Anteile und Namen
- * kommen erst in der Anzeige (`ui/statistikView.ts`). Dieser Teil kennt keine Klassen und Fertigkeiten, sondern nur Kennungen.
+ * Die Auswertung des Protokolls (`statistik.ts`): zählt die Nächte zusammen, insgesamt, je Klasse, je Nachtart und je Nachtart und Grad.
+ * Das sind nur Zähler; Anteile und Namen kommen erst in der Anzeige (`ui/statistikView.ts`). Dieser Teil kennt keine Klassen,
+ * Nachtarten und Fertigkeiten, sondern nur Kennungen.
  *
  * Die Zähler sind so gewählt, dass man sie addieren kann (zwei Auswertungen ergeben zusammen die Auswertung der beiden Protokolle).
  * Eine Sammelstelle für alle Spieler kann darum Zähler liefern, ohne jede einzelne Nacht herzugeben.
@@ -8,7 +9,7 @@
 
 import type { RunRecord } from './statistik';
 
-/** Die Zähler für eine Gruppe von Nächten: eine Klasse oder alle zusammen. */
+/** Die Zähler für eine Gruppe von Nächten: eine Klasse, eine Nachtart, eine Nachtart in einem Grad oder alle zusammen. */
 export interface Tally {
   /** Wie viele Nächte es waren. */
   nights: number;
@@ -33,10 +34,21 @@ export interface Auswertung {
   total: Tally;
   /** Je Klasse (Kennung); Klassen ohne Nacht fehlen. */
   byClass: Record<string, Tally>;
+  /**
+   * Je Nachtart (Kennung); Nachtarten ohne Nacht fehlen. Nächte, deren Nachtart unbekannt ist (siehe `RunRecord.night`), zählen
+   * hier nicht; die Summe der Nächte kann also unter `total.nights` liegen.
+   */
+  byNight: Record<string, Tally>;
+  /** Je Nachtart und Grad: Nachtart (Kennung) → Grad → Zähler; was nie gespielt wurde, fehlt. Zählt dieselben Nächte wie `byNight`. */
+  byNightGrade: Record<string, Record<number, Tally>>;
 }
 
 export function emptyTally(): Tally {
   return { nights: 0, wins: 0, falls: 0, aborts: 0, seconds: 0, levels: {}, upgrades: {}, segen: {}, skills: {} };
+}
+
+export function emptyAuswertung(): Auswertung {
+  return { total: emptyTally(), byClass: {}, byNight: {}, byNightGrade: {} };
 }
 
 function bump(counts: Record<string | number, number>, key: string | number, by = 1): void {
@@ -59,12 +71,17 @@ export function tallyRun(tally: Tally, run: RunRecord): void {
   }
 }
 
-/** Rechnet die Nächte eines Protokolls aus, insgesamt und je Klasse. */
+/** Rechnet die Nächte eines Protokolls aus, insgesamt, je Klasse, je Nachtart und je Nachtart und Grad. */
 export function evaluate(runs: readonly RunRecord[]): Auswertung {
-  const result: Auswertung = { total: emptyTally(), byClass: {} };
+  const result = emptyAuswertung();
   for (const run of runs) {
     tallyRun(result.total, run);
     tallyRun(result.byClass[run.classId] ?? (result.byClass[run.classId] = emptyTally()), run);
+    // Eine Nacht ohne bekannte Nachtart zählt nur insgesamt und bei ihrer Klasse.
+    if (!run.night) continue;
+    tallyRun(result.byNight[run.night] ?? (result.byNight[run.night] = emptyTally()), run);
+    const grades = result.byNightGrade[run.night] ?? (result.byNightGrade[run.night] = {});
+    tallyRun(grades[run.grade] ?? (grades[run.grade] = emptyTally()), run);
   }
   return result;
 }
@@ -105,16 +122,32 @@ function parseTally(raw: unknown): Tally {
   return tally;
 }
 
+/** Kennung → Zähler; was kein Zähler ist, fällt weg. */
+function parseTallies(raw: unknown): Record<string, Tally> {
+  const tallies: Record<string, Tally> = {};
+  if (!isRecord(raw)) return tallies;
+  for (const [id, tally] of Object.entries(raw)) tallies[id] = parseTally(tally);
+  return tallies;
+}
+
 /**
  * Liest eine Auswertung, die von außen kommt (die Sammelstelle liefert sie als JSON, siehe `sammelstelle.ts`). Was fehlt oder keine
- * Zahl ist, zählt als 0; ein Text, der keine Auswertung ist, ergibt eine leere.
+ * Zahl ist, zählt als 0; ein Text, der keine Auswertung ist, ergibt eine leere. Eine Sammelstelle, die noch nach dem Stand vor
+ * der Nachtart antwortet (ohne `byNight` und `byNightGrade`), ergibt eine Auswertung ohne diese beiden Teile.
  */
 export function parseAuswertung(raw: unknown): Auswertung {
-  const result: Auswertung = { total: emptyTally(), byClass: {} };
+  const result = emptyAuswertung();
   if (!isRecord(raw)) return result;
   result.total = parseTally(raw.total);
-  if (isRecord(raw.byClass)) {
-    for (const [classId, tally] of Object.entries(raw.byClass)) result.byClass[classId] = parseTally(tally);
+  result.byClass = parseTallies(raw.byClass);
+  result.byNight = parseTallies(raw.byNight);
+  if (isRecord(raw.byNightGrade)) {
+    for (const [night, grades] of Object.entries(raw.byNightGrade)) {
+      // Der Grad kommt als Text (JSON-Schlüssel); was keine ganze Zahl ist, fällt weg.
+      result.byNightGrade[night] = Object.fromEntries(
+        Object.entries(parseTallies(grades)).filter(([grade]) => /^\d{1,2}$/.test(grade)),
+      );
+    }
   }
   return result;
 }

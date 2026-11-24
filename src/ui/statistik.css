@@ -225,6 +225,42 @@
   text-align: left;
 }
 
+/* Reiter der Nachtarten: Zeilen zum Anklicken, die Grade einer Nachtart sind eingerückt. */
+.stats-table .stats-pick {
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stats-table .stats-pick:hover {
+  color: var(--ember);
+}
+
+.stats-table.nights tr.night td {
+  border-top-color: var(--line);
+}
+
+.stats-table.nights tr.night td.name {
+  color: var(--text);
+}
+
+.stats-table.nights tr.grade td.name {
+  padding-left: 26px;
+  color: var(--text-dim);
+}
+
+.stats-table.nights tr.chosen td {
+  background: rgba(255, 180, 94, 0.08);
+}
+
+.stats-table.nights tr.chosen td.name .stats-pick {
+  color: var(--ember);
+}
+
 @media (max-width: 760px) {
   .stats-grid {
     grid-template-columns: minmax(0, 1fr);

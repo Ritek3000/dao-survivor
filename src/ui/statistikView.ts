@@ -1,7 +1,8 @@
 /**
- * Die Anzeige der Statistik: ein Reiter "Übersicht" und je ein Reiter für jede Klasse. Die Übersicht zeigt, wie oft jede Klasse gespielt
- * wurde; der Reiter einer Klasse zeigt ihre Nächte (Siege, Durchschnitt der überlebten Zeit), die Ränge ihrer Fertigkeiten, die erreichten
- * Stufen und die gewählten Stärkungen und Segen. Jede Zahl steht mit ihrem Anteil daneben.
+ * Die Anzeige der Statistik: ein Reiter "Übersicht", je ein Reiter für jede Klasse und ein Reiter "Nachtarten". Die Übersicht zeigt, wie oft
+ * jede Klasse gespielt wurde; der Reiter einer Klasse zeigt ihre Nächte (Siege, Durchschnitt der überlebten Zeit), die Ränge ihrer Fertigkeiten,
+ * die erreichten Stufen und die gewählten Stärkungen und Segen. Der Reiter "Nachtarten" zählt jede Nachtart und jeden ihrer Grade für sich auf
+ * und zeigt zur gewählten Zeile dasselbe wie die Klasse (ohne Fertigkeiten, die gehören einer Klasse). Jede Zahl steht mit ihrem Anteil daneben.
  *
  * Die Anzeige bekommt eine fertige `Auswertung` (`core/auswertung.ts`) und liest nichts selbst: Dieselbe Anzeige zeigt die eigenen
  * Nächte im Spiel und später die aller Spieler auf einer eigenen Seite. Sie schreibt nur ins DOM und kennt keine Spielregeln,
@@ -12,6 +13,7 @@ import './statistik.css';
 import { emptyTally, type Auswertung, type Tally } from '../core/auswertung';
 import { CONFIG } from '../config';
 import { CLASSES, type ClassDef } from '../game/classes';
+import { NIGHTS, type NightDef } from '../game/nights';
 import { SEGEN, UPGRADES } from '../game/progression';
 import { EVOLUTION_RANK, MAX_RANK, weaponById } from '../game/weapons';
 
@@ -24,11 +26,14 @@ export interface StatistikTexts {
   empty: string;
   /** Steht im Reiter einer Klasse ohne Nacht; `name` ist der Name der Klasse. */
   emptyClass(name: string): string;
+  /** Steht im Reiter der Nachtarten, solange keine Nacht mit bekannter Nachtart vorliegt. */
+  emptyNights: string;
 }
 
 export const OWN_TEXTS: StatistikTexts = {
   empty: 'Noch keine Nacht gespielt. Sobald eine Nacht endet, ob gewonnen, gefallen oder abgebrochen, erscheint sie hier.',
   emptyClass: (name) => `Mit ${name} hast du noch keine Nacht gespielt.`,
+  emptyNights: 'Noch keine Nacht mit bekannter Nachtart. Sobald eine Nacht endet, erscheint sie hier mit ihrer Nachtart und ihrem Grad.',
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
@@ -57,6 +62,13 @@ function duration(seconds: number): string {
 
 function average(tally: Tally): number {
   return tally.nights > 0 ? tally.seconds / tally.nights : 0;
+}
+
+/** Die mittlere Stufe am Ende der Nacht; 0, wenn es keine Nacht gibt. */
+function meanLevel(tally: Tally): number {
+  if (tally.nights <= 0) return 0;
+  const total = Object.entries(tally.levels).reduce((sum, [level, nights]) => sum + Number(level) * nights, 0);
+  return total / tally.nights;
 }
 
 function cell(text: string, className = ''): HTMLTableCellElement {
@@ -122,10 +134,18 @@ function ranking(rows: readonly { name: string; detail?: string; value: number }
   return scrollable(table);
 }
 
+/** Die gewählte Zeile im Reiter der Nachtarten: eine Nachtart, ganz (`grade` ist `null`) oder in einem Grad. */
+interface NightPick {
+  night: string;
+  grade: number | null;
+}
+
 export class StatistikView {
-  /** 0 ist die Übersicht, 1 und folgende sind die Klassen in der Reihenfolge von `CLASSES`. */
+  /** 0 ist die Übersicht, 1 bis `CLASSES.length` sind die Klassen in der Reihenfolge von `CLASSES`, danach folgen die Nachtarten. */
   private tab = 0;
   private data: Auswertung | null = null;
+  /** Was im Reiter der Nachtarten unter der Tabelle ausgeführt wird; ob es noch passt, prüft `resolvePick`. */
+  private pick: NightPick | null = null;
 
   /** `root` nimmt den Inhalt auf; `scroller` ist, was blättert (die Seite dahinter), damit ein Reiterwechsel nach oben springt. */
   constructor(
@@ -142,7 +162,7 @@ export class StatistikView {
 
   /** Wechselt den Reiter um `delta` weiter (mit Umbruch); gibt zurück, ob sich etwas getan hat. */
   stepTab(delta: number): boolean {
-    const count = CLASSES.length + 1;
+    const count = CLASSES.length + 2;
     this.select((this.tab + delta + count) % count);
     return true;
   }
@@ -160,16 +180,20 @@ export class StatistikView {
     if (!data) return;
     this.root.append(this.tabs(data));
     const playerClass = CLASSES[this.tab - 1];
-    if (!playerClass) this.root.append(this.overview(data));
-    else this.root.append(this.classPage(playerClass, data.byClass[playerClass.id]));
+    if (this.tab === 0) this.root.append(this.overview(data));
+    else if (playerClass) this.root.append(this.classPage(playerClass, data.byClass[playerClass.id]));
+    else this.root.append(this.nightsPage(data));
   }
 
   private tabs(data: Auswertung): HTMLElement {
     const bar = el('div', 'stats-tabs');
     bar.setAttribute('role', 'tablist');
-    const labels = ['Übersicht', ...CLASSES.map((playerClass) => playerClass.name)];
+    const labels = ['Übersicht', ...CLASSES.map((playerClass) => playerClass.name), 'Nachtarten'];
     for (const [index, label] of labels.entries()) {
-      const nights = index === 0 ? data.total.nights : (data.byClass[CLASSES[index - 1]?.id ?? '']?.nights ?? 0);
+      let nights: number;
+      if (index === 0) nights = data.total.nights;
+      else if (index <= CLASSES.length) nights = data.byClass[CLASSES[index - 1]?.id ?? '']?.nights ?? 0;
+      else nights = this.knownNights(data);
       const button = el('button', index === this.tab ? 'stats-tab selected' : 'stats-tab', label);
       button.type = 'button';
       button.setAttribute('role', 'tab');
@@ -233,9 +257,9 @@ export class StatistikView {
     return page;
   }
 
-  /** Die Nächte der Klasse: wie viele, wie sie endeten und wie lange die Figur im Schnitt überlebte. */
-  private nights(tally: Tally): HTMLElement {
-    const section = card('Die Nächte', true);
+  /** Die Nächte der Klasse (oder der Nachtart): wie viele, wie sie endeten und wie lange die Figur im Schnitt überlebte. */
+  private nights(tally: Tally, title = 'Die Nächte'): HTMLElement {
+    const section = card(title, true);
     const figures = el('dl', 'stats-figures');
     const figure = (label: string, value: string, detail = ''): void => {
       const box = el('div', 'figure');
@@ -288,8 +312,7 @@ export class StatistikView {
     // Stufen dazwischen, die nie das Ende waren, stehen mit 0 da; so bleibt die Reihe lückenlos.
     for (let level = high; level >= low; level--) rows.push({ name: `Stufe ${level}`, value: tally.levels[level] ?? 0 });
     section.append(ranking(rows, tally.nights, ['Stufe', 'Nächte', 'Anteil']));
-    const mean = reached.reduce((sum, level) => sum + level * (tally.levels[level] ?? 0), 0) / tally.nights;
-    section.append(el('p', 'stats-note', `Im Schnitt Stufe ${DECIMAL.format(mean)}, am höchsten Stufe ${high}.`));
+    section.append(el('p', 'stats-note', `Im Schnitt Stufe ${DECIMAL.format(meanLevel(tally))}, am höchsten Stufe ${high}.`));
     return section;
   }
 
@@ -306,6 +329,110 @@ export class StatistikView {
     const rows = SEGEN.map((segen) => ({ name: segen.name, detail: segen.macht, value: tally.segen[segen.id] ?? 0 }));
     const whole = rows.reduce((sum, row) => sum + row.value, 0);
     section.append(ranking(this.byCount(rows), whole, ['Segen', 'Gewährt', 'Anteil']));
+    return section;
+  }
+
+  /** Wie viele Nächte eine bekannte Nachtart haben; die anderen (aus früheren Fassungen) fehlen im Reiter der Nachtarten. */
+  private knownNights(data: Auswertung): number {
+    return Object.values(data.byNight).reduce((sum, tally) => sum + tally.nights, 0);
+  }
+
+  /** Die Zähler zu einer Wahl; `undefined`, wo es keine Nacht gibt. */
+  private tallyOf(data: Auswertung, pick: NightPick): Tally | undefined {
+    const tally = pick.grade === null ? data.byNight[pick.night] : data.byNightGrade[pick.night]?.[pick.grade];
+    return tally && tally.nights > 0 ? tally : undefined;
+  }
+
+  /**
+   * Die Wahl, die gilt: die gemerkte, solange es dafür Nächte gibt (sonst gilt die ganze Nachtart, und fehlt auch die, die erste Nachtart
+   * mit Nächten, in der Reihenfolge von `NIGHTS`). `null`, wenn es keine Nacht mit bekannter Nachtart gibt.
+   */
+  private resolvePick(data: Auswertung): NightPick | null {
+    const wanted = this.pick;
+    if (wanted && this.tallyOf(data, wanted)) return wanted;
+    if (wanted && this.tallyOf(data, { night: wanted.night, grade: null })) return { night: wanted.night, grade: null };
+    const first = NIGHTS.find((night) => this.tallyOf(data, { night: night.id, grade: null }));
+    return first ? { night: first.id, grade: null } : null;
+  }
+
+  /**
+   * Der Reiter der Nachtarten: oben jede Nachtart mit ihren Graden in einer Tabelle (ein Klick wählt eine Zeile), darunter zur gewählten
+   * Zeile dieselben Angaben wie bei einer Klasse, nur ohne die Fertigkeiten (die gehören einer Klasse, nicht einer Nachtart).
+   */
+  private nightsPage(data: Auswertung): HTMLElement {
+    const page = el('div', 'stats-grid');
+    const pick = this.resolvePick(data);
+    if (!pick) {
+      page.append(el('p', 'stats-empty', this.texts.emptyNights));
+      return page;
+    }
+    page.append(this.nightTable(data, pick));
+    const night = NIGHTS.find((candidate) => candidate.id === pick.night);
+    const tally = this.tallyOf(data, pick);
+    if (!night || !tally) return page;
+    page.append(this.nights(tally, this.pickTitle(night, pick.grade)), this.levels(tally));
+    const right = el('div', 'stats-stack');
+    right.append(this.upgrades(tally), this.blessings(tally));
+    page.append(right);
+    return page;
+  }
+
+  private pickTitle(night: NightDef, grade: number | null): string {
+    return grade === null ? `${night.name} · alle Grade` : `${night.name} · Grad ${grade}`;
+  }
+
+  /** Eine Zeile je Nachtart (mit allen ihren Graden zusammen) und darunter eine je gespieltem Grad, aufsteigend. */
+  private nightTable(data: Auswertung, pick: NightPick): HTMLElement {
+    const section = card('Nachtarten und Grade', true);
+    const known = this.knownNights(data);
+    const table = el('table', 'stats-table nights');
+    table.append(head(['Nachtart / Grad', 'Nächte', '', 'Anteil', 'Siege', 'Siegquote', 'Ø überlebt', 'Ø Stufe']));
+    const body = el('tbody');
+    const top = Math.max(1, ...Object.values(data.byNight).map((tally) => tally.nights));
+    const row = (label: string, tally: Tally, choice: NightPick, className: string): void => {
+      const chosen = choice.night === pick.night && choice.grade === pick.grade;
+      const tr = el('tr', chosen ? `${className} chosen` : className);
+      const name = el('td', 'name');
+      const button = el('button', 'stats-pick', label);
+      button.type = 'button';
+      button.setAttribute('aria-pressed', String(chosen));
+      button.addEventListener('click', () => {
+        // Wie bei den Reitern: Enter und die Pfeiltasten gehören dem Spiel, der Fokus soll nicht am Knopf hängen bleiben.
+        button.blur();
+        this.pick = choice;
+        this.render();
+      });
+      name.append(button);
+      tr.append(
+        name,
+        cell(count(tally.nights)),
+        bar(tally.nights / top),
+        cell(percent(tally.nights, known)),
+        cell(count(tally.wins)),
+        cell(percent(tally.wins, tally.nights)),
+        cell(duration(average(tally))),
+        cell(DECIMAL.format(meanLevel(tally))),
+      );
+      body.append(tr);
+    };
+    for (const night of NIGHTS) {
+      const tally = data.byNight[night.id];
+      if (!tally || tally.nights === 0) continue;
+      row(night.name, tally, { night: night.id, grade: null }, 'night');
+      const grades = data.byNightGrade[night.id] ?? {};
+      for (const grade of Object.keys(grades).map(Number).sort((a, b) => a - b)) {
+        const gradeTally = grades[grade];
+        if (gradeTally && gradeTally.nights > 0) row(`Grad ${grade}`, gradeTally, { night: night.id, grade }, 'grade');
+      }
+    }
+    table.append(body);
+    section.append(scrollable(table));
+    section.append(el('p', 'stats-note', 'Die Zeile einer Nachtart zählt alle ihre Grade zusammen. Ein Klick auf eine Zeile zeigt darunter ihre Stufen, Stärkungen und Segen.'));
+    const unknown = data.total.nights - known;
+    if (unknown > 0) {
+      const text = unknown === 1 ? '1 Nacht' : `${count(unknown)} Nächte`;
+      section.append(el('p', 'stats-note', `${text} aus früheren Fassungen ${unknown === 1 ? 'kennt' : 'kennen'} ihre Nachtart nicht und ${unknown === 1 ? 'fehlt' : 'fehlen'} hier.`));
+    }
     return section;
   }
 

@@ -641,7 +641,7 @@ export class Game {
   private showDataNotice(): void {
     this.confirming = 'notice';
     const what =
-      'Am Ende jeder Nacht meldet das Spiel anonym, welche Klasse du gespielt hast, wie die Nacht endete und was du gewählt hast. ' +
+      'Am Ende jeder Nacht meldet das Spiel anonym, welche Klasse, Nachtart und welchen Grad du gespielt hast, wie die Nacht endete und was du gewählt hast. ' +
       'So lässt sich das Gleichgewicht verbessern. Es gibt keinen Namen und keine Kennung deines Geräts; beim Übertragen sieht der Dienst ' +
       '(Supabase) wie bei jeder Webanfrage deine IP-Adresse, in der Statistik wird sie nicht gespeichert.';
     if (this.settings.data.share) {
@@ -1427,7 +1427,7 @@ export class Game {
   }
 
   /**
-   * Hält die Nacht für die Statistik fest: Klasse, Ausgang, Zeit, Stufe, die gewählten Stärkungen und Segen und den Rang jeder Fertigkeit.
+   * Hält die Nacht für die Statistik fest: Klasse, Nachtart und Grad, Ausgang, Zeit, Stufe, die gewählten Stärkungen und Segen und den Rang jeder Fertigkeit.
    * Es zählt wie bei der gespielten Nacht des Händlers: Ein Lauf, den man vor `minNightSeconds` abbricht, fehlt im Protokoll.
    */
   private recordNight(outcome: RunOutcome, survived: number): void {
@@ -1448,6 +1448,8 @@ export class Game {
       at: Date.now(),
       version: __GAME_VERSION__,
       classId: this.playerClass.id,
+      night: this.night.id,
+      grade: this.runGrade,
       outcome,
       seconds: Math.round(survived),
       level: this.progression.level,
