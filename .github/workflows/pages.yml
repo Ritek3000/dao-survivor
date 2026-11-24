@@ -1,14 +1,19 @@
-# Baut das Spiel nach jedem Merge auf main und veröffentlicht es auf GitHub Pages,
-# damit sich jeder Stand sofort im Browser ausprobieren lässt.
+# Baut das Spiel nach jedem Merge auf main und veröffentlicht es
+#  1. auf GitHub Pages, damit sich jeder Stand sofort im Browser ausprobieren lässt, und
+#  2. zusätzlich per SFTP auf die eigene Domäne (Job „eigene-domain“, Zugangsdaten als Secrets).
+# Beide Veröffentlichungen sind voneinander unabhängig: Scheitert der Upload auf die eigene Domäne,
+# läuft GitHub Pages trotzdem, und umgekehrt.
 #
 # Einmalig nötig (Repository-Einstellung, nicht per Datei möglich):
 # Settings → Pages → Build and deployment → Source: „GitHub Actions“.
+# Für die eigene Domäne: die Secrets FTP_SERVER, FTP_BENUTZER und FTP_PASSWORT (siehe README, „Eigene Domäne“).
 #
 # Alle Aktionen laufen auf Node 24 (Laufzeit der Aktion selbst). Das hat nichts mit
 # `node-version` weiter unten zu tun; das ist die Version, mit der das Spiel gebaut wird.
 # Die Hauptversionen sind so gewählt, dass keine Node-20-Warnung mehr erscheint:
-# upload-pages-artifact ab v5 bringt upload-artifact v7 mit, deploy-pages ab v5 läuft auf Node 24.
-name: Spiel auf GitHub Pages veröffentlichen
+# upload-pages-artifact ab v5 bringt upload-artifact v7 mit, deploy-pages ab v5 läuft auf Node 24;
+# download-artifact v8 passt als Gegenstück zu upload-artifact v7.
+name: Spiel veröffentlichen (GitHub Pages und eigene Domäne)
 
 on:
   push:
@@ -59,6 +64,15 @@ jobs:
         with:
           path: dist
 
+      # Dieselben Dateien noch einmal für den Upload auf die eigene Domäne (der Pages-Artefakt ist ein Tar-Archiv
+      # nur für deploy-pages). Ein Tag Aufbewahrung genügt; danach räumt GitHub auf.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: spiel-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
+
   veroeffentlichen:
     needs: bauen
     runs-on: ubuntu-latest
@@ -68,3 +82,41 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  # Lädt denselben Stand per SFTP auf die eigene Domäne. Hängt nur vom Bauen ab, nicht von GitHub Pages,
+  # damit sich beide Veröffentlichungen nicht gegenseitig aufhalten.
+  # Die Zugangsdaten stehen als Secrets im Repository (Settings → Secrets and variables → Actions):
+  #   FTP_SERVER, FTP_BENUTZER, FTP_PASSWORT. Der Name sagt „FTP“, die Verbindung läuft aber über SFTP.
+  # Wahlweise als Variablen (gleiche Seite, Reiter „Variables“): FTP_PORT, FTP_ZIELORDNER,
+  # FTP_FINGERABDRUCK, FTP_ALTES_LOESCHEN. Was sie bewirken, steht in tools/sftp-hochladen.sh und in der README.
+  eigene-domain:
+    needs: bauen
+    runs-on: ubuntu-latest
+    # Der Lauf gehört zur Gruppe „pages“ (siehe oben): Ein hängender Upload würde sonst jede spätere
+    # Veröffentlichung aufhalten. Darum ist die Zeit begrenzt; der nächste Lauf lädt nur nach, was fehlt.
+    timeout-minutes: 20
+    steps:
+      # Nur das Skript, nicht das ganze Repository.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: tools/sftp-hochladen.sh
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: spiel-dist
+          path: dist
+
+      - name: lftp installieren
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      - name: Auf die eigene Domäne hochladen (SFTP)
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_BENUTZER: ${{ secrets.FTP_BENUTZER }}
+          FTP_PASSWORT: ${{ secrets.FTP_PASSWORT }}
+          FTP_PORT: ${{ vars.FTP_PORT }}
+          FTP_ZIELORDNER: ${{ vars.FTP_ZIELORDNER }}
+          FTP_FINGERABDRUCK: ${{ vars.FTP_FINGERABDRUCK }}
+          FTP_ALTES_LOESCHEN: ${{ vars.FTP_ALTES_LOESCHEN }}
+        run: bash tools/sftp-hochladen.sh dist
