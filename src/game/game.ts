@@ -28,7 +28,7 @@ import { Boerse } from './boerse';
 import { Beute, type LootSettlement } from './beute';
 import { Boss } from './boss';
 import { CameraRig } from './cameraRig';
-import { CLASSES, TRAITS, type ClassDef, type ClassId } from './classes';
+import { bindLooks, chooseLook, chosenLook, className, CLASSES, lookOf, TRAITS, type ClassDef, type ClassId, type Look } from './classes';
 import { Coins } from './coins';
 import { finsternisUniforms } from './darkness';
 import { Chest, Drops } from './drops';
@@ -267,6 +267,7 @@ export class Game {
     this.hud.onMainMenu = () => this.openTitle();
     this.hud.onReroll = () => this.reroll();
     this.hud.onBanish = () => this.toggleBanishing();
+    this.hud.onLook = (index, look) => this.setLook(index, look);
     this.hud.onGrade = (index, step) => {
       // Wer auf + oder − einer Karte klickt, wählt sie mit, damit Enter dieselbe Nacht beginnt.
       this.selected = index;
@@ -275,9 +276,11 @@ export class Game {
     };
     this.settings = loadSettings({
       sound: { ...CONFIG.audio.defaults, muted: false },
-      ui: { vitalsPosition: 'top-left' },
+      ui: { vitalsPosition: 'top-left', looks: {} },
       data: { share: true, noticeSeen: false },
     });
+    // Das gewählte Aussehen der Klassen gilt überall, wo ein Klassenname oder eine Figur gebraucht wird (siehe `lookOf`).
+    bindLooks(this.settings.ui.looks);
     audio.setVolumes(this.settings.sound);
     audio.muffleAt = (x, z) => this.zones.finsternisAt(x, z);
     audio.onVolumes = (volumes) => {
@@ -306,7 +309,7 @@ export class Game {
     this.hud.setLoading('Die Figuren werden geladen …');
     // Die Klänge laden daneben her; fehlen sie, bleibt das Spiel stumm, aber spielbar.
     const [models] = await Promise.all([
-      loadModels((done, total) => this.hud.setLoading(`Figuren geladen: ${done} von ${total}`)),
+      loadModels((done, total) => this.hud.setLoading(`Figuren geladen: ${done} von ${total}`), (playerClass) => chosenLook(playerClass)),
       audio.load(),
     ]);
     this.models = models;
@@ -321,9 +324,7 @@ export class Game {
     );
     this.hud.setLoading(null);
     // Eine fehlende Datei hält das Spiel nicht auf, soll aber nicht unbemerkt bleiben (sonst fällt nur der Platzhalter in der Nacht auf).
-    this.hud.setLoadNotice(
-      models.failed.length > 0 ? `Nicht geladen, der Platzhalter bleibt: ${models.failed.join(', ')}. Seite neu laden hilft bei Netzfehlern.` : null,
-    );
+    this.showLoadNotice();
     this.openTitle();
     if (!this.settings.data.noticeSeen) this.showDataNotice();
   }
@@ -954,12 +955,17 @@ export class Game {
     this.hud.showChoice(
       'Die Abendglocke läutet',
       'Wer steht heute Nacht vor der Mauer?',
-      CLASSES.map((playerClass) => ({
-        name: playerClass.name,
-        text: playerClass.text,
-        note: playerClass.home,
-        extra: this.lagerEnabled ? `Ausrüstung: ${this.ausruestung.equippedItems(playerClass.id).length} von 9` : undefined,
-      })),
+      CLASSES.map((playerClass) => {
+        const look = lookOf(playerClass);
+        return {
+          name: look.name,
+          text: look.text,
+          note: look.home,
+          extra: this.lagerEnabled ? `Ausrüstung: ${this.ausruestung.equippedItems(playerClass.id).length} von 9` : undefined,
+          // Den Schalter hat nur eine Klasse, die es auch als Frau gibt.
+          ...(playerClass.women ? { look: chosenLook(playerClass) } : {}),
+        };
+      }),
       this.selected,
       this.boerse.gold,
       refund > 0
@@ -980,8 +986,10 @@ export class Game {
     const [usual] = playerClass.weapons;
     const remembered = this.lastStart.get(playerClass.id) ?? usual;
     this.selected = Math.max(0, playerClass.weapons.indexOf(remembered ?? ''));
+    // Die Figur der gewählten Klasse lädt schon, während man den Angriff und die Nachtart wählt.
+    void this.models?.loadHero(playerClass, chosenLook(playerClass));
     this.hud.showChoice(
-      playerClass.name,
+      className(playerClass),
       'Mit welchem Angriff beginnst du die Nacht?',
       playerClass.weapons.map((id) => {
         const def = weaponById(id);
@@ -1086,7 +1094,7 @@ export class Game {
       this.ausruestung.apply(playerClass.id, stats);
       applyNightStats(rules, stats);
     });
-    this.player.setClass(playerClass, this.models?.heroes.get(playerClass.id) ?? null);
+    this.player.setClass(playerClass, this.models?.hero(playerClass.id, chosenLook(playerClass)) ?? null);
     this.player.reset();
     this.dust.setLightColor(playerClass.lightColor);
     this.events.clear();
@@ -1300,6 +1308,11 @@ export class Game {
     if (this.selected !== before) audio.play('auswahl');
     this.hud.select(this.selected);
 
+    if (this.phase === 'select' && this.input.wasPressed('look')) {
+      const playerClass = CLASSES[this.selected];
+      if (playerClass?.women) this.setLook(this.selected, chosenLook(playerClass) === 'w' ? 'm' : 'w');
+      return;
+    }
     if (this.phase === 'select' && this.input.wasPressed('lager') && this.lagerEnabled) {
       this.openLager(this.selected);
       return;
@@ -1340,6 +1353,32 @@ export class Game {
     else if (this.input.wasPressed('confirm')) this.pick(this.selected);
   }
 
+  /**
+   * Wechselt das Aussehen der Klasse auf Karte `index` (Mann oder Frau): Name und Texte der Karte ändern sich gleich, die Wahl wird
+   * gespeichert, und die Figur lädt im Hintergrund nach, damit sie bereitsteht, wenn die Nacht beginnt.
+   */
+  private setLook(index: number, look: Look): void {
+    if (this.phase !== 'select') return;
+    const playerClass = CLASSES[index];
+    if (!playerClass?.women || chosenLook(playerClass) === look) return;
+    this.selected = index;
+    this.hud.select(index);
+    chooseLook(playerClass, look);
+    saveSettings(this.settings);
+    const shown = lookOf(playerClass);
+    this.hud.setLook(index, look, { name: shown.name, text: shown.text, note: shown.home });
+    void this.models?.loadHero(playerClass, look).then(() => this.showLoadNotice());
+    audio.play('auswahl');
+  }
+
+  /** Zeigt auf dem Startbildschirm, welche Dateien fehlten (der Platzhalter oder die männliche Figur bleibt). */
+  private showLoadNotice(): void {
+    const failed = this.models?.failed ?? [];
+    this.hud.setLoadNotice(
+      failed.length > 0 ? `Nicht geladen, der Platzhalter bleibt: ${failed.join(', ')}. Seite neu laden hilft bei Netzfehlern.` : null,
+    );
+  }
+
   private pick(index: number): void {
     if (this.phase === 'select') {
       const playerClass = CLASSES[index];
@@ -1360,6 +1399,17 @@ export class Game {
       const playerClass = this.pendingClass;
       const night = NIGHTS[index];
       if (!playerClass || !night) return;
+      // Ist die Figur noch nicht da (die Frau lädt erst, wenn man sie wählt), wartet die Nacht kurz darauf, statt mit der falschen zu beginnen.
+      const loading = this.models?.loadingHero(playerClass, chosenLook(playerClass));
+      if (loading) {
+        this.hud.setLoading('Die Figur wird geladen …');
+        void loading.then(() => {
+          this.hud.setLoading(null);
+          this.showLoadNotice();
+          if (this.phase === 'night' && this.pendingClass === playerClass) this.pick(index);
+        });
+        return;
+      }
       this.lastNight = night.id;
       this.pendingClass = null;
       this.hud.hideChoice();
@@ -1401,7 +1451,7 @@ export class Game {
     const survived = Math.min(this.time, CONFIG.run.nightSeconds);
     const title = this.nightTitle();
     const nightName = title === '' ? '' : ` · ${title}`;
-    const stats = `${this.playerClass.name}${nightName} · Überlebt: ${formatTime(survived)} · Stufe ${this.progression.level} · Erschlagen: ${this.enemies.kills}`;
+    const stats = `${className(this.playerClass)}${nightName} · Überlebt: ${formatTime(survived)} · Stufe ${this.progression.level} · Erschlagen: ${this.enemies.kills}`;
     this.recordNight(outcome, survived);
     // Nur der Sonnenaufgang zählt als geschafft; wer fällt oder abbricht, behält den Grad, den er schon hat.
     const unlocked = won && this.grade.record(this.night.id, this.runGrade) ? this.grade.highest(this.night.id) : null;

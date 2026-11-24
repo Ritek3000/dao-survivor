@@ -1,4 +1,4 @@
-import type { VitalsPosition } from '../core/settings';
+import type { Look, VitalsPosition } from '../core/settings';
 import type { Rarity } from '../game/items';
 import type { IslandBearing, Zone } from '../game/zones';
 import { element, span } from './dom';
@@ -15,6 +15,8 @@ export interface ChoiceCard {
   extra?: string;
   /** Der Gradzähler einer Nachtart, die man schon geschafft hat (siehe `game/grade.ts`); fehlt er, hat die Karte keinen. */
   grade?: ChoiceGrade;
+  /** Der Schalter zwischen Mann und Frau auf der Karte einer Klasse; fehlt er, gibt es die Klasse nur als Mann. */
+  look?: Look;
 }
 
 /** Der Gradzähler auf der Karte einer Nachtart: `−  Grad 2  +`, darunter was der Grad ändert und was man geschafft hat. */
@@ -59,6 +61,17 @@ interface GradeParts {
   cleared: HTMLElement;
 }
 
+/** Der Schalter zwischen Mann und Frau auf der Klassenkarte und die Texte, die er mit ändert. */
+interface LookParts {
+  row: HTMLElement;
+  buttons: Record<Look, HTMLButtonElement>;
+  name: HTMLElement;
+  text: HTMLElement;
+  note: HTMLElement;
+}
+
+const LOOK_LABELS: Record<Look, string> = { m: 'Männlich', w: 'Weiblich' };
+
 const ZONE_LABELS: Record<Zone, string> = {
   licht: 'Im Licht',
   nacht: 'Nacht',
@@ -90,6 +103,8 @@ export class Hud {
   onBanish: () => void = () => {};
   /** Die Knöpfe − und + im Gradzähler einer Karte: Nummer der Karte und Schritt (−1 oder +1). */
   onGrade: (index: number, step: number) => void = () => {};
+  /** Ein Klick auf den Schalter der Klassenkarte `index`: Das Aussehen soll `look` werden. */
+  onLook: (index: number, look: Look) => void = () => {};
   private readonly hpFill = element('hp-fill');
   private readonly hpDust = element('hp-dust');
   private readonly hpText = element('hp-text');
@@ -141,6 +156,8 @@ export class Hud {
   private cards: HTMLElement[] = [];
   /** Die Teile des Gradzählers je Karte (nach Nummer), damit `setGrade` sie ändern kann. */
   private gradeParts = new Map<number, GradeParts>();
+  /** Die Teile des Aussehen-Schalters je Klassenkarte (nach Nummer), damit `setLook` Texte und Schalter ändern kann. */
+  private lookParts = new Map<number, LookParts>();
   private lagerEnabled = false;
 
   constructor(showDebug: boolean) {
@@ -296,19 +313,23 @@ export class Hud {
     this.choiceTools.hidden = true;
     this.choiceSubtitle.textContent = subtitle;
     this.gradeParts.clear();
+    this.lookParts.clear();
     this.cards = cards.map((card, index) => {
-      // Ein Knopf darf keine Knöpfe enthalten: Eine Karte mit Gradzähler ist darum ein Feld mit der Rolle eines Knopfs.
-      const root = card.grade ? document.createElement('div') : document.createElement('button');
+      // Ein Knopf darf keine Knöpfe enthalten: Eine Karte mit Gradzähler oder Aussehen-Schalter ist darum ein Feld mit der Rolle eines Knopfs.
+      const root = card.grade || card.look ? document.createElement('div') : document.createElement('button');
       if (root instanceof HTMLButtonElement) root.type = 'button';
       else root.setAttribute('role', 'button');
       root.className = card.segen ? 'card segen' : 'card';
-      root.append(
-        span('key', String(index + 1)),
-        span('name', card.name),
-        span('text', card.text),
-        span('note', card.note),
-        ...(card.extra ? [span('note extra', card.extra)] : []),
-      );
+      const name = span('name', card.name);
+      const text = span('text', card.text);
+      const note = span('note', card.note);
+      root.append(span('key', String(index + 1)), name, text, note, ...(card.extra ? [span('note extra', card.extra)] : []));
+      if (card.look) {
+        const parts = this.lookRow(index, name, text, note);
+        this.lookParts.set(index, parts);
+        this.fillLook(parts, card.look);
+        root.append(parts.row);
+      }
       if (card.grade) {
         const parts = this.gradeRow(index);
         this.gradeParts.set(index, parts);
@@ -328,9 +349,55 @@ export class Hud {
     this.choiceKeys.textContent =
       gold === null
         ? '1 · 2 · 3 oder Pfeiltasten und Enter'
-        : `1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen${this.lagerEnabled ? ' · L: Lager' : ''} · Esc: Hauptmenü`;
+        : `1 · 2 · 3 oder Pfeiltasten und Enter: Nacht beginnen${cards.some((card) => card.look) ? ' · F: Figur' : ''}${this.lagerEnabled ? ' · L: Lager' : ''} · Esc: Hauptmenü`;
     this.select(selected);
     this.choice.hidden = false;
+  }
+
+  /** Baut den Schalter zwischen Mann und Frau auf einer Klassenkarte; gefüllt wird er von `fillLook`. */
+  private lookRow(index: number, name: HTMLElement, text: HTMLElement, note: HTMLElement): LookParts {
+    const row = document.createElement('div');
+    row.className = 'look';
+    row.setAttribute('role', 'radiogroup');
+    row.setAttribute('aria-label', 'Figur');
+    const choose = (look: Look): HTMLButtonElement => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'look-choice';
+      button.textContent = LOOK_LABELS[look];
+      button.title = 'Figur wechseln (F)';
+      button.setAttribute('role', 'radio');
+      button.addEventListener('click', (event) => {
+        // Der Klick gehört dem Schalter und wählt nicht die Klasse; der Fokus bliebe sonst am Knopf hängen (Enter und Leertaste gehören dem Spiel).
+        event.stopPropagation();
+        button.blur();
+        this.onLook(index, look);
+      });
+      return button;
+    };
+    const buttons = { m: choose('m'), w: choose('w') };
+    const group = document.createElement('div');
+    group.className = 'look-group';
+    group.append(buttons.m, buttons.w);
+    row.append(span('look-title', 'Figur'), group);
+    return { row, buttons, name, text, note };
+  }
+
+  private fillLook(parts: LookParts, look: Look): void {
+    for (const key of ['m', 'w'] as const) {
+      parts.buttons[key].classList.toggle('on', key === look);
+      parts.buttons[key].setAttribute('aria-checked', String(key === look));
+    }
+  }
+
+  /** Stellt den Schalter der Klassenkarte `index` um und schreibt Name und Texte der Karte neu, etwa nach F. */
+  setLook(index: number, look: Look, texts: { name: string; text: string; note: string }): void {
+    const parts = this.lookParts.get(index);
+    if (!parts) return;
+    parts.name.textContent = texts.name;
+    parts.text.textContent = texts.text;
+    parts.note.textContent = texts.note;
+    this.fillLook(parts, look);
   }
 
   /** Baut den Gradzähler einer Karte; gefüllt wird er von `fillGrade`. */

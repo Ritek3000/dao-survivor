@@ -3,7 +3,10 @@
  * der Kämpfer im Licht, der Wildnisläufer am Rand der Finsternis, der Magier in ihr.
  */
 
+import type { Look } from '../core/settings';
 import type { GearDef } from './gear';
+
+export type { Look };
 
 export type ClassId = 'kaempfer' | 'wildnislaeufer' | 'magier';
 
@@ -34,22 +37,16 @@ export interface SwingDef {
   nock?: number;
 }
 
-export interface ClassDef {
-  id: ClassId;
+/**
+ * Was sich mit dem Aussehen einer Klasse ändert: Name, Texte, Figur und was sie in den Händen hält. Werte, Angriffe und
+ * Animationen gehören der Klasse und sind für Mann und Frau dieselben; das Aussehen ändert nie das Gleichgewicht.
+ */
+export interface LookDef {
   name: string;
   /** Spielgefühl in einem Satz, für die Auswahlkarte. */
   text: string;
   /** Wo die Klasse stark ist und was es sie kostet. */
   home: string;
-  /** Faktoren auf die Grundwerte aus der Konfiguration. */
-  hpFactor: number;
-  speedFactor: number;
-  lightRadiusFactor: number;
-  verstaubungFactor: number;
-  lightColor: number;
-  /** Der Magier trägt keine Fackel, sondern ein Kerzenwort: eine kalt leuchtende Staubwolke am Boden. */
-  light: 'fackel' | 'kerzenwort';
-  bodyColor: number;
   /** GLB-Modell: Datei im Ordner public/models und Höhe der stehenden Figur im Spiel, in Metern. */
   model: { file: string; height: number };
   /**
@@ -59,6 +56,29 @@ export interface ClassDef {
   gear: GearDef;
   /** Was die andere Hand hält, etwa der Schild des Kämpfers; er greift nicht ein, sondern schmückt die Figur. */
   offhand?: GearDef;
+}
+
+/**
+ * Das weibliche Aussehen einer Klasse. Name und Texte stehen immer da; was fehlt (`model`, `gear`, `offhand`), gilt wie beim
+ * Mann. Hat die Frau ein eigenes Modell, gehören sein Sitz in der Hand und die Höhe ausgemessen mit hierher: Das Skelett jeder
+ * Datei dreht die Handknochen anders.
+ */
+export type WomenDef = Pick<LookDef, 'name' | 'text' | 'home'> & Partial<Pick<LookDef, 'model' | 'gear' | 'offhand'>>;
+
+/** Die Klasse selbst trägt das Aussehen des Mannes; das der Frau steht in `women` (siehe `lookOf`). */
+export interface ClassDef extends LookDef {
+  id: ClassId;
+  /** Faktoren auf die Grundwerte aus der Konfiguration. */
+  hpFactor: number;
+  speedFactor: number;
+  lightRadiusFactor: number;
+  verstaubungFactor: number;
+  lightColor: number;
+  /** Der Magier trägt keine Fackel, sondern ein Kerzenwort: eine kalt leuchtende Staubwolke am Boden. */
+  light: 'fackel' | 'kerzenwort';
+  bodyColor: number;
+  /** Das weibliche Aussehen; ohne diesen Eintrag gibt es die Klasse nur als Mann, und die Karte zeigt keinen Schalter. */
+  women?: WomenDef;
   /** Der erste Eintrag ist der übliche Startangriff; vor der Nacht lässt sich jeder der sieben wählen. Die übrigen kommen beim Stufenaufstieg dazu. */
   weapons: readonly string[];
   /** Welche Animation zu welchem Angriff gehört. Angriffe ohne Eintrag wirken ohne Bewegung der Figur. */
@@ -157,6 +177,12 @@ export const CLASSES: readonly ClassDef[] = [
         leash: { bone: 'spine', rest: [0.4, -0.152, -0.027], near: 0.15, soft: 0.35, inward: 0.03 },
       },
     },
+    // Bis die Kämpferin ihr eigenes Modell hat (`model`, `gear`, `offhand`, siehe `WomenDef`), trägt sie die Figur des Kämpfers.
+    women: {
+      name: 'Kämpferin',
+      text: 'Zäh und mitten im Getümmel.',
+      home: 'Im Licht einer Feuerschale schlägt sie härter und steckt mehr ein. Erlischt das Feuer, ist sie kurz geschwächt.',
+    },
     weapons: ['axthieb', 'banner', 'wurfaxt', 'wirbelschlag', 'wuchthieb', 'kriegsschrei', 'dornenschild'],
     swings: {
       axthieb: AXE_SWING,
@@ -194,6 +220,12 @@ export const CLASSES: readonly ClassDef[] = [
       along: [-0.538, -0.068, 0.84],
       toward: [-0.225, 0.95, -0.216],
     },
+    // Bis die Wildnisläuferin ihr eigenes Modell hat, trägt sie die Figur des Wildnisläufers.
+    women: {
+      name: 'Wildnisläuferin',
+      text: 'Schnell und auf Abstand bedacht.',
+      home: 'Sie spürt Gegner in der Finsternis und trifft sie dort härter. Dafür trägt sie das kleinste Licht und hält wenig aus.',
+    },
     weapons: ['bogenschuss', 'pfeilhagel', 'fangeisen', 'wurfmesser', 'sporenfalle', 'koederpuppe', 'netz'],
     swings: {
       bogenschuss: BOW_SHOT,
@@ -222,6 +254,12 @@ export const CLASSES: readonly ClassDef[] = [
       along: [-0.691, -0.611, 0.386],
       toward: [-0.361, 0.754, 0.548],
     },
+    // Bis die Magierin ihr eigenes Modell hat, trägt sie die Figur des Magiers.
+    women: {
+      name: 'Magierin',
+      text: 'Zerbrechlich, mit großer Flächenwirkung.',
+      home: 'In der Finsternis liegt mehr Staub, dort zaubert sie schneller. Die Finsternis verstaubt auch sie, aber langsamer als andere.',
+    },
     weapons: ['hitze-werfen', 'sorlanze', 'glut-formen', 'erdstoss', 'wurzelgriff', 'sturmboee', 'schild'],
     swings: {
       'hitze-werfen': QUICK_CAST,
@@ -232,6 +270,53 @@ export const CLASSES: readonly ClassDef[] = [
     },
   },
 ];
+
+/** Das gewählte Aussehen je Klasse. Das Spiel bindet hier die Einstellungen ein (`bindLooks`), damit jede Stelle denselben Stand liest. */
+let chosen: Record<string, Look> = {};
+
+/** Bindet das Verzeichnis, in dem die gewählten Aussehen stehen (`settings.ui.looks`); `chooseLook` schreibt direkt hinein. */
+export function bindLooks(looks: Record<string, Look>): void {
+  chosen = looks;
+}
+
+/** Das gewählte Aussehen der Klasse; ohne Wahl und bei Klassen ohne weibliches Aussehen der Mann. */
+export function chosenLook(playerClass: ClassDef): Look {
+  return playerClass.women && chosen[playerClass.id] === 'w' ? 'w' : 'm';
+}
+
+export function chooseLook(playerClass: ClassDef, look: Look): void {
+  chosen[playerClass.id] = look;
+}
+
+const womenViews = new WeakMap<ClassDef, LookDef>();
+
+/**
+ * Das Aussehen einer Klasse: ohne Angabe das gewählte. Die Frau erbt vom Mann, was ihr Eintrag nicht nennt (Modell, Griff,
+ * Schild); das Ergebnis ist je Klasse dasselbe Objekt.
+ */
+export function lookOf(playerClass: ClassDef, look: Look = chosenLook(playerClass)): LookDef {
+  const women = playerClass.women;
+  if (look !== 'w' || !women) return playerClass;
+  let view = womenViews.get(playerClass);
+  if (!view) {
+    view = {
+      name: women.name,
+      text: women.text,
+      home: women.home,
+      model: women.model ?? playerClass.model,
+      gear: women.gear ?? playerClass.gear,
+      // `'offhand' in women` lässt die Frau bewusst nichts in der anderen Hand halten (`offhand: undefined`).
+      offhand: 'offhand' in women ? women.offhand : playerClass.offhand,
+    };
+    womenViews.set(playerClass, view);
+  }
+  return view;
+}
+
+/** Der Name der Klasse im gewählten Aussehen („Kämpfer“ oder „Kämpferin“), überall, wo das Spiel sie nennt. */
+export function className(playerClass: ClassDef): string {
+  return lookOf(playerClass).name;
+}
 
 /** Stellschrauben der Besonderheiten. */
 export const TRAITS = {

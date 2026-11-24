@@ -24,6 +24,8 @@ export type Action =
   /** Bei der Wahl der Nachtart: den Grad der gewählten Nacht um eins erhöhen oder senken (neben Pfeil hoch und runter). */
   | 'gradeUp'
   | 'gradeDown'
+  /** Bei der Klassenwahl: das Aussehen der gewählten Klasse wechseln (Mann oder Frau). */
+  | 'look'
   /** Die Karten einer Auswahl der Reihe nach; sieben gibt es bei der Wahl des Startangriffs. */
   | 'choice1'
   | 'choice2'
@@ -77,6 +79,7 @@ const ACTION_KEYS: Readonly<Record<string, Action>> = {
   KeyE: 'use',
   KeyR: 'reroll',
   KeyX: 'banish',
+  KeyF: 'look',
   Tab: 'switch',
   Digit1: 'choice1',
   Numpad1: 'choice1',

@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG } from '../config';
-import { CLASSES } from '../game/classes';
+import { CLASSES, lookOf, type LookDef } from '../game/classes';
 import { equip, type Gear } from '../game/gear';
 
 /** Richtwerte, an denen ein Modell gemessen wird. */
@@ -25,6 +25,14 @@ const BUDGET = {
 const SHOWN_HEIGHT = 1.8;
 
 type Level = 'good' | 'warn' | 'bad';
+
+/**
+ * Das Aussehen (Mann oder Frau) einer Klasse, dessen Modelldatei so heißt; Ausrüstung und Griff werden danach gezeigt.
+ * Die Frau, die noch die Figur des Mannes trägt, findet sich unter dem Mann.
+ */
+function lookOfFile(fileName: string): LookDef | undefined {
+  return CLASSES.flatMap((candidate) => [lookOf(candidate, 'm'), lookOf(candidate, 'w')]).find((look) => fileName.endsWith(look.model.file));
+}
 
 function element<T extends HTMLElement = HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -144,7 +152,7 @@ function show(gltf: GLTF, megabytes: number, fileName: string, gearModels: Reado
   if (current) scene.remove(current);
   current = gltf.scene;
   scene.add(current);
-  const playerClass = CLASSES.find((candidate) => fileName.endsWith(candidate.model.file));
+  const playerClass = lookOfFile(fileName);
   gear = playerClass ? equip(playerClass.gear, current, gearModels) : null;
   offhand = playerClass?.offhand ? equip(playerClass.offhand, current, gearModels) : null;
 
@@ -290,7 +298,7 @@ const loader = new GLTFLoader();
 /** Lädt die Modelle der Ausrüstung (Schild), die eine Spielfigur in die Hand nimmt; fehlt eines, bleibt der Platzhalter. */
 async function loadGearModels(fileName: string): Promise<Map<string, THREE.Object3D>> {
   const models = new Map<string, THREE.Object3D>();
-  const playerClass = CLASSES.find((candidate) => fileName.endsWith(candidate.model.file));
+  const playerClass = lookOfFile(fileName);
   for (const def of [playerClass?.gear, playerClass?.offhand]) {
     if (!def?.model || models.has(def.model)) continue;
     try {

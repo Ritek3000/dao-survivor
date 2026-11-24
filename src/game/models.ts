@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG, type EnemyModel, type EnemyType, type SceneryModel } from '../config';
-import { CLASSES, type ClassDef, type ClassId } from './classes';
+import { CLASSES, lookOf, type ClassDef, type ClassId, type Look, type LookDef } from './classes';
 import { swallowedByFinsternis } from './darkness';
 import { equip, type Gear } from './gear';
 
@@ -110,8 +110,26 @@ export interface BossModel {
   clips: THREE.AnimationClip[];
 }
 
+/** Schlüssel der Spielfigur einer Klasse in einem Aussehen (siehe `Models.heroes`). */
+export function heroKey(id: ClassId, look: Look): string {
+  return `${id}:${look}`;
+}
+
 export interface Models {
-  heroes: Map<ClassId, HeroModel>;
+  /** Die geladenen Spielfiguren nach `heroKey`. Zu Beginn nur das gewählte Aussehen je Klasse; das andere kommt mit `loadHero` dazu. */
+  heroes: Map<string, HeroModel>;
+  /**
+   * Die Figur einer Klasse im gewünschten Aussehen. Ist die der Frau nicht (mehr) da, bleibt der Mann; `null`, wenn keine
+   * von beiden geladen ist.
+   */
+  hero(id: ClassId, look: Look): HeroModel | null;
+  /**
+   * Lädt die Figur einer Klasse im Aussehen nach, wenn sie noch fehlt, und gibt sie zurück. Schlägt das bei der Frau fehl,
+   * kommt der Mann an ihre Stelle; `null`, wenn auch der nicht zu laden war. Mehrere Aufrufe teilen sich eine Ladung.
+   */
+  loadHero(playerClass: ClassDef, look: Look): Promise<HeroModel | null>;
+  /** Läuft gerade eine Ladung dieser Figur? Dann gibt es hier das, worauf zu warten ist; sonst `null`. */
+  loadingHero(playerClass: ClassDef, look: Look): Promise<unknown> | null;
   hordes: Map<EnemyType, HordeModel>;
   boss: BossModel | null;
   stachelboss: BossModel | null;
@@ -485,9 +503,9 @@ function prepareGearModel(gltf: GLTF): GearModel {
 
 /**
  * Stellt die Spielfigur auf den Boden, bringt sie auf die Höhe ihrer Klasse, säubert das Material
- * und gibt ihr ihre Waffe in die Hand.
+ * und gibt ihr ihre Waffe in die Hand. `playerClass` ist das Aussehen (Mann oder Frau), das die Datei zeigt.
  */
-function prepareHero(gltf: GLTF, playerClass: ClassDef, gearModels: ReadonlyMap<string, GearModel>): HeroModel {
+function prepareHero(gltf: GLTF, playerClass: LookDef, gearModels: ReadonlyMap<string, GearModel>): HeroModel {
   const scene = gltf.scene;
   const spec = playerClass.model;
   const upperBones = upperBodyBones(scene);
@@ -633,8 +651,23 @@ function sceneryProp(model: SceneryModel): PropSpec {
  * Lädt alle Modelle. Eine fehlende oder kaputte Datei hält das Spiel nicht auf:
  * Sie landet in `failed`, und an ihrer Stelle bleibt der Platzhalter.
  */
-export async function loadModels(onProgress: (done: number, total: number) => void): Promise<Models> {
-  const models: Models = { heroes: new Map(), hordes: new Map(), boss: null, stachelboss: null, props: new Map(), failed: [] };
+export async function loadModels(
+  onProgress: (done: number, total: number) => void,
+  /** Das Aussehen, mit dem eine Klasse beginnt; nur dessen Datei lädt beim Start. Ohne Angabe der Mann. */
+  startLook: (playerClass: ClassDef) => Look = () => 'm',
+): Promise<Models> {
+  const heroLoads = new Map<string, Promise<HeroModel | null>>();
+  const models: Models = {
+    heroes: new Map(),
+    hero: (id, look) => models.heroes.get(heroKey(id, look)) ?? models.heroes.get(heroKey(id, 'm')) ?? null,
+    loadHero: (playerClass, look) => loadHero(playerClass, look),
+    loadingHero: (playerClass, look) => heroLoads.get(heroKey(playerClass.id, effectiveLook(playerClass, look))) ?? null,
+    hordes: new Map(),
+    boss: null,
+    stachelboss: null,
+    props: new Map(),
+    failed: [],
+  };
   const { gems } = CONFIG.xp;
   const props: PropSpec[] = [
     ...CONFIG.scenery.rockModels.map(sceneryProp),
@@ -645,9 +678,14 @@ export async function loadModels(onProgress: (done: number, total: number) => vo
   ];
   // Die Ausrüstung lädt neben den Figuren und ist fertig, bevor eine Figur sie in die Hand nimmt.
   const gearModels = new Map<string, GearModel>();
-  const gearFiles = [...new Set(CLASSES.flatMap((playerClass) => [playerClass.gear.model, playerClass.offhand?.model]))].filter(
-    (file): file is string => file !== undefined,
-  );
+  // Die Ausrüstung beider Aussehen lädt gleich mit: Sie ist klein (der Schild 0,3 MB), die Figur der Frau soll beim Wechsel nicht warten.
+  const gearFiles = [
+    ...new Set(
+      CLASSES.flatMap((playerClass) =>
+        (['m', 'w'] as const).flatMap((look) => [lookOf(playerClass, look).gear.model, lookOf(playerClass, look).offhand?.model]),
+      ),
+    ),
+  ].filter((file): file is string => file !== undefined);
   let done = 0;
   const gearLoaded = Promise.all(
     gearFiles.map(async (file) => {
@@ -661,14 +699,50 @@ export async function loadModels(onProgress: (done: number, total: number) => vo
       onProgress(++done, tasks.length + gearFiles.length);
     }),
   );
-  const tasks: [string, (gltf: GLTF) => void | Promise<void>][] = [
-    ...CLASSES.map((playerClass): [string, (gltf: GLTF) => void | Promise<void>] => [
-      playerClass.model.file,
-      async (gltf) => {
+  /** Hat die Klasse kein weibliches Aussehen, gilt jede Anfrage als die des Mannes. */
+  const effectiveLook = (playerClass: ClassDef, look: Look): Look => (look === 'w' && playerClass.women ? 'w' : 'm');
+  const markFailed = (file: string): void => {
+    if (!models.failed.includes(file)) models.failed.push(file);
+  };
+  const loadHero = (playerClass: ClassDef, wanted: Look): Promise<HeroModel | null> => {
+    const look = effectiveLook(playerClass, wanted);
+    const key = heroKey(playerClass.id, look);
+    const known = models.heroes.get(key);
+    if (known) return Promise.resolve(known);
+    const running = heroLoads.get(key);
+    if (running) return running;
+    const def = lookOf(playerClass, look);
+    const loading = (async (): Promise<HeroModel | null> => {
+      try {
+        const gltf = await loadFile(def.model.file);
         await gearLoaded;
-        models.heroes.set(playerClass.id, prepareHero(gltf, playerClass, gearModels));
-      },
-    ]),
+        const hero = prepareHero(gltf, def, gearModels);
+        models.heroes.set(key, hero);
+        return hero;
+      } catch (error) {
+        console.warn(`Modell ${def.model.file} nicht geladen${look === 'w' ? ', es bleibt die männliche Figur' : ', Platzhalter bleibt'}.`, error);
+        markFailed(def.model.file);
+        return look === 'w' ? loadHero(playerClass, 'm') : null;
+      } finally {
+        heroLoads.delete(key);
+      }
+    })();
+    heroLoads.set(key, loading);
+    return loading;
+  };
+  const tasks: [string, (gltf: GLTF) => void | Promise<void>][] = [
+    // Beim Start nur das Aussehen, mit dem die Klasse beginnt; das andere lädt erst, wenn es gewählt wird.
+    ...CLASSES.map((playerClass): [string, (gltf: GLTF) => void | Promise<void>] => {
+      const look = effectiveLook(playerClass, startLook(playerClass));
+      const def = lookOf(playerClass, look);
+      return [
+        def.model.file,
+        async (gltf) => {
+          await gearLoaded;
+          models.heroes.set(heroKey(playerClass.id, look), prepareHero(gltf, def, gearModels));
+        },
+      ];
+    }),
     // Arten ohne Datei treten als Kapsel auf, bis es ihr Modell gibt.
     ...CONFIG.enemies.types
       .filter((type) => type.model.file !== '')
@@ -692,7 +766,7 @@ export async function loadModels(onProgress: (done: number, total: number) => vo
         await use(await loadFile(file));
       } catch (error) {
         console.warn(`Modell ${file} nicht geladen, Platzhalter bleibt.`, error);
-        models.failed.push(file);
+        markFailed(file);
       }
       onProgress(++done, tasks.length + gearFiles.length);
     }),

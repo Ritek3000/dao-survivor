@@ -617,6 +617,52 @@ body[data-vitals='bottom-left'] #debug {
   color: var(--text-dim);
 }
 
+/* Der Schalter zwischen Mann und Frau auf einer Klassenkarte. Er sitzt unten in der Karte, damit die Schalter nebeneinander fluchten. */
+.card .look {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.card .look-title {
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.card .look-group {
+  display: flex;
+}
+
+.card .look-choice {
+  padding: 6px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.card .look-choice + .look-choice {
+  border-left: 0;
+}
+
+.card .look-choice.on {
+  border-color: var(--ember);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--ember);
+}
+
+.card .look-choice:hover:not(.on) {
+  color: var(--text);
+}
+
 /* Der Gradzähler einer Nachtkarte: − Grad + mit dem Zuschlag darunter. Er sitzt unten in der Karte, damit die Zähler nebeneinander fluchten. */
 .card .grade {
   display: flex;

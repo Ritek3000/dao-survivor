@@ -56,6 +56,7 @@ Nach jedem Merge auf `main` baut GitHub das Spiel und veröffentlicht den Stand 
 | 1 bis 4 (bei der Nachtart) | Nachtart wählen; Esc führt jeweils einen Schritt zurück |
 | Pfeil hoch und runter, W und S oder + und − (bei der Nachtart) | Grad der gewählten Nachtart ändern, sobald man sie einmal geschafft hat (siehe [Grade der Nächte](#grade-der-nächte)) |
 | R, X (beim Stufenaufstieg) | Karten neu würfeln; eine Karte verbannen (danach die Karte wählen, X oder Esc bricht ab) |
+| F (bei der Klassenwahl)    | Aussehen der gewählten Klasse wechseln: Mann oder Frau (siehe [Mann und Frau](#mann-und-frau)) |
 | L oder U                   | Lager öffnen: Ausrüstung, Truhe und Händler (bei der Klassenwahl und am Ende der Nacht; sobald es Gegenstände oder Gold gibt, siehe [Gegenstände](#gegenstände)). U war die Taste der entfallenen Steigerungen |
 | Tab, E (im Lager)          | Ansicht wechseln (Ausrüstung, Truhe, Händler); Gegenstand gleich anlegen, umräumen, beim Händler kaufen oder verkaufen |
 
@@ -107,7 +108,7 @@ Wichtige Teile von `src/game/`:
 | Datei                          | Inhalt                                                                  |
 | ------------------------------ | ----------------------------------------------------------------------- |
 | `game.ts`                      | Hauptschleife und Phasen (Laden, Startbildschirm, Klassenwahl, Spiel, Pause, Ende) |
-| `classes.ts`, `gear.ts`        | Die drei Klassen mit Werten, Modell und Ausrüstung; die Ausrüstung in den Händen (Axt, Bogen, Buch, Schild des Kämpfers) |
+| `classes.ts`, `gear.ts`        | Die drei Klassen mit Werten, Modell und Ausrüstung (als Mann, dazu `women` für die Frau); die Ausrüstung in den Händen (Axt, Bogen, Buch, Schild des Kämpfers) |
 | `weapons.ts`, `arsenal.ts`     | Alle Angriffe als Daten (mit Rangregeln) und ihre Ausführung; die Fertigkeiten der drei Klassen (siehe [Kämpfer](#fertigkeiten-des-kämpfers), [Wildnisläufer](#fertigkeiten-des-wildnisläufers), [Magier](#fertigkeiten-des-magiers)) |
 | `evolutions.ts`, `evolutionsLaeufer.ts`, `evolutionsMagier.ts` (und `evolutionEffects*.ts`, `crowd.ts`) | Die Evolutionen (Rang 6) der drei Klassen, ihre Bilder und die Suche nach Gruppen (siehe [Evolutionen](#evolutionen)) |
 | `status.ts`, `events.ts`, `fields.ts`, `buffs.ts` | Unterbau der Fertigkeiten: Zustände der Gegner, Ereignisse mit Urheber, Bodenfelder, zeitweilige Werte (siehe [Fertigkeiten](#fertigkeiten-der-unterbau)) |
@@ -152,6 +153,26 @@ Nächte, erreichte Stufen, Stärkungen und Segen dieser Nachtart bzw. dieses Gra
 Alle Einstellungen bleiben erhalten (`localStorage`, Schlüssel `dao-survivor.einstellungen`, siehe `src/core/settings.ts`); Stände ohne die Stelle der
 Lebensgruppe gelten als „oben links“. Die Menüs stehen in `index.html`, bedient werden sie von `src/ui/menus.ts`; was ein Knopf bewirkt,
 entscheidet `Game.onMenuCommand`.
+
+## Mann und Frau
+
+Jede Klasse gibt es als Mann und als Frau (Kämpfer und Kämpferin, Wildnisläufer und Wildnisläuferin, Magier und Magierin). Das Aussehen ändert **nur** Figur, Namen und
+Texte: Werte, Angriffe, Animationen, Gegenstände, Truhe, Gold und Statistik gehören der Klasse und sind für beide gleich. Darum ist die Frau keine eigene Klasse
+(`ClassId`), sondern ein Aussehen derselben.
+
+- **Wahl:** Auf der Karte jeder Klasse steht unten der Schalter *Figur: Männlich / Weiblich* (Klick oder **F** bei der markierten Karte). Name und Texte der Karte, der Titel der
+  Startangriff-Wahl, das Endbild, das Lager und die Statistik der Klasse nennen danach „Kämpferin“ statt „Kämpfer“ (`className` in `classes.ts`). Die Statistik aller Spieler
+  (`statistik-global.html`) kennt keine Wahl und nennt die Klassen weiter beim männlichen Namen.
+- **Speichern:** Die Wahl ist eine Einstellung und kein Fortschritt: `Settings.ui.looks` (`Look` = `'m'` oder `'w'`, nach `ClassId`) in `src/core/settings.ts`. Ältere Stände ohne den Eintrag zeigen
+  den Mann; ein Wechsel des Spielstands (Datei sichern und laden) ändert die Wahl nicht, und sie braucht keine neue Fassung des Spielstand-Formats.
+- **Daten:** `ClassDef` ist selbst das Aussehen des Mannes (`LookDef`: Name, Texte, `model`, `gear`, `offhand`); `ClassDef.women` ist das der Frau. Was `women` nicht nennt (`model`, `gear`, `offhand`),
+  erbt sie vom Mann. `lookOf(klasse, look)` liefert das Aussehen. Hat die Frau ein eigenes Modell, gehört dazu: die Datei und Höhe, der Sitz von Axt, Bogen oder Buch (`offset`, `along`, `toward`
+  im Raum des Handknochens der neuen Datei) und beim Kämpfer der Schild (`offhand` mit `steady` und Leine), jeweils am neuen Modell neu ausgemessen. Die Animationen (`swings`) bleiben die der Klasse;
+  die Datei der Frau muss dieselben Clips haben (Running, Walking, Idle_02, Dead und die Angriffsclips der Klasse).
+- **Laden:** Beim Start lädt je Klasse nur die Figur im gewählten Aussehen (`loadModels(…, startLook)`), so bleibt der Download gleich groß. Wer das andere wählt, lädt es nach (`Models.loadHero`), und zwar
+  schon während der Karte der Startangriff-Wahl; ist es beim Beginn der Nacht noch nicht da, wartet das Spiel kurz („Die Figur wird geladen …“) und beginnt nicht mit der falschen Figur. Schlägt das Laden der Frau fehl, bleibt der Mann.
+- **Stand:** Die drei weiblichen Aussehen tragen vorerst die Figur des Mannes. Ihre Modelle entstehen aus den männlichen als Vorlage (Meshy, Bild zu 3D, dann Skelett und Animationen) und kommen als
+  eigene Pull Requests, je Klasse eines.
 
 ## Stufenaufstieg und Startangriff
 

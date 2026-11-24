@@ -14,7 +14,7 @@
 import './statistik.css';
 import { emptyTally, type Auswertung, type Tally } from '../core/auswertung';
 import { CONFIG } from '../config';
-import { CLASSES, type ClassDef } from '../game/classes';
+import { className, CLASSES, type ClassDef } from '../game/classes';
 import { NIGHTS, type NightDef } from '../game/nights';
 import { SEGEN, UPGRADES } from '../game/progression';
 import { EVOLUTION_RANK, MAX_RANK, weaponById } from '../game/weapons';
@@ -217,7 +217,7 @@ export class StatistikView {
   private tabs(data: Auswertung): HTMLElement {
     const bar = el('div', 'stats-tabs');
     bar.setAttribute('role', 'tablist');
-    const labels = ['Übersicht', ...CLASSES.map((playerClass) => playerClass.name), 'Nachtarten', 'Höchster Grad'];
+    const labels = ['Übersicht', ...CLASSES.map((playerClass) => className(playerClass)), 'Nachtarten', 'Höchster Grad'];
     for (const [index, label] of labels.entries()) {
       let note: string;
       if (index === labels.length - 1) note = `${Object.keys(data.highestGrade).length} von ${NIGHTS.length} geschafft`;
@@ -269,7 +269,7 @@ export class StatistikView {
     };
     const top = Math.max(1, ...CLASSES.map((playerClass) => data.byClass[playerClass.id]?.nights ?? 0));
     for (const playerClass of CLASSES) {
-      body.append(row(playerClass.name, data.byClass[playerClass.id] ?? emptyTally(), top));
+      body.append(row(className(playerClass), data.byClass[playerClass.id] ?? emptyTally(), top));
     }
     body.append(row('Alle Klassen', data.total, data.total.nights, 'total'));
     table.append(body);
@@ -286,14 +286,14 @@ export class StatistikView {
     const page = el('div', 'stats-grid');
     const total = data.byClass[playerClass.id];
     if (!total || total.nights === 0) {
-      page.append(el('p', 'stats-empty', this.texts.emptyClass(playerClass.name)));
+      page.append(el('p', 'stats-empty', this.texts.emptyClass(className(playerClass))));
       return page;
     }
     const view = this.resolveClassView(playerClass, data, total);
     page.append(this.classFilter(playerClass, data, view));
     if (!view.tally) {
       const night = NIGHTS.find((candidate) => candidate.id === view.night);
-      const text = this.outdated(data) ? this.texts.outdated : this.texts.emptyClassNight(playerClass.name, night?.name ?? view.night);
+      const text = this.outdated(data) ? this.texts.outdated : this.texts.emptyClassNight(className(playerClass), night?.name ?? view.night);
       page.append(el('p', 'stats-empty', text));
       return page;
     }
