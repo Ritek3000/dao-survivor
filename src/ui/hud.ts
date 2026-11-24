@@ -114,6 +114,7 @@ export class Hud {
   private readonly soundOff = element('sound-off');
   private readonly loading = element('loading');
   private readonly loadingText = element('loading-text');
+  private readonly loadNotice = element('load-notice');
   private readonly choice = element('choice');
   private readonly choiceTitle = element('choice-title');
   private readonly choiceSubtitle = element('choice-subtitle');
@@ -261,6 +262,12 @@ export class Hud {
   /** Der Hinweis "Ton aus" unten im Bild, solange der Ton stumm geschaltet ist. */
   setMuted(muted: boolean): void {
     this.soundOff.hidden = !muted;
+  }
+
+  /** Hinweis auf dem Startbildschirm, wenn Modelldateien fehlen (der Platzhalter bleibt); `null` blendet ihn aus. */
+  setLoadNotice(text: string | null): void {
+    this.loadNotice.hidden = text === null;
+    this.loadNotice.textContent = text ?? '';
   }
 
   /** Hinweis, solange die Modelle geladen werden; `null` blendet ihn aus. */

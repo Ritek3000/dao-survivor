@@ -133,9 +133,26 @@ const HOVER_FPS = 15;
 const BAKE_WIDTH = 1024;
 
 const loader = new GLTFLoader();
+/** So oft wird eine Datei nach einem Fehler noch einmal geholt: Große Dateien brechen im Netz gelegentlich ab, und der Platzhalter bliebe sonst die ganze Nacht. */
+const LOAD_RETRIES = 2;
+/** Pause vor dem nächsten Versuch, in Sekunden, wächst mit jedem Fehlschlag. */
+const RETRY_SECONDS = 0.6;
 
 function modelUrl(file: string): string {
   return `${import.meta.env.BASE_URL}models/${file.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+/** Holt und liest eine GLB-Datei; schlägt es fehl, folgen bis zu `LOAD_RETRIES` weitere Versuche, erst dann gilt sie als fehlend. */
+async function loadFile(file: string): Promise<GLTF> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await loader.loadAsync(modelUrl(file));
+    } catch (error) {
+      if (attempt >= LOAD_RETRIES) throw error;
+      console.warn(`Modell ${file} nicht geladen (Versuch ${attempt + 1}), neuer Versuch.`, error);
+      await new Promise((resolve) => setTimeout(resolve, RETRY_SECONDS * 1000 * (attempt + 1)));
+    }
+  }
 }
 
 function findClip<T>(clips: readonly T[], name: (clip: T) => string, pattern: RegExp): T | null {
@@ -635,7 +652,7 @@ export async function loadModels(onProgress: (done: number, total: number) => vo
   const gearLoaded = Promise.all(
     gearFiles.map(async (file) => {
       try {
-        gearModels.set(file, prepareGearModel(await loader.loadAsync(modelUrl(file))));
+        gearModels.set(file, prepareGearModel(await loadFile(file)));
       } catch (error) {
         // Ohne Modell greift die Figur zum Platzhalter aus gear.ts.
         console.warn(`Modell ${file} nicht geladen, Platzhalter bleibt.`, error);
@@ -672,7 +689,7 @@ export async function loadModels(onProgress: (done: number, total: number) => vo
     gearLoaded,
     ...tasks.map(async ([file, use]) => {
       try {
-        await use(await loader.loadAsync(modelUrl(file)));
+        await use(await loadFile(file));
       } catch (error) {
         console.warn(`Modell ${file} nicht geladen, Platzhalter bleibt.`, error);
         models.failed.push(file);
