@@ -98,6 +98,7 @@
     "stachelboss.einschlag": {"beschreibung": "Ein Stachel der Salve schlägt in den Boden (vorläufig der Einschlag des Pfeilhagels)", "datei": "sfx/einschlag-pfeilhagel.ogg", "lautstaerke": 0.5, "streuung": 200, "abstand": 0.04, "reichweite": 32, "prioritaet": 1},
     "stachelboss.festgesetzt": {"beschreibung": "Die Spielfigur wird von Stacheln am Boden festgesetzt (vorläufig das Fangeisen)", "datei": "sfx/einschlag-fangeisen.ogg", "lautstaerke": 0.9, "reichweite": 30, "prioritaet": 3},
     "stachelboss.rage": {"beschreibung": "Der Stachelträger gerät in Rage (vorläufig der Ansturm des Verschlingers)", "datei": "sfx/boss-ansturm.ogg", "lautstaerke": 1.0, "reichweite": 70, "prioritaet": 3},
+    "stachelboss.aura": {"beschreibung": "Die Aura des Stachelträgers steht (vorläufig das Laden des Schilds)", "datei": "sfx/schild-bereit.ogg", "lautstaerke": 0.8, "streuung": 200, "reichweite": 50, "prioritaet": 2},
     "stachelboss.faellt": {"beschreibung": "Der Stachelträger fällt (vorläufig der Sturz des Verschlingers, höher)", "datei": "sfx/boss-faellt.ogg", "lautstaerke": 0.95, "streuung": 250, "reichweite": 80, "prioritaet": 3}
   },
   "schleifen": {

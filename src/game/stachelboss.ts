@@ -6,7 +6,8 @@
  *   Stachelwurf    der Standardangriff: Er greift mit einer Hand in den Rücken, zieht einen Stachel und wirft ihn; die Hände wechseln
  *   Stachelsalve   Er schüttelt den Rücken, zehn Stacheln fliegen im hohen Bogen auf eine vorher angekündigte Fläche von 12 m Durchmesser;
  *                  wen einer trifft, der ist kurz festgesetzt (`Player.root`)
- *   Rage           unter einem Drittel seines Lebens greift er schneller an und schüttelt öfter; er pulsiert dabei rötlich
+ *   Rage           unter 30 % seines Lebens greift er schneller an und schüttelt öfter; er pulsiert dabei rötlich
+ *   Aura           alle 6 s, 3 s lang: Wer ihn von außerhalb der Aura trifft, richtet nur ein Viertel des Schadens an (`Enemy.guard`)
  * Die Stacheln selbst fliegen im Vorrat von `quills.ts`. Alle Zahlen stehen in `CONFIG.stachelboss`.
  */
 import * as THREE from 'three';
@@ -39,6 +40,37 @@ const HAND_HEIGHT = 2.4;
 /** Stärke des roten Pulsierens in der Rage (Emission; 0 = keins). */
 const RAGE_GLOW = 0.34;
 const GOLDEN_ANGLE = 2.399963;
+/** Sekunden, in denen die Aura am Boden ein- und ausblendet. */
+const AURA_FADE = 0.25;
+/** Höhe der Aura über dem Boden: knapp über dem Boden, unter den Warnflächen der Salve (0,05 bis 0,07). */
+const AURA_HEIGHT = 0.08;
+const AURA_VERTEX = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+/** Ein heller Rand aus laufenden Strichen, ein zweiter, dünner Ring innen und ein sanfter Schein dazwischen; kalt-türkis, damit sie nicht wie die orangefarbene Warnfläche der Salve wirkt. */
+const AURA_FRAGMENT = /* glsl */ `
+  uniform float uAlpha;
+  uniform float uTime;
+  uniform vec3 uColor;
+  varying vec2 vUv;
+  void main() {
+    vec2 p = (vUv - 0.5) * 2.0;
+    float r = length(p);
+    if (r > 1.0) discard;
+    float angle = atan(p.y, p.x);
+    float rim = smoothstep(0.9, 0.96, r) * (1.0 - smoothstep(0.985, 1.0, r));
+    float dashes = 0.6 + 0.4 * sin(angle * 18.0 - uTime * 1.8);
+    float inner = smoothstep(0.58, 0.62, r) * (1.0 - smoothstep(0.64, 0.68, r)) * 0.45;
+    float fill = 0.07 + (1.0 - r) * 0.14;
+    float pulse = 0.88 + 0.12 * sin(uTime * 5.0);
+    float a = (rim * dashes + inner + fill) * pulse * uAlpha;
+    gl_FragColor = vec4(uColor, min(1.0, a));
+  }
+`;
 
 function wrap(angle: number): number {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -58,6 +90,9 @@ export class Stachelboss {
   slainAt = 0;
   private readonly placeholder: THREE.Mesh;
   private readonly dissolve = { value: 0 };
+  /** Die Aura am Boden: ein Kreis unter ihm, der mit ihm geht. */
+  private readonly aura: THREE.Mesh;
+  private readonly auraUniforms = { uAlpha: { value: 0 }, uTime: { value: 0 }, uColor: { value: new THREE.Color(0x7fe8d8) } };
   private model: BossModel | null = null;
   private mixer: THREE.AnimationMixer | null = null;
   private readonly actions = new Map<ClipName, THREE.AnimationAction>();
@@ -79,6 +114,10 @@ export class Stachelboss {
   private shaken = false;
   private raging = false;
   private rageTime = 0;
+  /** Sekunden seit seinem Erscheinen (der Takt der Aura), ob sie steht, und wie weit ihre Anzeige eingeblendet ist (0 bis 1). */
+  private auraClock = 0;
+  private auraOn = false;
+  private auraFade = 0;
   private event: StachelbossEvent | null = null;
   /** Die Hände (Knochen des Modells) und der Stachel, den die Hand beim Wurf hält. */
   private readonly hands = new Map<1 | -1, THREE.Object3D>();
@@ -96,6 +135,24 @@ export class Stachelboss {
     this.placeholder.castShadow = true;
     // Die Stacheln (`quills.group`) gehören der Welt, nicht ihm: Sie fliegen weiter, wenn er sich dreht, und sind auch zu sehen, wenn er verschwindet.
     this.group.add(this.placeholder);
+    const size = SPEC.aura.radius * 2;
+    const disc = new THREE.PlaneGeometry(size, size);
+    disc.rotateX(-Math.PI / 2);
+    this.aura = new THREE.Mesh(
+      disc,
+      new THREE.ShaderMaterial({
+        uniforms: this.auraUniforms,
+        vertexShader: AURA_VERTEX,
+        fragmentShader: AURA_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    this.aura.position.y = AURA_HEIGHT;
+    this.aura.renderOrder = 2;
+    this.aura.visible = false;
+    this.group.add(this.aura);
     this.group.visible = false;
   }
 
@@ -159,6 +216,10 @@ export class Stachelboss {
     this.raging = false;
     this.group.visible = false;
     this.dissolve.value = 0;
+    this.auraClock = 0;
+    this.auraOn = false;
+    this.auraFade = 0;
+    this.aura.visible = false;
     this.mode = 'walk';
     this.mixer?.stopAllAction();
     this.playing = null;
@@ -194,6 +255,7 @@ export class Stachelboss {
       this.wurfIn -= dt;
       this.salveIn -= dt;
       this.updateRage(dt, enemy);
+      this.updateAura(dt, enemy, player);
       this.act(dt, enemy, player, threats, world);
       this.group.position.set(enemy.x, 0, enemy.z);
       this.group.rotation.y = this.heading;
@@ -212,6 +274,9 @@ export class Stachelboss {
     this.slainAt = time;
     this.mode = 'dying';
     this.timer = (this.actions.get('dead')?.getClip().duration ?? 0.6) + DISSOLVE_SECONDS;
+    this.auraOn = false;
+    this.auraFade = 0;
+    this.aura.visible = false;
     this.hideHeld();
     this.play('dead', 0.12, false);
     this.setGlow(0, 0);
@@ -220,7 +285,15 @@ export class Stachelboss {
   /** Nach dem Ende der Nacht: Er rührt sich nicht mehr vom Fleck, bleibt aber lebendig. */
   animate(dt: number): void {
     if (this.mode === 'dying') this.updateDying(dt);
-    else if (this.enemy) this.play('idle');
+    else if (this.enemy) {
+      this.play('idle');
+      // Die Aura erlischt mit dem Ende der Nacht; eine Spielfigur gibt es nicht mehr, die sie schützen müsste.
+      if (this.enemy.guard !== 1 || this.auraFade > 0) {
+        this.enemy.guard = 1;
+        this.auraOn = false;
+        this.fadeAura(dt);
+      }
+    }
     this.mixer?.update(dt);
   }
 
@@ -245,6 +318,8 @@ export class Stachelboss {
     this.hand = 1;
     this.raging = false;
     this.rageTime = 0;
+    this.auraClock = 0;
+    this.auraOn = false;
     this.dissolve.value = 0;
     this.group.visible = true;
     this.event = 'erschienen';
@@ -262,6 +337,32 @@ export class Stachelboss {
       else if (this.mode === 'salve') this.setTimeScale('salve', SPEC.rage.speed);
     }
     if (this.raging) this.rageTime += dt;
+  }
+
+  /**
+   * Der Takt der Aura: `first` Sekunden nach dem Erscheinen steht sie `duration` Sekunden, dann `interval` Sekunden nach ihrem Beginn wieder.
+   * Solange sie steht, schützt sie ihn vor Schaden von der Spielfigur außerhalb des Kreises (`Enemies.damage` rechnet `enemy.guard` ein).
+   */
+  private updateAura(dt: number, enemy: Enemy, player: Player): void {
+    const { aura } = SPEC;
+    this.auraClock += dt;
+    const phase = this.auraClock - aura.first;
+    const on = phase >= 0 && phase % aura.interval < aura.duration;
+    if (on && !this.auraOn) audio.play('stachelboss.aura', enemy.x, enemy.z);
+    this.auraOn = on;
+    const inside = Math.hypot(player.position.x - enemy.x, player.position.z - enemy.z) <= aura.radius;
+    enemy.guard = on && !inside ? aura.outside : 1;
+    this.fadeAura(dt);
+  }
+
+  /** Blendet die Anzeige der Aura ein oder aus und lässt ihre Striche laufen. */
+  private fadeAura(dt: number): void {
+    const target = this.auraOn ? 1 : 0;
+    const step = dt / AURA_FADE;
+    this.auraFade = target > this.auraFade ? Math.min(target, this.auraFade + step) : Math.max(target, this.auraFade - step);
+    this.auraUniforms.uAlpha.value = this.auraFade;
+    this.auraUniforms.uTime.value += dt;
+    this.aura.visible = this.auraFade > 0.001;
   }
 
   /** Tempo seiner Angriffe: in der Rage schneller. */
