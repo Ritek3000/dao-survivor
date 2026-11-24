@@ -13,6 +13,9 @@ const TEXTS: StatistikTexts = {
   empty: 'In der Sammelstelle liegt noch keine Nacht.',
   emptyClass: (name) => `Mit ${name} wurde noch keine Nacht gemeldet.`,
   emptyNights: 'In der Sammelstelle liegt noch keine Nacht mit Angabe der Nachtart.',
+  emptyClassNight: (name, night) => `Mit ${name} wurde noch keine Nacht der Art „${night}“ gemeldet.`,
+  outdated:
+    'Die Sammelstelle liefert diese Aufschlüsselung noch nicht. Dazu muss das SQL-Skript tools/supabase/statistik.sql im Supabase-Dashboard noch einmal ausgeführt werden.',
 };
 
 function fail(message: string): void {

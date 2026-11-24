@@ -140,10 +140,13 @@ Lebensgruppe (Stufe im Kreis, Lebensbalken, Gold im Geldbeutel): oben links, obe
 wandert als Ganzes; was dort sonst stünde (Hinweis, Tonmeldung, Feuer entzünden), weicht aus. Bedienung mit der Maus oder mit den Tasten
 (Auf und Ab wählen die Zeile, Links und Rechts ändern, Enter schaltet um, Esc geht zurück).
 
-**Statistik** (Startbildschirm): zeigt die eigenen Nächte in Reitern, einer Übersicht, je einer Seite für jede Klasse und einer Seite *Nachtarten*. Die Übersicht nennt, wie oft jede
+**Statistik** (Startbildschirm): zeigt die eigenen Nächte in Reitern: einer Übersicht, je einer Seite für jede Klasse, *Nachtarten* und *Höchster Grad*. Die Übersicht nennt, wie oft jede
 Klasse gespielt wurde (Zahl und Anteil), mit Siegen und mittlerer überlebter Zeit. Die Seite einer Klasse zeigt ihre Nächte (gespielt, Siege, Gefallen,
 Abgebrochen, Ø überlebt), den Rang jeder Fertigkeit am Ende der Nacht, die erreichten Stufen, die gewählten Stärkungen und die gewährten Segen, jeweils mit Zahl
-und Anteil. Die Seite *Nachtarten* führt jede Nachtart und darunter jeden gespielten Grad in einer Tabelle (Nächte, Anteil, Siege, Siegquote, Ø überlebt, Ø Stufe); ein Klick auf eine Zeile zeigt darunter
+und Anteil. Darüber wählen Unterreiter *Gesamt* (alle Nächte der Klasse) oder eine Nachtart (*Gewöhnliche Nacht*, *Rotnacht*, *Blaunacht*, *Regenlicht*, je mit der Zahl der Nächte); in einer Nachtart, die die Klasse
+in mehreren Graden gespielt hat, erscheint darunter eine Gradauswahl (*Alle Grade*, *Grad 0*, *Grad 1* …), und die Seite zeigt dieselben Angaben nur für diese Auswahl. Der gewählte Unterreiter bleibt beim Wechsel der Klasse
+stehen, damit man Klassen vergleichen kann. Die Seite *Höchster Grad* nennt je Nachtart den höchsten Grad, in dem sie geschafft wurde (die Sonne ging auf), mit der Klasse, die ihn zuerst geschafft hat, und dem Tag.
+Die Seite *Nachtarten* führt jede Nachtart und darunter jeden gespielten Grad in einer Tabelle (Nächte, Anteil, Siege, Siegquote, Ø überlebt, Ø Stufe); ein Klick auf eine Zeile zeigt darunter
 Nächte, erreichte Stufen, Stärkungen und Segen dieser Nachtart bzw. dieses Grads (ohne Fertigkeiten, die gehören einer Klasse). Links und Rechts wechseln den Reiter, Auf und Ab blättern (`Menus.showStats`, `Menus.scrollPage`). Siehe [Statistik](#statistik). Die *Optionen* haben die Gruppe *Daten* (Häkchen „Statistik anonym senden“).
 
 Alle Einstellungen bleiben erhalten (`localStorage`, Schlüssel `dao-survivor.einstellungen`, siehe `src/core/settings.ts`); Stände ohne die Stelle der
@@ -243,10 +246,12 @@ Ein Lauf, den man vor `CONFIG.items.shop.minNightSeconds` (60 Sekunden) abbricht
   `TextStore` wie Spielstand und Einstellungen; eine Desktop-Fassung setzt mit `useStatistikStore` eine Datei an die Stelle. Es ist bewusst vom Spielstand getrennt: Es wächst
   mit jeder Nacht (höchstens `MAX_RUNS` = 2000, die ältesten fallen heraus, etwa 700 KB), würde den Spielstand bei jedem Handel mitschreiben lassen und soll
   „Neues Spiel“ überstehen. Ein unlesbarer Stand beginnt leer; unbrauchbare Einträge werden beim Lesen übersprungen.
-- **Auswertung.** `evaluate` in `src/core/auswertung.ts` zählt die Nächte zusammen (insgesamt, je Klasse, je Nachtart `byNight` und je Nachtart und Grad `byNightGrade`): Nächte, Siege, Gefallen, Abgebrochen, Summe der Sekunden, Nächte je
+- **Auswertung.** `evaluate` in `src/core/auswertung.ts` zählt die Nächte zusammen (insgesamt, je Klasse, je Nachtart `byNight`, je Nachtart und Grad `byNightGrade` sowie je Klasse in Nachtart und Nachtart und Grad `byClassNight` und `byClassNightGrade`; dazu `highestGrade`, je Nachtart der höchste
+  geschaffte Grad mit der Klasse, die ihn zuerst geschafft hat): Nächte, Siege, Gefallen, Abgebrochen, Summe der Sekunden, Nächte je
   Stufe, Wahlen je Stärkung und Segen, Nächte je Rang und Fertigkeit. Die Zähler lassen sich addieren. Anteile und Namen rechnet erst die Anzeige.
 - **Anzeige.** `src/ui/statistikView.ts` zeigt eine fertige `Auswertung`; sie liest nichts selbst und kennt keine Spielregeln. Das Menü *Statistik* im Startbildschirm bindet sie
   ein (`Menus.showStats`).
+- **Höchster Grad.** Es zählen nur Siege (wie bei den Graden selbst, siehe [Grade der Nächte](#grade-der-nächte)). „Zuerst“ heißt die früheste solche Nacht im höchsten Grad (Zeitpunkt der Nacht, in der Sammelstelle der des Servers).
 - **Nachtarten und Grade.** Eine Nacht, deren Nachtart unbekannt ist (`night` leer; Fassungen 0.21 bis 0.24), zählt nur insgesamt und bei ihrer Klasse; die Seite *Nachtarten* nennt, wie viele es sind. Der Anteil in ihrer Tabelle bezieht sich auf alle Nächte mit
   bekannter Nachtart.
 - **Anteile.** Bei den Klassen, den Fertigkeiten und den Stufen ist es der Anteil an allen Nächten der Klasse (bzw. aller Klassen). Bei Stärkungen und Segen ist es der Anteil an allen
@@ -270,19 +275,19 @@ Das Spiel meldet jede Nacht zusätzlich anonym an eine Sammelstelle (Supabase, e
   Keine Kennung des Spielers oder Geräts, nichts vom Spielstand. Die Kennung der Nacht verhindert nur Doppelte. `Game.recordNight` ruft `sendRun` (`src/core/sammelstelle.ts`) auf, `fetch` ohne Bibliothek;
   Fehler stehen nur in der Konsole, das Spiel läuft weiter, die Nacht fehlt dann in der Statistik aller. Im Dev-Modus (`npm run dev`) wird nichts gesendet; die Fassung trägt dort die Endung `-dev` (`vite.config.ts`), und solche Nächte zählt die Auswertung ohnehin nicht.
 - **Die Datenbank.** `tools/supabase/statistik.sql` legt alles an und ist wiederholbar: die Tabelle `runs` (mit Prüfregeln für die Werte), Zeilensicherheit (RLS) und die Funktion
-  `stats_overview(token)` (seit 0.25.0 mit den Spalten `night_id` und `grade`). Das Spiel darf mit dem öffentlichen Schlüssel (`CONFIG.sammelstelle`, ein „publishable key“, der dafür gemacht ist, im Spiel zu stehen) nur **neue Zeilen eintragen**;
+  `stats_overview(token)` (seit 0.25.0 mit den Spalten `night_id` und `grade`, seit 0.26.0 mit den Teilen je Klasse und Nachtart und dem höchsten Grad). Das Spiel darf mit dem öffentlichen Schlüssel (`CONFIG.sammelstelle`, ein „publishable key“, der dafür gemacht ist, im Spiel zu stehen) nur **neue Zeilen eintragen**;
   Lesen, Ändern und Löschen einzelner Zeilen darf niemand über die Schnittstelle. Die globale Seite liest keine Zeilen, sondern nur die **Zähler** aus `stats_overview`, in der Form von `Auswertung`
-  (`src/core/auswertung.ts`; die Funktion rechnet dasselbe wie `evaluate`, nach `tallyRun` in SQL, auch je Nachtart und je Nachtart und Grad).
+  (`src/core/auswertung.ts`; die Funktion rechnet dasselbe wie `evaluate`, nach `tallyRun` in SQL, auch je Nachtart, je Nachtart und Grad und je Klasse darin, samt dem höchsten Grad).
 - **Der Link.** Die Funktion verlangt einen Schlüssel, den das Skript einmal zufällig erzeugt (Tabelle `stats_config`); er steht nicht im Repository. Die Seite liest ihn aus dem Teil der Adresse hinter dem `#`
   (der geht nur an die Sammelstelle, nie an den Server der Seite). Ohne Schlüssel oder mit einem falschen zeigt die Seite nichts außer einem Hinweis. Die Adresse lautet also
   `https://ritek3000.github.io/dao-survivor/statistik-global.html#<Schlüssel>`; die Seite trägt `noindex`. Das ist ein Zugangsschlüssel im Link, kein Passwort-Schutz: Wer den Link hat, sieht die Zähler.
   Einen neuen Schlüssel setzt `update public.stats_config set value = '…' where key = 'token';` im SQL-Editor.
 - **Einrichten (einmalig).** Im Supabase-Dashboard unter *SQL Editor* den Inhalt von `tools/supabase/statistik.sql` einfügen und ausführen; die letzte Zeile des Ergebnisses (`link_ende`) ist der Rest des Links.
   Alle gesammelten Nächte löscht `delete from public.runs;`.
-- **Aktualisieren.** Ändert sich `tools/supabase/statistik.sql` (zuletzt mit 0.25.0: Spalten `night_id` und `grade`, `byNight` und `byNightGrade` in `stats_overview`), führt man die Datei noch einmal aus; sie ist wiederholbar, der Schlüssel und die
+- **Aktualisieren.** Ändert sich `tools/supabase/statistik.sql` (zuletzt mit 0.26.0: `byClassNight`, `byClassNightGrade` und `highestGrade` in `stats_overview`; mit 0.25.0: Spalten `night_id` und `grade`), führt man die Datei noch einmal aus; sie ist wiederholbar, der Schlüssel und die
   gesammelten Nächte bleiben. **Die Datenbank kommt vor dem Spiel:** Ein Spiel, das die neuen Felder sendet, wird von einer älteren Datenbank abgewiesen (Fehler 400, die Nacht fehlt dann in der Statistik aller); umgekehrt arbeitet ein älteres Spiel
   mit der neuen Datenbank weiter. Darum die Datei ausführen, bevor der Pull Request mit der neuen Fassung zusammengeführt wird (der Stand von `main` läuft sofort auf GitHub Pages). Nächte vor 0.21.0 trägt das Skript als gewöhnliche Nacht im Grad 0 nach;
-  Nächte aus 0.21 bis 0.24 bleiben ohne Nachtart.
+  Nächte aus 0.21 bis 0.24 bleiben ohne Nachtart. Kommt 0.26.0 vor dem Skript, läuft alles; auf der globalen Seite zeigen die Unterreiter der Klassen und *Höchster Grad* dann den Hinweis, das Skript noch einmal auszuführen.
 - **Grenzen.** Die Werte kommen vom Spiel im Browser des Spielers und lassen sich fälschen; sie sind Richtwerte, kein Beweis. Jeder mit dem öffentlichen Schlüssel kann Nächte eintragen (die Prüfregeln
   begrenzen nur, was als Nacht durchgeht). Der Hinweistext im Spiel ist ein ehrlicher Hinweis, keine Rechtsberatung; wer das Spiel öffentlich anbietet, prüft, ob eine Datenschutzerklärung nötig ist
   und ob das Supabase-Projekt in einer EU-Region liegt.

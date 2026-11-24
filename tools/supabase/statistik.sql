@@ -6,6 +6,8 @@
 -- wenn sich diese Datei geaendert hat. Version 0.25.0 brachte die Spalten `night_id` und `grade` und den Teil `byNight` / `byNightGrade`
 -- in `stats_overview`; die Datenbank muss darauf stehen, BEVOR das Spiel mit 0.25.0 veroeffentlicht wird (das Spiel sendet die neuen Felder).
 -- Das alte Spiel (ohne die Felder) arbeitet mit der neuen Datenbank weiter, die Reihenfolge ist also: erst Datenbank, dann Spiel.
+-- Version 0.26.0 erweitert nur `stats_overview` (`byClassNight`, `byClassNightGrade`, `highestGrade`); die Tabelle bleibt. Ein Spiel
+-- mit 0.26.0 gegen eine Datenbank von 0.25.0 laeuft, nur fehlen den Reitern der Klassen die Nachtarten und dem Reiter "Hoechster Grad" die Zeilen.
 -- Die letzte Zeile gibt den Schluessel fuer den Link der globalen Seite aus (siehe README, Abschnitt "Sammelstelle").
 --
 -- Was das Spiel schreiben darf: nur neue Zeilen in `runs` (RLS: INSERT fuer `anon`, sonst nichts).
@@ -79,8 +81,13 @@ on conflict (key) do nothing;
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- Die Zaehler fuer die globale Seite: dieselbe Form wie `Auswertung` in src/core/auswertung.ts
---   { total: Tally, byClass: { <Klasse>: Tally }, byNight: { <Nachtart>: Tally }, byNightGrade: { <Nachtart>: { <Grad>: Tally } } }
--- Eine Nacht zaehlt insgesamt, bei ihrer Klasse und, wenn sie ihre Nachtart kennt, bei der Nachtart und bei der Nachtart im Grad.
+--   { total: Tally, byClass: { <Klasse>: Tally }, byNight: { <Nachtart>: Tally }, byNightGrade: { <Nachtart>: { <Grad>: Tally } },
+--     byClassNight: { <Klasse>: { <Nachtart>: Tally } }, byClassNightGrade: { <Klasse>: { <Nachtart>: { <Grad>: Tally } } },
+--     highestGrade: { <Nachtart>: { grade, classId, at } } }
+-- Eine Nacht zaehlt insgesamt, bei ihrer Klasse und, wenn sie ihre Nachtart kennt, bei der Nachtart, bei der Nachtart im Grad und
+-- dieselben beiden noch einmal bei ihrer Klasse. `highestGrade` nennt je Nachtart den hoechsten Grad, in dem eine Nacht gewonnen
+-- wurde, mit der Klasse, die ihn zuerst geschafft hat (frueheste Nacht, die der Server eingetragen hat), und deren Zeitpunkt
+-- in Millisekunden seit 1970.
 -- Naechte aus Entwicklungsfassungen (Fassung mit Endung "-dev") zaehlen nicht mit. Wer die Form der Zaehler aendert, aendert
 -- beides: diese Funktion und `tallyRun` / `evaluate` in src/core/auswertung.ts.
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -102,8 +109,9 @@ begin
     select * from public.runs where game_version !~ '-dev$'
   ),
   -- Jede Nacht zaehlt in mehreren Gruppen ("scope"): fuer alle ('*'), fuer ihre Klasse ('c:<Klasse>'), und wenn sie die Nachtart
-  -- kennt, fuer die Nachtart ('n:<Nachtart>') und fuer die Nachtart im Grad ('g:<Nachtart>:<Grad>'). Die Kennungen enthalten
-  -- keinen Doppelpunkt (siehe die Pruefregeln der Tabelle), das Trennzeichen ist also eindeutig.
+  -- kennt, fuer die Nachtart ('n:<Nachtart>'), fuer die Nachtart im Grad ('g:<Nachtart>:<Grad>') und fuer ihre Klasse in beiden
+  -- ('cn:<Klasse>:<Nachtart>' und 'cg:<Klasse>:<Nachtart>:<Grad>'). Die Kennungen enthalten keinen Doppelpunkt (siehe die
+  -- Pruefregeln der Tabelle), das Trennzeichen ist also eindeutig.
   scoped as (
     select 'c:' || class_id as scope, r.* from live r
     union all
@@ -112,6 +120,10 @@ begin
     select 'n:' || night_id as scope, r.* from live r where night_id is not null
     union all
     select 'g:' || night_id || ':' || grade as scope, r.* from live r where night_id is not null and grade is not null
+    union all
+    select 'cn:' || class_id || ':' || night_id as scope, r.* from live r where night_id is not null
+    union all
+    select 'cg:' || class_id || ':' || night_id || ':' || grade as scope, r.* from live r where night_id is not null and grade is not null
   ),
   base as (
     select scope,
@@ -161,6 +173,13 @@ begin
     ) t2
     group by scope
   ),
+  -- Je Nachtart der hoechste Grad, in dem eine Nacht gewonnen wurde; bei mehreren die fruehste (siehe `highestGrade` oben).
+  highest as (
+    select distinct on (night_id) night_id, grade, class_id, created_at
+    from live
+    where outcome = 'won' and night_id is not null and grade is not null
+    order by night_id, grade desc, created_at asc
+  ),
   tallies as (
     select b.scope,
            jsonb_build_object(
@@ -190,6 +209,38 @@ begin
                where scope like 'g:%'
                group by split_part(scope, ':', 2)
              ) t
+           ), '{}'::jsonb),
+           'byClassNight', coalesce((
+             select jsonb_object_agg(class_id, nights)
+             from (
+               select split_part(scope, ':', 2) as class_id,
+                      jsonb_object_agg(split_part(scope, ':', 3), tally) as nights
+               from tallies
+               where scope like 'cn:%'
+               group by split_part(scope, ':', 2)
+             ) t
+           ), '{}'::jsonb),
+           'byClassNightGrade', coalesce((
+             select jsonb_object_agg(class_id, nights)
+             from (
+               select class_id, jsonb_object_agg(night, grades) as nights
+               from (
+                 select split_part(scope, ':', 2) as class_id,
+                        split_part(scope, ':', 3) as night,
+                        jsonb_object_agg(split_part(scope, ':', 4), tally) as grades
+                 from tallies
+                 where scope like 'cg:%'
+                 group by split_part(scope, ':', 2), split_part(scope, ':', 3)
+               ) per_night
+               group by class_id
+             ) t
+           ), '{}'::jsonb),
+           'highestGrade', coalesce((
+             select jsonb_object_agg(
+                      night_id,
+                      jsonb_build_object('grade', grade, 'classId', class_id, 'at', (extract(epoch from created_at) * 1000)::bigint)
+                    )
+             from highest
            ), '{}'::jsonb)
          )
   into result;
