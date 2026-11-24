@@ -38,7 +38,7 @@ import {
 } from '../ui/lagerView';
 import { itemIconId, preloadItemImages } from '../ui/itemIcons';
 import { samePlace, type Ausruestung, type Place, type Scope } from './ausruestung';
-import { CLASSES, type ClassDef, type ClassId } from './classes';
+import { className, CLASSES, type ClassDef, type ClassId } from './classes';
 import { needsConfirm } from './haendler';
 import {
   compareItems,
@@ -77,7 +77,7 @@ function itemView(item: Item, viewer: ClassId): ItemView {
       range: formatRange(property.id, item.slot),
       quality: propertyQuality(item.slot, property),
     })),
-    bound: owner ? `Gehört zur Klasse ${owner.name}` : null,
+    bound: owner ? `Gehört zur Klasse ${className(owner)}` : null,
     evolution: describeEvolution(item),
   };
 }
@@ -1022,7 +1022,7 @@ export class Lager {
       if (this.cursor < offset) {
         const inventory = this.ausruestung.inventory(this.playerClass.id);
         const count = inventory.filter((item) => item !== null).length;
-        return this.emptyDetail(`Inventar ${this.playerClass.name}: ${count} von ${inventory.length} Plätzen belegt. ${hand}`);
+        return this.emptyDetail(`Inventar ${className(this.playerClass)}: ${count} von ${inventory.length} Plätzen belegt. ${hand}`);
       }
       const tab = tabs[this.cursor - offset];
       if (!tab) return this.emptyDetail('');
@@ -1168,7 +1168,7 @@ export class Lager {
       gold: this.gold,
       classes: CLASSES.map((entry) => {
         const count = this.ausruestung.count(entry.id);
-        return { name: entry.name, note: `${count} ${count === 1 ? 'Gegenstand' : 'Gegenstände'}` };
+        return { name: className(entry), note: `${count} ${count === 1 ? 'Gegenstand' : 'Gegenstände'}` };
       }),
       active: this.classIndex,
       mode: this.mode,

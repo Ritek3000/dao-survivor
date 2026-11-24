@@ -17,7 +17,7 @@
 import { CONFIG } from '../config';
 import { createRandom } from '../core/random';
 import { loadSavegame, writeSavegame, type Savegame, type StoredItems } from '../core/savegame';
-import { CLASSES, type ClassId } from './classes';
+import { className, CLASSES, type ClassId } from './classes';
 import { emptyStand, parseStand, rerollPrice, rollStock, serializeStand, type HaendlerStand } from './haendler';
 import {
   applyItems,
@@ -515,7 +515,7 @@ export class Ausruestung {
     if (item.slot !== to.slot) return 'Das gehört auf einen anderen Platz.';
     if (!canEquip(item, to.classId)) {
       const owner = CLASSES.find((entry) => entry.id === item.classId);
-      return owner ? `Nur der ${owner.name} kann das tragen.` : 'Das kann diese Klasse nicht tragen.';
+      return owner ? `Nur die Klasse ${className(owner)} kann das tragen.` : 'Das kann diese Klasse nicht tragen.';
     }
     return null;
   }

@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { swallowedByFinsternis } from './darkness';
 
 export type GearKind = 'axt' | 'bogen' | 'buch' | 'schild';
-type Triple = readonly [number, number, number];
+export type Triple = readonly [number, number, number];
 
 export interface GearDef {
   kind: GearKind;

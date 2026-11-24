@@ -132,6 +132,7 @@ Startbildschirm (unten rechts, auch auf GitHub Pages), welcher Stand gerade läu
 - `public/models/` enthält nur spielfertige GLB-Dateien (wenige Tausend Dreiecke, kleine Texturen). Die schweren Meshy-Originale
   liegen lokal in `modelle-original/` und sind per `.gitignore` ausgeschlossen (GitHub erlaubt keine Dateien über 100 MB).
   Neue Modelle werden mit `tools/modelle-verkleinern.py` (Blender) aufbereitet und in `tools/modelle-verkleinern.json` eingetragen.
+  Spielfiguren aus Meshys Autorig (die weiblichen Figuren) bereitet `tools/helden-aufbereiten.py` auf, ohne Blender: Texturen verkleinern, Clips übertragen.
 - `*.glb` gilt für Git als Binärdatei (`.gitattributes`). Binärdateien nur ändern, wenn es nötig ist; jede neue Fassung bläht
   die Historie auf.
 - Neue Modelle bringt das Spiel mit `src/game/models.ts` auf seine Maße; ein fehlendes Modell fällt auf einen Platzhalter zurück.
