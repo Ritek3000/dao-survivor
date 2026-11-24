@@ -63,6 +63,7 @@ export type SoundId =
   | 'stachelboss.einschlag'
   | 'stachelboss.festgesetzt'
   | 'stachelboss.rage'
+  | 'stachelboss.aura'
   | 'stachelboss.faellt';
 
 /** Dauerklänge, deren Lautstärke das Spiel laufend nachführt. */

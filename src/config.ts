@@ -379,8 +379,8 @@ export const CONFIG = {
   },
   /**
    * Der Stachelträger: ein zweiter Boss, der früh in der Nacht kommt (Sekunde 300) und die Spielfigur aus der Ferne bedrängt. Er wirft Stacheln aus
-   * seinem Rücken und schüttelt ab und zu eine Salve auf eine angekündigte Fläche, deren Stacheln die Figur am Boden festsetzen. Unter einem
-   * Drittel seines Lebens gerät er in Rage. **Namen und alle Zahlen sind Vorschläge und Startwerte** für den Messlauf (`__messlauf`); die Lore
+   * seinem Rücken und schüttelt ab und zu eine Salve auf eine angekündigte Fläche, deren Stacheln die Figur am Boden festsetzen. Eine Aura schützt
+   * ihn zeitweise vor Schaden von außen. Unter 30 % seines Lebens gerät er in Rage. **Namen und alle Zahlen sind Vorschläge und Startwerte** für den Messlauf (`__messlauf`); die Lore
    * kennt dieses Wesen nicht (siehe PR zu v0.23.0).
    */
   stachelboss: {
@@ -446,6 +446,14 @@ export const CONFIG = {
      * Abweichung vom Wortlaut des Auftrags: „die Abklingzeit um 25 % steigern“ ist als kürzere Wartezeit gemeint, sonst wäre die Rage keine.
      */
     rage: { below: 0.3, speed: 1.25, cooldown: 0.75, pulse: 0.9 },
+    /**
+     * Aura: Alle `interval` Sekunden, `first` Sekunden nach seinem Erscheinen zum ersten Mal, umgibt ihn `duration` Sekunden lang eine Aura
+     * (Radius `radius`, 5 m Durchmesser). Solange sie steht, erleidet er nur den Anteil `outside` des Schadens (0,25 = 75 % weniger), es sei denn,
+     * die Spielfigur steht in der Aura: Dann gilt der Schaden voll. Maßgeblich ist, wo die Figur im Augenblick des Schadens steht (Mitte der Figur
+     * zur Mitte des Bosses), gleich ob der Schaden von einem Hieb, einem Geschoss oder einem Feld kommt. Sein Kollisionskreis (1,4 m) lässt die
+     * Figur bis auf 2,2 m heran: Wer ihm im Nahkampf an den Füßen steht, ist in der Aura. Die Rage ändert sie nicht.
+     */
+    aura: { first: 3, interval: 6, duration: 3, radius: 2.5, outside: 0.25 },
   },
   /**
    * Gold: Münzen aus Gegnern, Sold für die überlebte Zeit und die Siegprämie. Es bezahlt zwischen den Nächten beim Händler

@@ -50,6 +50,8 @@ export interface Enemy {
   maxHp: number;
   /** Bis zu dieser Spielzeit erleidet er mehr Schaden aus Nahkampfangriffen des Kämpfers (Donner der Alten Ordnung); sonst 0. */
   thunderUntil: number;
+  /** Faktor auf jeden Schaden, den er erleidet; 1 für alle, nur die Aura des Stachelträgers senkt ihn (stachelboss.ts). */
+  guard: number;
 }
 
 /** Was die Horde dem Spiel meldet. */
@@ -401,6 +403,7 @@ export class Enemies {
    * kommt, und gilt als Urheber seines Todes. `dot`: Schaden über Zeit (Blutung, Brennen); er lässt weder aufleuchten noch zurückstoßen.
    */
   damage(enemy: Enemy, amount: number, pushX: number, pushZ: number, source: Source | null = null, dot = false): void {
+    if (enemy.guard !== 1) amount *= enemy.guard;
     enemy.hp -= amount;
     if (!dot) {
       enemy.flash = 1;
@@ -519,11 +522,13 @@ export class Enemies {
       scorchAt: -Infinity,
       maxHp: hp,
       thunderUntil: 0,
+      guard: 1,
     };
     enemy.type = type;
     enemy.hp = hp;
     enemy.maxHp = hp;
     enemy.thunderUntil = 0;
+    enemy.guard = 1;
     enemy.pushX = 0;
     enemy.pushZ = 0;
     enemy.flash = 0;
