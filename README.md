@@ -2,12 +2,12 @@
 
 Ein 3D-Survivor-like in der Spielwelt von **Die Alte Ordnung** (DAO). Eine Nacht dauert 15 Minuten:
 Von der Abendglocke bis zum Sonnenaufgang hält sich die Spielfigur im Licht, entzündet Feuerschalen,
-wehrt die Horde ab und widersteht dem Staub und der Finsternis. Gegen Ende der Nacht erscheint der Verschlinger.
+wehrt die Horde ab und widersteht dem Staub und der Finsternis. Nach fünf Minuten erscheint der Stachelträger, gegen Ende der Nacht der Verschlinger.
 Wer bis zum Sonnenaufgang überlebt, gewinnt.
 
 Das Spiel ist ein früher Prototyp. Es gibt drei Klassen (Kämpfer, Wildnisläufer, Magier) mit je sieben Fertigkeiten
-und deren Evolutionen, Stufenaufstiege mit Stärkungen, Segen der Höheren Mächte, eine Gegnerhorde, Feuerschalen als Lichtinseln und einen
-Endgegner. Das Gold, das eine Nacht einbringt, kauft zwischen den Nächten beim Händler im Lager Gegenstände für die Klassen
+und deren Evolutionen, Stufenaufstiege mit Stärkungen, Segen der Höheren Mächte, eine Gegnerhorde, Feuerschalen als Lichtinseln und zwei
+Bosse. Das Gold, das eine Nacht einbringt, kauft zwischen den Nächten beim Händler im Lager Gegenstände für die Klassen
 (siehe [Gold](#gold) und [Gegenstände](#gegenstände)); ein legendärer Ring schaltet die Evolution einer Fertigkeit frei (siehe [Evolutionen](#evolutionen)). Die Zielplattform (Browser oder Desktop) ist noch offen;
 vorerst läuft das Spiel im Browser.
 
@@ -97,7 +97,7 @@ src/
   game/               Spiellogik und Darstellung (siehe unten)
   ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Statistik, Anleitung, Rückfragen; statistikView.ts und statistik.css: die Anzeige der Statistik; lagerView.ts und lager.css: Lager (Ausrüstung, Truhe und Händler)
   tools/              Entwicklungswerkzeuge: Messlauf, Gegenstände (`__items`), Fertigkeiten-Unterbau (`__skills`) und Modell-Prüfer
-tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten, Gegenstandsbilder freistellen; SQL: die Sammelstelle der Statistik in Supabase einrichten, `supabase/statistik.sql`)
+tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Stachelschwein riggen und animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten, Gegenstandsbilder freistellen; SQL: die Sammelstelle der Statistik in Supabase einrichten, `supabase/statistik.sql`)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
 ```
 
@@ -112,6 +112,7 @@ Wichtige Teile von `src/game/`:
 | `status.ts`, `events.ts`, `fields.ts`, `buffs.ts` | Unterbau der Fertigkeiten: Zustände der Gegner, Ereignisse mit Urheber, Bodenfelder, zeitweilige Werte (siehe [Fertigkeiten](#fertigkeiten-der-unterbau)) |
 | `effects.ts`, `strips.ts`, `particles.ts`, `props.ts` | Wie die Angriffe aussehen                        |
 | `enemies.ts`, `boss.ts`, `threats.ts` | Horde, Verschlinger und die Zauber der Gegner                    |
+| `stachelboss.ts`, `quills.ts`  | Der Stachelträger (zweiter Boss, siehe [Der Stachelträger](#der-stachelträger)) und seine Stacheln |
 | `progression.ts`               | Stufen, Stärkungen und die Segen der Höheren Mächte                     |
 | `boerse.ts`, `coins.ts`        | Die Börse (das Gold im Spielstand) und die Münzen, die das Gold bringen |
 | `nights.ts`, `grade.ts`        | Die Nachtarten mit ihren Regeln; die Grade der Nächte (siehe [Nachtarten](#nachtarten)) |
@@ -190,8 +191,8 @@ oder mit + und −; die Aktionen `gradeUp` und `gradeDown` in `src/core/input.ts
 Nur ein Sieg schaltet frei: Fallen und Abbrechen ändern nichts, ebenso ein Sieg in einem Grad unter dem höchsten geschafften. Das Endbild nennt, was ein Sieg freigeschaltet hat; in der Nacht steht der Grad im Bild und über der Uhr
 („Rotnacht · Grad 2 · Sonnenaufgang in“).
 
-**Wirkung.** Jeder Grad macht die Gegner stärker, und zwar additiv (Grad 10 ist +50 % Leben und +25 % Schaden, nicht 1,05 hoch 10): Das **Leben** der Gegner und des Verschlingers wächst um 5 % je Grad (`CONFIG.grade.enemyHp`) und der **Schaden**, den die Figur erleidet,
-um 2,5 % je Grad (`CONFIG.grade.enemyDamage`, als Faktor `Stats.taken`; das gilt für Berührung, Hieb, den Schwarzen Sog und die Angriffe des Verschlingers, nicht für die Verstaubung durch die Finsternis). Die Zuschläge kommen auf die Regeln der
+**Wirkung.** Jeder Grad macht die Gegner stärker, und zwar additiv (Grad 10 ist +50 % Leben und +25 % Schaden, nicht 1,05 hoch 10): Das **Leben** der Gegner und der Bosse wächst um 5 % je Grad (`CONFIG.grade.enemyHp`) und der **Schaden**, den die Figur erleidet,
+um 2,5 % je Grad (`CONFIG.grade.enemyDamage`, als Faktor `Stats.taken`; das gilt für Berührung, Hieb, den Schwarzen Sog und die Angriffe der Bosse, nicht für die Verstaubung durch die Finsternis). Die Zuschläge kommen auf die Regeln der
 Nachtart obendrauf (`rulesAt` in `nights.ts`; Blaunacht, Grad 2: Leben × 1,5 × 1,1). Tempo und Zahl der Gegner bleiben unberührt: Läufer (4,3 m/s) wären schon ab Grad 3 schneller als die Figur (5,5 m/s), und bei 350 gleichzeitigen
 Gegnern ist ohnehin Schluss. Der Lohn ändert sich mit dem Grad nicht. Das sind Vorschläge und Startwerte, keine Lore; die Zahlen stehen in `CONFIG.grade`.
 
@@ -201,6 +202,32 @@ und „Neues Spiel“ löscht sie (die Rückfrage nennt sie). `Grade` (`src/game
 **Messlauf.** `__messlauf.start({ nacht: 'blaunacht', grad: 3 })` spielt alle Nächte der Messung im Grad 3; der Grad muss nicht freigeschaltet sein und verändert den echten Spielstand nicht. Jedes Ergebnis trägt den Grad (`grad`).
 
 **Statistik.** Wie die Nachtart steht auch der Grad (noch) nicht im Protokoll der Nächte und geht nicht an die Sammelstelle (siehe oben); höhere Grade mischen sich in die Zahlen der Statistik.
+
+## Der Stachelträger
+
+Der zweite Boss erscheint nach fünf Minuten (Sekunde 300, `CONFIG.stachelboss.from`) am Rand des Bildes, der Verschlinger erst in den letzten vier. Er ist ein Fernkämpfer: Er geht auf die Figur zu, bis sie
+näher ist als 5,5 m (`stand`), und greift an, sobald sie näher ist als 10 m (`range`) und er sie ansieht (wer hinter ihm läuft, hat Zeit). Die Kamera zeigt nach vorn etwa 13 m; die Lebensleiste des Bosses
+verdeckt den oberen Rand, darum steht er so nah. Wie der Verschlinger ist er für die Angriffe der Figur ein Gegner wie jeder andere; er lässt sich verlangsamen (bis 70 % Tempo, `CONFIG.boss.slowFloor`), aber nicht festhalten.
+
+| Angriff | Ablauf | Zahlen (`CONFIG.stachelboss`) |
+| ------- | ------ | ----------------------------- |
+| **Stachelwurf** (Standardangriff) | Er greift mit einer Hand in den Rücken (die Hände wechseln sich ab, die Hand hält den Stachel sichtbar) und wirft ihn auf die Stelle, an der die Figur beim Loslassen steht. Wer sich seitlich bewegt, weicht aus. | alle 0,9 s, 4 Schaden, 12 m/s, trifft innerhalb von 0,6 m um die Mitte der Figur |
+| **Stachelsalve** | Er schüttelt den Rücken. Zehn Stacheln fliegen gestaffelt im hohen Bogen auf eine vorher angekündigte Fläche von 12 m Durchmesser (orangefarbener Rand, ein Ring zieht sich zusammen), die dort liegt, wo die Figur beim Beginn stand. Wen ein Stachel trifft, der ist bewegungsunfähig (Laufen nicht, Kämpfen wohl) und danach kurz gefeit. | alle 5 s, je Stachel 4 Schaden in 1,7 m um den Einschlag, 1,6 s festgesetzt, danach 1,5 s gefeit; die Stacheln stecken noch 1,4 s im Boden; der letzte schlägt rund 2,7 s nach dem Beginn ein |
+| **Rage** | Unter 30 % seines Lebens schlägt er schneller zu: Tempo der Angriffe ×1,25 (Animation und Takt) und die Salve kommt nach 3,75 s statt 5 s. Er pulsiert dabei rötlich. | `rage: { below: 0.3, speed: 1.25, cooldown: 0.75, pulse: 0.9 }` |
+
+Alle Zahlen sind **Vorschläge und Startwerte**, keine Lore (die Quellen kennen dieses Wesen nicht; Name, Ablauf und Belohnung sind erfunden). Zwei Auslegungen des Auftrags: Die Rage „steigert die Abklingzeit um 25 %“ wird als *kürzere* Wartezeit
+gelesen (sonst wäre sie keine Rage), und die Salve zielt auf die Stelle der Figur beim Beginn, damit sie sich vor dem Einschlag aus der Fläche bewegen kann.
+
+**Leben:** 1800 (der Verschlinger hat 4500); es wächst wie das des Verschlingers mit dem Grad der Nacht (`bossHp`). **Beute:** 8 Edelsteine (60 Erfahrung), 6 Münzen zu je 8 Gold und ein Segen; anders als der Verschlinger lässt er keine Kiste fallen.
+
+**Wie die Zahlen entstanden.** In einem gestellten Zweikampf (Sekunde 300, ohne Horde, Figur der Stufe 7 bis 10 mit zufällig gewählten Angeboten, Boss mit 1800 Leben) schlug der Wildnisläufer ihn aus 7 m in rund 21 s und verlor dabei 4 von 85 Leben,
+wenn er den Salven auswich, und 16, wenn er in der Fläche blieb und zweimal festsaß; der Magier brauchte rund 42 s und verlor 9 von 70. Der Kämpfer kommt im Nahkampf nur durch, wenn er den Salven ausweicht: Dann hatte er den Boss nach 89 s auf 6 % gebracht und war bei 0 von 120 Leben;
+wer in der Fläche stehen bleibt, wird in jeder Salve festgesetzt und fällt nach etwa 46 s (der Boss hat dann noch 29 %). Der Boss ist also für Fernkämpfer leicht und für den Kämpfer knapp (dessen zufällige Angebote waren hier schwach: rund 26 Schaden je Sekunde gegen rund 85 beim Wildnisläufer).
+Die ersten Stellschrauben sind `hp`, `wurf.damage` und `salve.root`. Der Messlauf (`__messlauf`) taugt dafür wenig: Seine Automatik-Figur meidet den Boss; bei den ersten Werten (2400 Leben, 7 Schaden) hatte er ihn in 220 s nur beim Kämpfer auf 67 %, bei den anderen Klassen kaum unter 95 % gebracht und erlitt fast keinen Schaden von ihm.
+Er trägt die Felder `stachelboss`, `stachelbossFall`, `stachelbossSchaden` und `festgesetzt` ins Ergebnis ein.
+
+**Tests und Ausbau.** Das Modell, seine Animationen („Stehen“, „Laufen“, „Stachelwurf“, „Stachelwurf2“, „Stachelsalve“, „Tod“) und deren Zeiten stehen in `public/models/stachelschwein.glb` und `CONFIG.stachelboss`; die Stacheln liegen in einem festen Vorrat von 80 Instanzen
+(`quills.ts`), im Kampf entsteht nichts Neues. Die Töne sind vorerst die vorhandenen Dateien unter neuen Ereignisnamen (`stachelboss.erscheint`, `.wurf`, `.salve`, `.einschlag`, `.festgesetzt`, `.rage`, `.faellt`; sie lassen sich in `audio.json` austauschen).
 
 ## Statistik
 
@@ -261,7 +288,7 @@ Das Gold gehört allen Klassen gemeinsam (eine Geldbörse). Gegenstände gehöre
 - *Münzen aus Gegnern.* Jede Gegnerart lässt mit einer Wahrscheinlichkeit eine Münze fallen (der Schänder oft für 1 Gold, der Troll
   meist für 5). Die Münzen fliegen wie die Edelsteine zur Figur, sobald sie im Sammelradius liegen. Kupfer, Silber und Gold der Münze
   sagen nur, wie viel sie wert ist (ab 5 und ab 25 Gold).
-- *Der Verschlinger* lässt beim Sturz einen Kranz von Münzen fallen.
+- *Der Verschlinger* lässt beim Sturz einen Kranz von Münzen fallen, *der Stachelträger* einen kleineren (`CONFIG.stachelboss.coins` Münzen zu je `coinValue` Gold).
 - *Sold:* Gold für jede volle Minute, die man überlebt hat.
 - *Prämie* bei Sonnenaufgang.
 - *Tod:* Wer fällt, behält den Anteil `deathKeep` des Ertrags. Jetzt ist er 1: Wer fällt, behält alles. Ein kleinerer Wert macht aus
@@ -711,7 +738,7 @@ Browser spielen erst nach der ersten Eingabe Ton ab: Bis zur ersten Taste oder d
 - **In der Finsternis werden Geräusche gedämpft**, so wie es `finsternis.md` beschreibt („Schritte werden zu Flüstern und Rufe verhallen nach wenigen Metern“):
   In einer Schwade sinkt die Grenzfrequenz, die Lautstärke und die Reichweite; auch die Musik wird dumpf, und ein tiefes Brummen setzt ein.
   Töne, die in einer Schwade entstehen, klingen auch von außen dumpf.
-- Die Musik folgt dem Spiel: Startbildschirm und Klassenwahl, Nacht, dichtere Nacht ab der 8. Minute, Verschlinger, danach ein kurzes Stück für Sieg oder Niederlage.
+- Die Musik folgt dem Spiel: Startbildschirm und Klassenwahl, Nacht, dichtere Nacht ab der 8. Minute, Boss (solange der Stachelträger oder der Verschlinger lebt), danach ein kurzes Stück für Sieg oder Niederlage.
   In der Pause und bei der Wahl einer Stärkung tritt sie zurück.
 - Alle Zahlen der Abmischung stehen in `CONFIG.audio` (`src/config.ts`).
 
@@ -759,6 +786,13 @@ Dateien mit gleichem Namen. Neu erzeugte OGG-Dateien nur einchecken, wenn sich d
   (`blender --background --factory-startup --python tools/manteltraeger-animieren.py -- modelle-original/manteltraeger.glb public/models/manteltraeger.glb`).
   Das Spiel spielt „Laufen“ nach der zurückgelegten Strecke (`stride`) und „Krallenhieb“ in Echtzeit: Der Gegner holt aus, am
   Boden erscheint die Warnfläche, und der Treffer fällt `strike.hitAt` Sekunden nach Beginn des Hiebs. Wer ausweicht, bleibt unverletzt.
+- **Stachelschwein riggen und animieren**: Das Meshy-Modell des Stachelträgers hatte das Rigging eines Vierbeiners: Die Arme besaßen keine eigenen Knochen,
+  ihr Oberarm hing an den Vorderbeinen und zog beim Gehen mit. `tools/stachelschwein-rig.py` legt je Arm vier Knochen an (Schulter, Oberarm, Unterarm, Hand),
+  hängt Arme und Vorderbeine an die Brust und rechnet die Gewichte neu; `tools/stachelschwein-animieren.py` legt darauf „Stehen“, „Laufen“, „Stachelwurf“ und
+  „Stachelwurf2“ (je ein Arm), „Stachelsalve“ und „Tod“ an und schreibt `public/models/stachelschwein.glb`. Beide laufen in Blender ohne Fenster
+  (`blender --background --factory-startup --python tools/stachelschwein-rig.py -- quelle.glb ziel.glb`, danach dasselbe mit `stachelschwein-animieren.py`; mit dem Python-Modul
+  `bpy` geht es ebenso). Die Bewegung steht als Zahlen im Skript; Zeiten wie der Augenblick, in dem der Stachel die Hand verlässt, stehen oben im Skript und in `CONFIG.stachelboss`
+  und müssen zusammenpassen.
 - **Schild erzeugen**: Der Schild in der linken Hand des Kämpfers (`public/models/ausruestung/schild.glb`) entsteht ganz aus Rechnung:
   `tools/schild-erzeugen.py` baut in Blender einen Rundschild aus Brettern mit Eisenrand, Buckel und Messingnieten und backt Holz und
   Eisen in eine Textur (`blender --background --factory-startup --python tools/schild-erzeugen.py`, optional mit `-- ziel.glb`).

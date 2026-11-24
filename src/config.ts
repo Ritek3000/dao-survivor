@@ -378,6 +378,76 @@ export const CONFIG = {
     slowFloor: 0.7,
   },
   /**
+   * Der Stachelträger: ein zweiter Boss, der früh in der Nacht kommt (Sekunde 300) und die Spielfigur aus der Ferne bedrängt. Er wirft Stacheln aus
+   * seinem Rücken und schüttelt ab und zu eine Salve auf eine angekündigte Fläche, deren Stacheln die Figur am Boden festsetzen. Unter einem
+   * Drittel seines Lebens gerät er in Rage. **Namen und alle Zahlen sind Vorschläge und Startwerte** für den Messlauf (`__messlauf`); die Lore
+   * kennt dieses Wesen nicht (siehe PR zu v0.23.0).
+   */
+  stachelboss: {
+    name: 'Der Stachelträger',
+    /** Sekunde der Nacht, in der er erscheint. */
+    from: 300,
+    /**
+     * Als Gegner: Trefferkreis, Leben und Schritttempo. `scale` bremst nur den Rückstoß, `model.height` ist seine Größe im Spiel (die Stacheln
+     * eingerechnet), `model.stride` die Meter je Durchlauf des Gehens: LAUF_STRECKE aus tools/stachelschwein-animieren.py (0,9 m in der Datei,
+     * die 1,675 m hoch ist) mal 3,4 / 1,675. Stimmt der Wert nicht, rutschen die Füße.
+     */
+    type: {
+      id: 'stachelboss',
+      model: { file: 'stachelschwein.glb', height: 3.4, clip: 'Laufen', stride: 1.83 },
+      radius: 1.4, scale: 6, speed: 2.3, hp: 1800, damage: 0, xp: 0, color: 0x4a4038, from: 0, weight: 0,
+    } as EnemyType,
+    /** Namen der Animationen in der Datei (ein Teil des Namens genügt; beide Würfe heißen gleich anfangend, darum genau). */
+    clips: { idle: 'Stehen', walk: 'Laufen', wurf: 'Stachelwurf', wurf2: 'Stachelwurf2', salve: 'Stachelsalve', dead: 'Tod' },
+    /** Erfahrung und Gold, die er fallen lässt (Kranz von Edelsteinen und Münzen), und die Segen, die man für ihn wählen darf. */
+    xp: 60,
+    gems: 8,
+    coins: 6,
+    coinValue: 8,
+    segen: 1,
+    /**
+     * Er geht auf die Spielfigur zu, bis sie näher ist als `stand`, und greift an, sobald sie näher ist als `range` (Meter, Mitte zu Mitte).
+     * Die Kamera zeigt etwa 13 m vor die Figur, und die Lebensleiste im Bild verdeckt den oberen Rand: Mit `stand` 5,5 m steht er unter ihr,
+     * und `range` liegt weit genug darunter, damit jeder Angriff im Bild beginnt und sein Ausholen zu sehen ist.
+     */
+    stand: 5.5,
+    range: 10,
+    /** So schnell dreht er sich (Radiant je Sekunde). */
+    turnRate: 2.4,
+    /**
+     * Stachelwurf, der Standardangriff: Er greift mit einer Hand in den Rücken und wirft den Stachel. Die Hände wechseln sich ab.
+     * `interval` = Sekunden von einem Wurf bis zum nächsten, `releaseAt` = Sekunde der Animation, in der der Stachel die Hand verlässt,
+     * `heldFrom` = ab da hält die Hand ihn sichtbar (siehe tools/stachelschwein-animieren.py: WURF_LOSLASSEN). `speed` in m/s, `radius` =
+     * wie dicht der Stachel an der Mitte der Figur vorbei darf, um zu treffen; `maxRange` = so weit fliegt er höchstens.
+     */
+    wurf: { interval: 0.9, damage: 4, speed: 12, releaseAt: 0.52, heldFrom: 0.26, radius: 0.6, maxRange: 28 },
+    /**
+     * Stachelsalve: Er schüttelt den Rücken, `count` Stacheln fliegen im hohen Bogen auf die angekündigte Fläche (Radius `radius`, also 12 m
+     * Durchmesser; sie liegt dort, wo die Figur beim Beginn steht). Jeder Stachel schlägt mit `impactRadius` Metern Wirkung ein; wen einer trifft,
+     * ist `root` Sekunden bewegungsunfähig und danach `immunity` Sekunden gegen weiteres Festsetzen gefeit. `launchAt` = Sekunde der Animation, ab
+     * der sie fliegen, verteilt auf `spread` Sekunden; `flight` = Flugzeit von bis; `stuck` = so lange stecken sie danach im Boden.
+     */
+    salve: {
+      interval: 5,
+      count: 10,
+      radius: 6,
+      damage: 4,
+      root: 1.6,
+      immunity: 1.5,
+      launchAt: 0.75,
+      spread: 0.55,
+      flight: [1.15, 1.45] as readonly [number, number],
+      impactRadius: 1.7,
+      stuck: 1.4,
+    },
+    /**
+     * Rage: Unter diesem Anteil seines Lebens wird er schneller. `speed` = Faktor auf die Geschwindigkeit seiner Angriffe (Animation und Takt),
+     * `cooldown` = Faktor auf die Abklingzeit der Salve (0,75 = ein Viertel kürzer). Er pulsiert dabei rötlich (`pulse` = Sekunden je Puls).
+     * Abweichung vom Wortlaut des Auftrags: „die Abklingzeit um 25 % steigern“ ist als kürzere Wartezeit gemeint, sonst wäre die Rage keine.
+     */
+    rage: { below: 0.3, speed: 1.25, cooldown: 0.75, pulse: 0.9 },
+  },
+  /**
    * Gold: Münzen aus Gegnern, Sold für die überlebte Zeit und die Siegprämie. Es bezahlt zwischen den Nächten beim Händler
    * Gegenstände und Reiter der Truhe (game/ausruestung.ts). Was eine Gegnerart fallen lässt, steht bei ihr (`gold`).
    * Alle Beträge sind Gold vor dem Goldfaktor der Figur (Eigenschaft „Gold“ der Gegenstände).

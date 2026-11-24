@@ -101,7 +101,7 @@ export interface PropModel {
   receiveShadow?: boolean;
 }
 
-/** Der Verschlinger kommt einmal: volles Skelett wie die Spielfigur, mit allen Clips der Datei. */
+/** Ein Boss kommt einmal je Nacht: volles Skelett wie die Spielfigur, mit allen Clips der Datei (Verschlinger und Stachelträger). */
 export interface BossModel {
   /** Füße auf Höhe 0, Blick nach +Z, in der Größe aus der Konfiguration. */
   root: THREE.Group;
@@ -114,6 +114,7 @@ export interface Models {
   heroes: Map<ClassId, HeroModel>;
   hordes: Map<EnemyType, HordeModel>;
   boss: BossModel | null;
+  stachelboss: BossModel | null;
   /** Gegenstände der Welt, nach Dateiname. */
   props: Map<string, PropModel>;
   /** Dateien, die fehlten oder sich nicht lesen ließen; dafür bleibt der Platzhalter stehen. */
@@ -525,7 +526,7 @@ function prepareHero(gltf: GLTF, playerClass: ClassDef, gearModels: ReadonlyMap<
   return { root, height: spec.height, materials: [...materials.values()], idle, run, dead, clips, gear, offhand };
 }
 
-/** Stellt den Verschlinger auf den Boden, bringt ihn auf seine Größe und säubert das Material. */
+/** Stellt einen Boss (Verschlinger, Stachelträger) auf den Boden, bringt ihn auf seine Größe und säubert das Material. */
 function prepareBoss(gltf: GLTF, spec: EnemyModel): BossModel {
   const scene = gltf.scene;
   const materials = new Map<THREE.Material, THREE.MeshStandardMaterial>();
@@ -546,7 +547,7 @@ function prepareBoss(gltf: GLTF, spec: EnemyModel): BossModel {
   });
 
   // Gemessen wird in der Haltung, in der er steht: Die Ruhepose der Datei hat ausgebreitete Arme.
-  const idle = findClip(gltf.animations, (clip) => clip.name, /idle/i) ?? gltf.animations[0] ?? null;
+  const idle = findClip(gltf.animations, (clip) => clip.name, /idle|stehen/i) ?? gltf.animations[0] ?? null;
   const mixer = new THREE.AnimationMixer(scene);
   if (idle) {
     mixer.clipAction(idle).play();
@@ -616,7 +617,7 @@ function sceneryProp(model: SceneryModel): PropSpec {
  * Sie landet in `failed`, und an ihrer Stelle bleibt der Platzhalter.
  */
 export async function loadModels(onProgress: (done: number, total: number) => void): Promise<Models> {
-  const models: Models = { heroes: new Map(), hordes: new Map(), boss: null, props: new Map(), failed: [] };
+  const models: Models = { heroes: new Map(), hordes: new Map(), boss: null, stachelboss: null, props: new Map(), failed: [] };
   const { gems } = CONFIG.xp;
   const props: PropSpec[] = [
     ...CONFIG.scenery.rockModels.map(sceneryProp),
@@ -659,6 +660,7 @@ export async function loadModels(onProgress: (done: number, total: number) => vo
         (gltf) => models.hordes.set(type, bakeHorde(gltf, type.model)),
       ]),
     [CONFIG.boss.type.model.file, (gltf) => (models.boss = prepareBoss(gltf, CONFIG.boss.type.model))],
+    [CONFIG.stachelboss.type.model.file, (gltf) => (models.stachelboss = prepareBoss(gltf, CONFIG.stachelboss.type.model))],
     ...props.map((spec): [string, (gltf: GLTF) => void] => [
       spec.file,
       (gltf) => models.props.set(spec.file, prepareProp(gltf, spec)),

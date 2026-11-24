@@ -56,6 +56,13 @@ interface Internals {
   enemies: { alive: Enemy[]; kills: number };
   threats: { sogs: { x: number; z: number; radius: number }[] };
   boss: { appeared: boolean; slain: boolean };
+  stachelboss: {
+    appeared: boolean;
+    slain: boolean;
+    slainAt: number;
+    enemy: Enemy | null;
+    quills: { zones: { x: number; z: number; radius: number }[]; roots: number };
+  };
   zones: {
     islands: { x: number; z: number; state: 'unlit' | 'burning' | 'spent' }[];
     zoneAt(x: number, z: number): Zone;
@@ -144,6 +151,11 @@ export interface NightResult {
   entzuendeteFeuer: number;
   /** Was aus dem Verschlinger wurde: 'nicht erschienen', 'überlebt' oder 'erschlagen'. */
   boss: string;
+  /** Was aus dem Stachelträger wurde (wie `boss`), die Sekunde, in der er fiel (0, wenn er nicht fiel), der Schaden, den er der Figur zufügte, und wie oft sie festsaß. */
+  stachelboss: string;
+  stachelbossFall: number;
+  stachelbossSchaden: number;
+  festgesetzt: number;
   /** Die Segen, die in dieser Nacht gewählt wurden. */
   segen: string[];
   /** Gold, das die Nacht der Geldbörse eingebracht hat (Münzen, Sold und Prämie; ohne den Verkauf überzähliger Gegenstände). */
@@ -222,9 +234,12 @@ function steer(g: Internals, style: Style, previous: number, out: MoveVector): n
     let loot = 0;
     for (const gem of gems) loot = Math.max(loot, gem.value ** 0.5 / (Math.hypot(px - gem.x, pz - gem.z) + 1.5));
     let value = -danger * style.fear * 6 + loot * 2.2 - g.zones.finsternisAt(px, pz) * style.shunDark * 3;
-    // Aus der angekündigten Fläche eines Schwarzen Sogs geht jeder hinaus, der sie sieht.
+    // Aus der angekündigten Fläche eines Schwarzen Sogs geht jeder hinaus, der sie sieht; ebenso aus der einer Stachelsalve.
     for (const sog of g.threats.sogs) {
       if (Math.hypot(px - sog.x, pz - sog.z) < sog.radius + 0.6) value -= 5;
+    }
+    for (const zone of g.stachelboss.quills.zones) {
+      if (Math.hypot(px - zone.x, pz - zone.z) < zone.radius + 0.6) value -= 5;
     }
     if (island) value -= (Math.hypot(island.x - px, island.z - pz) / 10) * lightPull;
     const fromCenter = Math.hypot(px, pz);
@@ -295,6 +310,10 @@ async function playNight(
     zonen: { licht: 0, nacht: 0, finsternis: 0 },
     entzuendeteFeuer: 0,
     boss: 'nicht erschienen',
+    stachelboss: 'nicht erschienen',
+    stachelbossFall: 0,
+    stachelbossSchaden: 0,
+    festgesetzt: 0,
     segen: [],
     gold: 0,
     beute: { normal: 0, selten: 0, rar: 0, legendaer: 0 },
@@ -354,6 +373,7 @@ async function playNight(
     if (this.hp < before) {
       result.erlittenerSchaden += before - this.hp;
       result.treffer++;
+      if (attacker && attacker.type === CONFIG.stachelboss.type) result.stachelbossSchaden += before - this.hp;
     }
   };
   const move: MoveVector = { x: 0, y: 0 };
@@ -430,6 +450,9 @@ async function playNight(
   result.stufe = g.progression.level;
   result.erschlagen = g.enemies.kills;
   result.boss = g.boss.slain ? 'erschlagen' : g.boss.appeared ? 'überlebt' : 'nicht erschienen';
+  result.stachelboss = g.stachelboss.slain ? 'erschlagen' : g.stachelboss.appeared ? 'überlebt' : 'nicht erschienen';
+  result.stachelbossFall = g.stachelboss.slain ? Math.round(g.stachelboss.slainAt) : 0;
+  result.festgesetzt = g.stachelboss.quills.roots;
   result.segen = g.progression.blessed.map((segen) => segen.name);
   result.gold = g.boerse.gold - goldBefore - soldGold;
   for (const weapon of g.arsenal.owned) {

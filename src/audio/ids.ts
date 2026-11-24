@@ -55,7 +55,15 @@ export type SoundId =
   | 'boss.ansturm'
   | 'boss.aufprall'
   | 'boss.verschlingen'
-  | 'boss.faellt';
+  | 'boss.faellt'
+  // Stachelträger: Erscheinen, Wurf eines Stachels, Salve (Rücken schütteln), Einschlag eines Salven-Stachels, Figur festgesetzt, Rage, Sturz
+  | 'stachelboss.erscheint'
+  | 'stachelboss.wurf'
+  | 'stachelboss.salve'
+  | 'stachelboss.einschlag'
+  | 'stachelboss.festgesetzt'
+  | 'stachelboss.rage'
+  | 'stachelboss.faellt';
 
 /** Dauerklänge, deren Lautstärke das Spiel laufend nachführt. */
 export type LoopId = 'feuer.knistern' | 'wind.nacht' | 'finsternis.brummen';

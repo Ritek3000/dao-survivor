@@ -25,9 +25,9 @@ export type NightStat = 'cooldown' | 'restHeal' | 'verstaubung' | 'xp' | 'gold' 
 export interface NightRules {
   /** Faktor auf das Tempo der Gegner. */
   enemySpeed?: number;
-  /** Faktor auf das Leben der Gegner (nicht des Verschlingers; dessen Leben ändert nur `bossHp`). */
+  /** Faktor auf das Leben der Gegner (nicht der Bosse; deren Leben ändert nur `bossHp`). */
   enemyHp?: number;
-  /** Faktor auf das Leben des Verschlingers. Die Nachtarten rühren es nicht an; der Grad (`rulesAt`) schon. */
+  /** Faktor auf das Leben der Bosse, des Verschlingers und des Stachelträgers. Die Nachtarten rühren es nicht an; der Grad (`rulesAt`) schon. */
   bossHp?: number;
   /** Faktor auf die Zahl der Gegner, die je Sekunde entstehen. */
   spawnRate?: number;
@@ -96,7 +96,7 @@ export function nightById(id: string): NightDef | undefined {
 
 /**
  * Die Regeln einer Nacht im gewählten Grad (siehe `grade.ts`): die der Nachtart, dazu der Zuschlag des Grads auf das Leben der Gegner
- * und des Verschlingers und auf den Schaden, den die Figur erleidet (`taken`). Die Zuschläge sind additiv je Grad
+ * und der Bosse und auf den Schaden, den die Figur erleidet (`taken`). Die Zuschläge sind additiv je Grad
  * (`CONFIG.grade`) und werden mit den Faktoren der Nachtart malgenommen. Grad 0 ergibt die Regeln der Nachtart unverändert.
  */
 export function rulesAt(night: NightDef, grade: number): NightRules {

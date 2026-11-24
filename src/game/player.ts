@@ -82,6 +82,10 @@ export class Player {
   shieldCharges = 0;
   /** Faktor auf erlittene Treffer aus der Besonderheit der Klasse. */
   takenFactor = 1;
+  /** Restsekunden, die die Figur festgesetzt ist (Stachelsalve des Stachelträgers): Sie kann dann nicht laufen, wohl aber kämpfen. */
+  rootedFor = 0;
+  /** Restsekunden, in denen sie nicht erneut festgesetzt werden kann; verhindert, dass Salven sie in Dauerstarre halten. */
+  private rootImmune = 0;
   private readonly figure = new THREE.Group();
   private readonly velocity = new THREE.Vector3();
   private readonly body: THREE.Mesh;
@@ -258,6 +262,8 @@ export class Player {
     this.lastDamage = 'treffer';
     this.shieldCharges = 0;
     this.takenFactor = 1;
+    this.rootedFor = 0;
+    this.rootImmune = 0;
     this.invulnerable = 0;
     this.hurtGlow = 0;
     this.wasHit = false;
@@ -426,10 +432,20 @@ export class Player {
     const light = this.baseLight * this.stats.light;
     if (light !== this.lightRadius) this.reach(light);
 
+    // Festgesetzt, steht sie sofort still: Eingaben zählen nicht, die Geschwindigkeit ist weg.
+    if (this.rootedFor > 0) {
+      this.rootedFor -= dt;
+      this.velocity.set(0, 0, 0);
+      if (this.rootedFor <= 0) this.rootedFor = 0;
+    } else {
+      this.rootImmune = Math.max(0, this.rootImmune - dt);
+    }
     // Bildschirm-oben entspricht -Z in der Welt.
     const blend = 1 - Math.exp(-acceleration * dt);
-    this.velocity.x += (move.x * speed - this.velocity.x) * blend;
-    this.velocity.z += (-move.y * speed - this.velocity.z) * blend;
+    if (this.rootedFor <= 0) {
+      this.velocity.x += (move.x * speed - this.velocity.x) * blend;
+      this.velocity.z += (-move.y * speed - this.velocity.z) * blend;
+    }
 
     const position = this.object.position;
     position.x += this.velocity.x * dt;
@@ -540,6 +556,17 @@ export class Player {
     this.wasHit = true;
     audio.play(verstaubt ? 'spieler-verstaubt' : 'spieler-treffer', this.position.x, this.position.z);
     this.events.hurt(attacker, taken, false);
+  }
+
+  /**
+   * Setzt die Figur für `seconds` fest (die Stacheln des Stachelträgers). Wer schon festsitzt oder eben erst freikam, wird nicht erneut
+   * festgesetzt: `immunity` Sekunden nach dem Ende sind die Füße frei. Gibt zurück, ob es gewirkt hat.
+   */
+  root(seconds: number, immunity: number): boolean {
+    if (!this.alive || this.rootedFor > 0 || this.rootImmune > 0) return false;
+    this.rootedFor = seconds;
+    this.rootImmune = immunity;
+    return true;
   }
 
   /** Mehr Höchstleben durch eine Verbesserung bringt die Punkte gleich mit. */

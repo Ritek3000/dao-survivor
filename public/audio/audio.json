@@ -91,7 +91,14 @@
     "boss.ansturm": {"beschreibung": "Der Verschlinger beginnt seinen Ansturm", "datei": "sfx/boss-ansturm.ogg", "lautstaerke": 1.0, "reichweite": 60, "prioritaet": 3},
     "boss.aufprall": {"beschreibung": "Der Ansturm endet mit einem Aufprall", "datei": "sfx/boss-aufprall.ogg", "lautstaerke": 1.0, "reichweite": 60, "prioritaet": 3},
     "boss.verschlingen": {"beschreibung": "Das Verschlingen: Der Verschlinger hüllt sich in Finsternis", "datei": "sfx/boss-verschlingen.ogg", "lautstaerke": 1.0, "reichweite": 80, "prioritaet": 3},
-    "boss.faellt": {"beschreibung": "Der Verschlinger fällt", "datei": "sfx/boss-faellt.ogg", "lautstaerke": 1.0, "reichweite": 80, "prioritaet": 3}
+    "boss.faellt": {"beschreibung": "Der Verschlinger fällt", "datei": "sfx/boss-faellt.ogg", "lautstaerke": 1.0, "reichweite": 80, "prioritaet": 3},
+    "stachelboss.erscheint": {"beschreibung": "Der Stachelträger erscheint (vorläufig der Klang des Verschlingers, etwas höher)", "datei": "sfx/boss-erscheint.ogg", "lautstaerke": 0.9, "streuung": 300, "reichweite": 80, "prioritaet": 3},
+    "stachelboss.wurf": {"beschreibung": "Der Stachelträger wirft einen Stachel (vorläufig das Wurfmesser des Wildnisläufers)", "datei": "sfx/angriff-wurfmesser.ogg", "lautstaerke": 0.65, "streuung": 150, "abstand": 0.08, "reichweite": 40, "prioritaet": 2},
+    "stachelboss.salve": {"beschreibung": "Der Stachelträger schüttelt den Rücken, die Stacheln der Salve fliegen (vorläufig der Pfeilhagel)", "datei": "sfx/angriff-pfeilhagel.ogg", "lautstaerke": 0.9, "reichweite": 50, "prioritaet": 3},
+    "stachelboss.einschlag": {"beschreibung": "Ein Stachel der Salve schlägt in den Boden (vorläufig der Einschlag des Pfeilhagels)", "datei": "sfx/einschlag-pfeilhagel.ogg", "lautstaerke": 0.5, "streuung": 200, "abstand": 0.04, "reichweite": 32, "prioritaet": 1},
+    "stachelboss.festgesetzt": {"beschreibung": "Die Spielfigur wird von Stacheln am Boden festgesetzt (vorläufig das Fangeisen)", "datei": "sfx/einschlag-fangeisen.ogg", "lautstaerke": 0.9, "reichweite": 30, "prioritaet": 3},
+    "stachelboss.rage": {"beschreibung": "Der Stachelträger gerät in Rage (vorläufig der Ansturm des Verschlingers)", "datei": "sfx/boss-ansturm.ogg", "lautstaerke": 1.0, "reichweite": 70, "prioritaet": 3},
+    "stachelboss.faellt": {"beschreibung": "Der Stachelträger fällt (vorläufig der Sturz des Verschlingers, höher)", "datei": "sfx/boss-faellt.ogg", "lautstaerke": 0.95, "streuung": 250, "reichweite": 80, "prioritaet": 3}
   },
   "schleifen": {
     "feuer.knistern": {"beschreibung": "Knistern der nächsten brennenden Feuerschale; leiser mit der Entfernung", "datei": "schleifen/feuer-knistern.ogg", "lautstaerke": 0.9, "reichweite": 26},
