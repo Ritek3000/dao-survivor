@@ -33,7 +33,7 @@ import { Coins } from './coins';
 import { finsternisUniforms } from './darkness';
 import { Chest, Drops } from './drops';
 import { Dust } from './dust';
-import { Enemies, type EnemyHooks } from './enemies';
+import { Enemies, type Enemy, type EnemyHooks } from './enemies';
 import { CombatEvents } from './events';
 import { Fields } from './fields';
 import { Grade, describeGrade } from './grade';
@@ -44,6 +44,7 @@ import { applyNightStats, NIGHTS, rulesAt, USUAL_NIGHT, type NightDef, type Nigh
 import { Pickups } from './pickups';
 import { Player } from './player';
 import { Progression, SEGEN_EVERY_LEVELS, UPGRADES } from './progression';
+import { Stachelboss } from './stachelboss';
 import { Threats } from './threats';
 import { MAX_RANK, weaponById } from './weapons';
 import { World } from './world';
@@ -56,7 +57,7 @@ const DAWN_BACKGROUND = new THREE.Color(0x4f4a3a);
 /** Abstand zwischen zwei Wirkungen von Kwests Esse, in Sekunden. */
 const SEAR_SECONDS = 0.5;
 const SEGEN_SUBTITLE = 'Eine Höhere Macht antwortet. Wähle einen Segen';
-/** Sekunden zwischen dem Sturz des Verschlingers und der Wahl des Segens. */
+/** Sekunden zwischen dem Sturz eines Bosses und der Wahl des Segens. */
 const BOSS_SEGEN_SECONDS = 3;
 
 /**
@@ -131,6 +132,7 @@ export class Game {
   private readonly fields: Fields;
   private readonly threats = new Threats();
   private readonly boss = new Boss();
+  private readonly stachelboss = new Stachelboss();
   private readonly dust = new Dust();
   private readonly rig = new CameraRig();
   private readonly move: MoveVector = { x: 0, y: 0 };
@@ -144,10 +146,12 @@ export class Game {
   private time = 0;
   /** Stufenaufstiege, für die noch eine Stärkung gewählt werden muss. */
   private pendingLevels = 0;
-  /** Segen, die außer der Reihe gewährt werden: für den erschlagenen Verschlinger. */
+  /** Segen, die außer der Reihe gewährt werden: für erschlagene Bosse. */
   private pendingSegen = 0;
-  /** Sekunden, bis der Segen für den gefallenen Verschlinger zur Wahl steht; 0 = keiner unterwegs. */
-  private segenIn = 0;
+  /** Segen für gefallene Bosse, die noch unterwegs sind: Name des Bosses und Sekunden bis zur Wahl. */
+  private readonly segenDue: { name: string; seconds: number }[] = [];
+  /** Die Bosse, für die ein Segen zur Wahl steht, in der Reihenfolge ihres Falls. */
+  private readonly segenFor: string[] = [];
   /** Sekunden bis zur nächsten Wirkung von Kwests Esse. */
   private searIn = 0;
   /** Reichweite des Lichtscheins, die den übrigen Systemen zuletzt gemeldet wurde. */
@@ -244,6 +248,8 @@ export class Game {
       this.zones.group,
       this.enemies.group,
       this.boss.group,
+      this.stachelboss.group,
+      this.stachelboss.quills.group,
       this.pickups.group,
       this.coins.group,
       this.drops.group,
@@ -306,6 +312,7 @@ export class Game {
     this.models = models;
     for (const [type, model] of models.hordes) this.enemies.setModel(type, model);
     this.boss.setModel(models.boss);
+    this.stachelboss.setModel(models.stachelboss);
     this.world.dress(models.props);
     this.zones.setModel(models.props.get(CONFIG.islands.model.file) ?? null);
     this.pickups.setModels(
@@ -349,6 +356,7 @@ export class Game {
       case 'ended':
         this.player.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         this.boss.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
+        this.stachelboss.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         this.arsenal.animate(Math.min(frameSeconds, MAX_FRAME_SECONDS));
         if (this.input.wasPressed('confirm')) this.openSelect();
         else if (this.input.wasPressed('lager')) this.openLagerFromMenu();
@@ -382,12 +390,18 @@ export class Game {
     this.enemies.update(dt, this.time, this.player, this.world, this.hooks);
     this.callHorde(dt);
     this.boss.update(dt, this.time, this.player, this.enemies, this.threats, this.world, this.random);
+    this.stachelboss.update(dt, this.time, this.player, this.enemies, this.threats, this.world);
     this.fields.update(dt);
     this.threats.update(dt, this.player, this.zones);
     this.reportBoss();
-    if (this.segenIn > 0) {
-      this.segenIn -= dt;
-      if (this.segenIn <= 0) this.pendingSegen++;
+    for (let i = this.segenDue.length - 1; i >= 0; i--) {
+      const due = this.segenDue[i];
+      if (!due) continue;
+      due.seconds -= dt;
+      if (due.seconds > 0) continue;
+      this.segenDue.splice(i, 1);
+      this.segenFor.push(due.name);
+      this.pendingSegen++;
     }
     this.arsenal.update(dt, this.time, this.traits);
     if (stats.scorch > 0) {
@@ -437,11 +451,14 @@ export class Game {
     this.zones.setViewerLight(this.player.light, this.player.lightColor);
   }
 
-  /** Was der Verschlinger und sein Sog gerade getan haben, als kurze Meldung im Bild. */
+  /** Was die Bosse und der Sog gerade getan haben, als kurze Meldung im Bild. */
   private reportBoss(): void {
     const event = this.boss.consumeEvent();
     if (event === 'erschienen') this.hud.announce(`${CONFIG.boss.name} kommt`);
     else if (event === 'verschlingen') this.hud.announce('Das Verschlingen');
+    const stachel = this.stachelboss.consumeEvent();
+    if (stachel === 'erschienen') this.hud.announce(`${CONFIG.stachelboss.name} kommt`);
+    else if (stachel === 'rage') this.hud.announce(`${CONFIG.stachelboss.name} gerät in Rage`);
     if (this.threats.quenched > 0) {
       this.threats.quenched = 0;
       this.hud.announce('Die Feuer erlöschen');
@@ -492,6 +509,10 @@ export class Game {
 
   private readonly hooks: EnemyHooks = {
     death: (enemy) => {
+      if (enemy === this.stachelboss.enemy) {
+        this.stachelbossFalls(enemy);
+        return;
+      }
       if (enemy !== this.boss.enemy) {
         this.pickups.drop(enemy.x, enemy.z, enemy.type.xp);
         const { gold } = enemy.type;
@@ -520,7 +541,7 @@ export class Game {
       this.chest.open(enemy.x, enemy.z, this.beute.rollChest());
       audio.play('beute.kiste', enemy.x, enemy.z);
       // Erst stürzt er, dann antwortet die Höhere Macht.
-      this.segenIn = BOSS_SEGEN_SECONDS;
+      this.segenDue.push({ name, seconds: BOSS_SEGEN_SECONDS });
       this.hud.announce(`${name} fällt · Eine Kiste springt auf`);
     },
     cast: (enemy, x, z) => {
@@ -532,6 +553,28 @@ export class Game {
       if (strike) this.threats.arc(enemy.x, enemy.z, enemy.heading, strike.arc, strike.reach, strike.hitAt);
     },
   };
+
+  /**
+   * Der Stachelträger fällt: Erfahrung in einem Kranz von Edelsteinen, Gold in einem Kranz von Münzen und ein Segen. Eine Kiste lässt er
+   * nicht zurück (das bleibt dem Verschlinger vorbehalten; das ist ein Vorschlag, siehe `CONFIG.stachelboss`).
+   */
+  private stachelbossFalls(enemy: Enemy): void {
+    const { xp, gems, coins, coinValue, segen, name } = CONFIG.stachelboss;
+    for (let i = 0; i < gems; i++) {
+      const angle = (i / gems) * Math.PI * 2;
+      const distance = 1.6 + this.random() * 2;
+      this.pickups.drop(enemy.x + Math.cos(angle) * distance, enemy.z + Math.sin(angle) * distance, xp / gems);
+    }
+    for (let i = 0; i < coins; i++) {
+      // Zwischen den Edelsteinen, etwas weiter außen.
+      const angle = ((i + 0.5) / coins) * Math.PI * 2;
+      const distance = 2.4 + this.random() * 1.6;
+      this.coins.drop(enemy.x + Math.cos(angle) * distance, enemy.z + Math.sin(angle) * distance, coinValue);
+    }
+    this.stachelboss.fall(this.time);
+    for (let i = 0; i < segen; i++) this.segenDue.push({ name, seconds: BOSS_SEGEN_SECONDS });
+    this.hud.announce(`${name} fällt`);
+  }
 
   /** Legt einen gefallenen Gegenstand hin; ist kein Platz am Boden, geht er gleich in den Beutel. */
   private dropLoot(item: Item, x: number, z: number): void {
@@ -1023,7 +1066,8 @@ export class Game {
     this.time = 0;
     this.pendingLevels = 0;
     this.pendingSegen = 0;
-    this.segenIn = 0;
+    this.segenDue.length = 0;
+    this.segenFor.length = 0;
     this.rerolls = CONFIG.run.rerolls;
     this.banishes = CONFIG.run.banishes;
     this.banished.clear();
@@ -1058,6 +1102,7 @@ export class Game {
     this.applyBlessings();
     this.threats.reset();
     this.boss.reset(rules.bossHp);
+    this.stachelboss.reset(rules.bossHp, this.runSeed);
     this.hud.setBoss(null);
     this.arsenal.reset(playerClass, this.ausruestung.evolutionsOf(playerClass.id), startWeapon);
     finsternisUniforms.uSense.value = playerClass.id === 'wildnislaeufer' ? 1 : 0;
@@ -1190,10 +1235,10 @@ export class Game {
     audio.play('bestaetigen');
   }
 
-  /** Der Segen für den erschlagenen Verschlinger. */
+  /** Der Segen für einen erschlagenen Boss. */
   private openBossSegen(): void {
     this.pendingSegen--;
-    this.offerSegen(`${CONFIG.boss.name} ist gefallen`);
+    this.offerSegen(`${this.segenFor.shift() ?? CONFIG.boss.name} ist gefallen`);
   }
 
   private openLevelUp(): void {
@@ -1337,6 +1382,12 @@ export class Game {
     else if (this.pendingLevels > 0) this.openLevelUp();
   }
 
+  /** Was aus einem Boss geworden ist, für den Text zum Sonnenaufgang; leer, wenn er nicht erschien. */
+  private bossFate(name: string, boss: { slain: boolean; appeared: boolean }): string {
+    if (boss.slain) return ` ${name} ist gefallen.`;
+    return boss.appeared ? ` ${name} weicht mit der Finsternis.` : '';
+  }
+
   private end(outcome: 'won' | 'fallen' | 'aborted'): void {
     const won = outcome === 'won';
     this.phase = 'ended';
@@ -1362,12 +1413,7 @@ export class Game {
       this.hud.showEnd('Lauf abgebrochen', 'Du hast dich aus der Nacht zurückgezogen.', stats, gold, lines);
     } else if (won) {
       this.world.setDawn(1);
-      const { name } = CONFIG.boss;
-      const fate = this.boss.slain
-        ? ` ${name} ist gefallen.`
-        : this.boss.appeared
-          ? ` ${name} weicht mit der Finsternis.`
-          : '';
+      const fate = this.bossFate(CONFIG.boss.name, this.boss) + this.bossFate(CONFIG.stachelboss.name, this.stachelboss);
       const unlock = unlocked === null ? '' : ` Freigeschaltet: ${this.night.name}, Grad ${unlocked}.`;
       this.hud.showEnd('Sor geht auf', `Du hast die Nacht vor der Mauer überstanden.${fate}${unlock}`, stats, gold, lines);
     } else {
@@ -1494,7 +1540,7 @@ export class Game {
       case 'ended':
         return this.aborted ? 'menue' : this.won ? 'sieg' : 'niederlage';
       default:
-        if (this.boss.enemy) return 'boss';
+        if (this.boss.enemy || this.stachelboss.enemy) return 'boss';
         return this.time >= CONFIG.audio.music.lateFrom ? 'nacht-spaet' : 'nacht';
     }
   }
@@ -1540,7 +1586,7 @@ export class Game {
     // Ein paar Versuche reichen: Wer weit weg steht, wird ohnehin nicht gehört. Der Zufall gehört nur dem Ohr.
     for (let attempt = 0; attempt < 6 && alive.length > 0; attempt++) {
       const enemy = alive[Math.floor(Math.random() * alive.length)];
-      if (!enemy || enemy.hp <= 0 || enemy === this.boss.enemy) continue;
+      if (!enemy || enemy.hp <= 0 || enemy === this.boss.enemy || enemy === this.stachelboss.enemy) continue;
       if (Math.hypot(enemy.x - position.x, enemy.z - position.z) > range) continue;
       audio.play(`gegner-laut.${enemy.type.id}`, enemy.x, enemy.z);
       return;
@@ -1553,10 +1599,13 @@ export class Game {
     this.hud.setProgress(this.progression.level, this.progression.xp / this.progression.needed);
     this.hud.setClock(CONFIG.run.nightSeconds - this.time);
     this.hud.setZone(this.zones.zoneAt(x, z), this.zones.finsternisAt(x, z));
-    this.hud.setTrait(this.traitLabel);
+    // Wer von Stacheln festgehalten wird, sieht es an der Stelle der Besonderheit der Klasse: Das ist die wichtigere Nachricht.
+    this.hud.setTrait(this.player.rootedFor > 0 ? 'Festgesetzt' : this.traitLabel);
     this.hud.setIgnite(this.zones.igniteProgress);
     this.hud.setCompass(this.zones.nearestIsland(x, z, this.bearing));
-    this.hud.setBoss(this.boss.enemy ? CONFIG.boss.name : null, this.boss.hpFraction);
+    // Die Leiste zeigt den Boss, der gerade bedrohlicher ist: der Verschlinger, solange er lebt, sonst der Stachelträger.
+    if (this.boss.enemy) this.hud.setBoss(CONFIG.boss.name, this.boss.hpFraction);
+    else this.hud.setBoss(this.stachelboss.enemy ? CONFIG.stachelboss.name : null, this.stachelboss.hpFraction);
   }
 
   private readonly resize = (): void => {

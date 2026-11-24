@@ -41,7 +41,7 @@ export interface Enemy {
   strikeIn: number;
   /** Radius der Finsternis, die er mit sich trägt; 0 = keine. */
   mantle: number;
-  /** Bewegt sich nicht von selbst: Der Verschlinger wird von boss.ts geführt. */
+  /** Bewegt sich nicht von selbst: Der Verschlinger wird von boss.ts geführt, der Stachelträger von stachelboss.ts. */
   driven: boolean;
   /** Wie lange er ohne Unterbrechung im Glutkreis des Magiers steht (Sekunden) und wann er zuletzt darin war (Spielzeit); Glut formen, Rang 4. */
   scorch: number;
@@ -85,7 +85,7 @@ interface Horde {
 }
 
 const TYPES = CONFIG.enemies.types;
-const LARGEST_RADIUS = Math.max(CONFIG.boss.type.radius, ...TYPES.map((type) => type.radius));
+const LARGEST_RADIUS = Math.max(CONFIG.boss.type.radius, CONFIG.stachelboss.type.radius, ...TYPES.map((type) => type.radius));
 /** Jedes Bodenfeld kann ein Köder sein, mehr als Felder gibt es nie. */
 const LURE_CAPACITY = CONFIG.skills.maxFields;
 const WHITE = new THREE.Color(0xffffff);
@@ -267,7 +267,7 @@ export class Enemies {
       enemy.z += enemy.pushZ * dt;
       enemy.pushX *= pushDecay;
       enemy.pushZ *= pushDecay;
-      // Den Verschlinger führt boss.ts: Er läuft, stürmt und schlägt nach eigenen Regeln.
+      // Die Bosse führen boss.ts und stachelboss.ts: Sie laufen, stürmen, schlagen und werfen nach eigenen Regeln.
       if (enemy.driven) continue;
 
       let dx = playerX - enemy.x;

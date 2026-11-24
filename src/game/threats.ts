@@ -17,6 +17,9 @@ import type { Site, Zones } from './zones';
 /** Die Farbe, in der Finsternis sich verrät: kaltes, fahles Blau. */
 const COLD = 0x6f8cff;
 const DARK_DUST = 0x3a3d4c;
+/** Die Warnfarbe der Stachelsalve: glühendes Orange, damit sie sich vom kalten Blau der Finsternis abhebt. */
+const WARNING = 0xff9a45;
+const WARNING_SOFT = 0xb85a22;
 const WHITE = new THREE.Color(1, 1, 1);
 const TAU = Math.PI * 2;
 
@@ -144,6 +147,20 @@ export class Threats {
   /** Kündigt die Bahn eines Ansturms an. */
   lane(x: number, z: number, angle: number, length: number, width: number, seconds: number): void {
     this.strips.spawn({ look: 'bahn', x, z, angle, width, inner: 0.5, outer: length, y: 0.07, color: COLD, opacity: 0.4, life: seconds });
+  }
+
+  /**
+   * Kündigt die Fläche einer Stachelsalve an (Stachelträger): ein warmer, pulsierender Rand, innen ein weicher Schein; ein zweiter Ring zieht
+   * sich in `seconds` Sekunden zur Mitte zusammen, bis die ersten Stacheln einschlagen. Warm und nicht kalt: Das ist kein Zauber der Finsternis.
+   */
+  marker(x: number, z: number, radius: number, seconds: number): void {
+    this.strips.spawn({ look: 'glow', x, z, inner: 0, outer: radius, y: 0.05, color: WARNING_SOFT, opacity: 0.3, life: seconds });
+    this.strips.spawn({ look: 'sogrand', x, z, inner: 0, outer: radius, y: 0.07, color: WARNING, opacity: 0.8, life: seconds });
+  }
+
+  /** Risse im Boden um die Füße der Figur, solange Stacheln sie festhalten. */
+  pin(x: number, z: number, seconds: number): void {
+    this.strips.spawn({ look: 'footcrack', x, z, inner: 0, outer: 1.6, y: 0.04, opacity: 0.95, life: Math.max(0.6, seconds) });
   }
 
   /** Staub, der aufgewirbelt wird, wo etwas Schweres aufschlägt. */
