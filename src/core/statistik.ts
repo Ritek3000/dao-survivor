@@ -1,6 +1,6 @@
 /**
- * Das Protokoll der gespielten Nächte: Aus jeder Nacht bleibt ein kleiner Datensatz (`RunRecord`) mit der Klasse, dem Ausgang,
- * der überlebten Zeit, der erreichten Stufe, den gewählten Stärkungen und Segen und den Rängen der Fertigkeiten. Die Statistik
+ * Das Protokoll der gespielten Nächte: Aus jeder Nacht bleibt ein kleiner Datensatz (`RunRecord`) mit der Klasse, der Nachtart und dem
+ * Grad, dem Ausgang, der überlebten Zeit, der erreichten Stufe, den gewählten Stärkungen und Segen und den Rängen der Fertigkeiten. Die Statistik
  * (`auswertung.ts`) rechnet daraus; hier wird nur aufgezeichnet, gelesen und gespeichert.
  *
  * Das Protokoll liegt nicht im Spielstand (`savegame.ts`), sondern in einem eigenen Speicher: Es wächst mit jeder Nacht, würde den
@@ -16,8 +16,8 @@
 
 import { browserTextStore, type TextStore } from './storage';
 
-/** Die Fassung des Formats, die dieser Code schreibt. */
-export const STATISTIK_VERSION = 1;
+/** Die Fassung des Formats, die dieser Code schreibt. Fassung 2 kam mit der Nachtart und dem Grad dazu (`night`, `grade`). */
+export const STATISTIK_VERSION = 2;
 
 /** Wie eine Nacht endete: Sonnenaufgang erlebt, gefallen (auch verstaubt) oder über das Pausenmenü abgebrochen. */
 export type RunOutcome = 'won' | 'fallen' | 'aborted';
@@ -35,6 +35,14 @@ export interface RunRecord {
    */
   version: string;
   classId: string;
+  /**
+   * Die Nachtart (`NightId` aus `game/nights.ts`, hier nur als Text). Leer, wenn sie unbekannt ist: bei Nächten aus den Fassungen
+   * 0.21 bis 0.24, die sie nicht festhielten (siehe `legacyNight`). Die Auswertung zählt solche Nächte nur bei der Klasse und
+   * insgesamt, nicht bei einer Nachtart.
+   */
+  night: string;
+  /** Der gewählte Grad der Nacht (0 ist der Grundgrad, siehe `game/grade.ts`); 0 auch dort, wo die Nachtart unbekannt ist. */
+  grade: number;
   outcome: RunOutcome;
   /** Überlebte Sekunden, ganz; höchstens `CONFIG.run.nightSeconds`. */
   seconds: number;
@@ -55,6 +63,8 @@ export const MAX_RUNS = 2000;
 const MAX_ID_LENGTH = 64;
 const MAX_SECONDS = 24 * 60 * 60;
 const MAX_LEVEL = 999;
+/** Wie `CONFIG.grade.max` und die Prüfregel für `grade` in `tools/supabase/statistik.sql`. */
+const MAX_GRADE = 99;
 const MAX_COUNT = 99;
 const MAX_ENTRIES = 64;
 
@@ -81,6 +91,24 @@ function shortText(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH ? value : null;
 }
 
+/** Die Kennung der gewöhnlichen Nacht (`USUAL_NIGHT` in `game/nights.ts`); der Kern kennt sonst keine Nachtarten. */
+const USUAL_NIGHT_ID = 'gewoehnlich';
+
+/** Seit dieser Fassung (Haupt- und Nebenzahl) gibt es Nachtarten; Fassung 0.21.0 brachte Rotnacht, Blaunacht und Regenlicht. */
+const NIGHTS_SINCE: readonly [number, number] = [0, 21];
+
+/**
+ * Die Nachtart einer Nacht, die sie nicht festhielt (Protokoll der Fassung 1): Vor den Nachtarten war jede Nacht eine gewöhnliche im
+ * Grad 0, das sagt die Fassung des Spiels. Aus den Fassungen danach ist die Nachtart nicht mehr zu erraten; sie bleibt leer.
+ */
+function legacyNight(version: string): string {
+  const match = /^(\d+)\.(\d+)\./.exec(version);
+  if (!match) return '';
+  const [major, minor] = [Number(match[1]), Number(match[2])];
+  const [sinceMajor, sinceMinor] = NIGHTS_SINCE;
+  return major < sinceMajor || (major === sinceMajor && minor < sinceMinor) ? USUAL_NIGHT_ID : '';
+}
+
 /** Kennung → Zahl (mindestens 1); Einträge ohne gültige Kennung oder mit 0 fallen weg. */
 function parseCounts(raw: unknown): Record<string, number> {
   const counts: Record<string, number> = {};
@@ -98,11 +126,16 @@ function parseRun(raw: unknown): RunRecord | null {
   const classId = shortText(raw.classId);
   const outcome = RUN_OUTCOMES.find((candidate) => candidate === raw.outcome);
   if (!id || !classId || !outcome) return null;
+  const version = typeof raw.version === 'string' ? raw.version.slice(0, 20) : '';
+  // Fassung 1 des Protokolls kennt die Nachtart nicht (siehe `legacyNight`); ohne Nachtart gibt es auch keinen Grad.
+  const night = shortText(raw.night) ?? legacyNight(version);
   return {
     id,
     at: wholeNumber(raw.at, Number.MAX_SAFE_INTEGER),
-    version: typeof raw.version === 'string' ? raw.version.slice(0, 20) : '',
+    version,
     classId,
+    night,
+    grade: night ? wholeNumber(raw.grade, MAX_GRADE) : 0,
     outcome,
     seconds: wholeNumber(raw.seconds, MAX_SECONDS),
     level: Math.max(1, wholeNumber(raw.level, MAX_LEVEL)),
@@ -124,7 +157,8 @@ export function parseRuns(text: string | null): RunRecord[] {
     // Beschädigter Text: Das Protokoll beginnt leer. Überschrieben wird erst, wenn die nächste Nacht endet.
     return [];
   }
-  // Fassung 1 ist die erste; spätere heben ältere Stände hier an, bevor die Einträge gelesen werden.
+  // Fassung 1 ist die erste, Fassung 2 fügt Nachtart und Grad hinzu. Fehlen sie, hebt `parseRun` den Eintrag an; das Format der Liste
+  // selbst blieb gleich, darum genügt es, die Einträge einzeln zu lesen.
   if (!isRecord(parsed) || !Array.isArray(parsed.runs)) return [];
   const runs: RunRecord[] = [];
   for (const raw of parsed.runs.slice(-MAX_RUNS)) {

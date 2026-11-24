@@ -12,6 +12,7 @@ import { StatistikView, type StatistikTexts } from './ui/statistikView';
 const TEXTS: StatistikTexts = {
   empty: 'In der Sammelstelle liegt noch keine Nacht.',
   emptyClass: (name) => `Mit ${name} wurde noch keine Nacht gemeldet.`,
+  emptyNights: 'In der Sammelstelle liegt noch keine Nacht mit Angabe der Nachtart.',
 };
 
 function fail(message: string): void {
