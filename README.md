@@ -45,6 +45,42 @@ Nach jedem Merge auf `main` baut GitHub das Spiel und veröffentlicht den Stand 
 - Einmalig muss in den Repository-Einstellungen unter **Settings → Pages → Build and deployment → Source** der Wert
   **GitHub Actions** gewählt sein. Bei einem kostenlosen GitHub-Konto muss das Repository dafür öffentlich sein.
 
+### Eigene Domäne (SFTP)
+
+Derselbe Workflow lädt nach jedem Merge auf `main` zusätzlich den gebauten Stand auf die eigene Domäne. GitHub Pages bleibt
+unverändert; beide Veröffentlichungen laufen als getrennte Jobs und halten sich nicht gegenseitig auf. Der Job heißt
+`eigene-domain` (`.github/workflows/pages.yml`), die Arbeit macht `tools/sftp-hochladen.sh` mit `lftp`.
+
+**Pflicht: drei Secrets** unter *Settings → Secrets and variables → Actions → Secrets*. Der Name sagt „FTP“, die Verbindung läuft aber über **SFTP**:
+
+| Secret         | Inhalt                                                            |
+| -------------- | ----------------------------------------------------------------- |
+| `FTP_SERVER`   | Rechnername des Webspaces, zum Beispiel `ssh.example.org`          |
+| `FTP_BENUTZER` | Benutzername des SFTP-Zugangs                                      |
+| `FTP_PASSWORT` | Passwort dazu                                                      |
+
+**Wahlweise: Variablen** unter *Settings → Secrets and variables → Actions → Variables*. Ohne sie gilt der Rückfall in Klammern:
+
+| Variable             | Wirkung                                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `FTP_PORT`           | Port des SFTP-Servers (`22`)                                                                                |
+| `FTP_ZIELORDNER`     | Ordner auf dem Webspace, etwa `htdocs`. Der Rückfall `.` ist das Heimatverzeichnis des Zugangs, bei Webspaces meist die Wurzel der Domäne |
+| `FTP_FINGERABDRUCK`  | Fingerabdruck des Server-Schlüssels, `SHA256:…`. Ohne ihn wird der Schlüssel beim Verbinden ungeprüft übernommen; das Protokoll des Laufs nennt die Fingerabdrücke, einen davon hier eintragen |
+| `FTP_ALTES_LOESCHEN` | `ja`: löscht im Zielordner **alles**, was nicht zum Spiel gehört (auch fremde Dateien). Ohne die Variable wird nie gelöscht, dann sammeln sich alte Skripte unter `assets/` an |
+
+So funktioniert der Upload:
+
+- **Gleiche Dateien wie auf GitHub Pages.** Der Job nimmt den gebauten `dist/`-Ordner aus dem Bau-Job. Weil der Build relative Pfade
+  nutzt (`base: './'`), läuft die Seite unverändert in der Wurzel der Domäne wie auch in einem Unterordner; ein Umbau ist nicht nötig.
+- **Nur Geändertes wird hochgeladen.** Die Seite ist rund 170 MB groß. Jede Datei bekommt vor dem Vergleich einen Zeitstempel, der nur
+  von ihrem Inhalt abhängt, so lädt `lftp` nach einem Update nur die geänderten Dateien hoch. Der erste Lauf lädt alles.
+- **Erst die Dateien, dann die Seiten.** Skripte, Modelle und Klänge kommen zuerst, die HTML-Seiten zuletzt, und jede Datei wird erst ersetzt,
+  wenn die neue vollständig da ist. Die Seite zeigt also nie auf Dateien, die noch fehlen.
+- **Fehler sind sichtbar.** Scheitert der Upload (falsches Passwort, voller Webspace, Server nicht erreichbar), wird der Lauf unter **Actions**
+  rot und nennt den Grund. GitHub Pages ist davon nicht betroffen. Der nächste Lauf versucht es erneut.
+- **Probelauf vor dem Merge:** Unter **Actions → Run workflow** lässt sich der Workflow von Hand auf einem Branch starten.
+- Der Upload ersetzt gleichnamige Dateien im Zielordner, zum Beispiel eine vorhandene `index.html`. Fremde Dateien bleiben stehen (außer bei `FTP_ALTES_LOESCHEN=ja`).
+
 ## Steuerung
 
 | Taste                      | Aktion                                  |
@@ -99,8 +135,8 @@ src/
   game/               Spiellogik und Darstellung (siehe unten)
   ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Statistik, Anleitung, Rückfragen; statistikView.ts und statistik.css: die Anzeige der Statistik; lagerView.ts und lager.css: Lager (Ausrüstung, Truhe und Händler)
   tools/              Entwicklungswerkzeuge: Messlauf, Gegenstände (`__items`), Fertigkeiten-Unterbau (`__skills`) und Modell-Prüfer
-tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Stachelschwein riggen und animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten, Gegenstandsbilder freistellen, Spielfiguren aufbereiten; SQL: die Sammelstelle der Statistik in Supabase einrichten, `supabase/statistik.sql`)
-.github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
+tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Stachelschwein riggen und animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten, Gegenstandsbilder freistellen, Spielfiguren aufbereiten; SQL: die Sammelstelle der Statistik in Supabase einrichten, `supabase/statistik.sql`; Shell: Upload auf die eigene Domäne, `sftp-hochladen.sh`)
+.github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages und auf die eigene Domäne (pages.yml)
 ```
 
 Wichtige Teile von `src/game/`:

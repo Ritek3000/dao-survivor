@@ -81,7 +81,9 @@ Ob das Spiel im Browser bleibt oder als Desktop-Programm erscheint, ist noch nic
     werden über `import.meta.env.BASE_URL` geladen und nicht über absolute Pfade wie `/models/…`.
   - Keine Abhängigkeit von einem Server, Cookies oder einem festen Host. Alles Nötige steckt in `dist/`. Aus demselben Grund
     läuft der Stand von `main` nach jedem Merge unter dem Unterpfad `/dao-survivor/` auf GitHub Pages
-    (`.github/workflows/pages.yml`); ein absoluter Pfad würde dort ins Leere laufen.
+    (`.github/workflows/pages.yml`); ein absoluter Pfad würde dort ins Leere laufen. Derselbe Workflow lädt `dist/` zudem per SFTP
+    auf Fabians eigene Domäne (Job `eigene-domain`, `tools/sftp-hochladen.sh`, siehe README „Eigene Domäne“), je nach Einstellung
+    in deren Wurzel oder einen Unterordner; auch dort tragen nur relative Pfade.
   - Eingabe nur über die Aktionen in `src/core/input.ts` (Gamepad kommt später dazu), nicht über verstreute Tastenabfragen.
   - Browser-APIs, die in einer Hülle fehlen können (etwa Vollbild, Zeigersperre, Speicher), nur mit Rückfall verwenden.
     Spielstand und Einstellungen liegen hinter einer kleinen Schicht, die sich austauschen lässt (`src/core/storage.ts`,
