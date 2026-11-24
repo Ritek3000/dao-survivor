@@ -99,7 +99,7 @@ src/
   game/               Spiellogik und Darstellung (siehe unten)
   ui/                 hud.ts: Anzeigen, Auswahlkarten, Ende; menus.ts: Startbildschirm, Pause, Optionen, Statistik, Anleitung, Rückfragen; statistikView.ts und statistik.css: die Anzeige der Statistik; lagerView.ts und lager.css: Lager (Ausrüstung, Truhe und Händler)
   tools/              Entwicklungswerkzeuge: Messlauf, Gegenstände (`__items`), Fertigkeiten-Unterbau (`__skills`) und Modell-Prüfer
-tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Stachelschwein riggen und animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten, Gegenstandsbilder freistellen; SQL: die Sammelstelle der Statistik in Supabase einrichten, `supabase/statistik.sql`)
+tools/                Skripte außerhalb des Spiels (Blender: Modelle verkleinern, Priester und Mantelträger animieren, Stachelschwein riggen und animieren, Schild erzeugen; Python: Klänge erzeugen, Sor-Symbol und Favicon aufbereiten, Gegenstandsbilder freistellen, Spielfiguren aufbereiten; SQL: die Sammelstelle der Statistik in Supabase einrichten, `supabase/statistik.sql`)
 .github/workflows/    GitHub Actions: Veröffentlichung auf GitHub Pages (pages.yml)
 ```
 
@@ -171,8 +171,16 @@ Texte: Werte, Angriffe, Animationen, Gegenstände, Truhe, Gold und Statistik geh
   die Datei der Frau muss dieselben Clips haben (Running, Walking, Idle_02, Dead und die Angriffsclips der Klasse).
 - **Laden:** Beim Start lädt je Klasse nur die Figur im gewählten Aussehen (`loadModels(…, startLook)`), so bleibt der Download gleich groß. Wer das andere wählt, lädt es nach (`Models.loadHero`), und zwar
   schon während der Karte der Startangriff-Wahl; ist es beim Beginn der Nacht noch nicht da, wartet das Spiel kurz („Die Figur wird geladen …“) und beginnt nicht mit der falschen Figur. Schlägt das Laden der Frau fehl, bleibt der Mann.
-- **Stand:** Die drei weiblichen Aussehen tragen vorerst die Figur des Mannes. Ihre Modelle entstehen aus den männlichen als Vorlage (Meshy, Bild zu 3D, dann Skelett und Animationen) und kommen als
-  eigene Pull Requests, je Klasse eines.
+- **Modelle:** Alle drei Frauen haben ein eigenes Modell (`kaempferin.glb`, `wildnislaeuferin.glb`, `magierin.glb` in `public/models`). Sie entstanden in Meshy (Bild zu Bild aus der männlichen Vorlage, dann
+  Bild zu 3D, Autorig und Clips aus Meshys Bibliothek). Kämpferin: Zwergin ohne Bart; Wildnisläuferin und Magierin sind etwas jünger als die Männer. Die Meshy-Exporte wiegen knapp 20 MB, fast alles davon sind drei
+  2048er-Texturen; `tools/helden-aufbereiten.py` (siehe [Entwicklungswerkzeuge](#entwicklungswerkzeuge)) verkleinert sie auf 1024 Pixel und kommt ohne Blender aus. Fertig sind die Dateien etwa 5 MB groß.
+- **Leerlauf und Zauber:** Meshys Autorig liefert für die Frauen den Leerlauf `Idle` mit hängenden Armen. Axt, Bogen und Buch sind aber in der Haltung des Mannes (`Idle_02`) ausgemessen, und in der anderen
+  Haltung stünde die Axt quer zum Körper. Darum bekommt jede Frau den Clip `Idle_02` des Mannes (nur die Drehungen der Knochen, nach Knochennamen, als Abstand zur Ruhepose; so bleibt die Bewegung gleich, auch
+  wenn die Frau andere Proportionen hat), und ihr `Idle` entfällt. Die Magierin bekommt auf demselben Weg auch `mage_soell_cast` des Magiers; diesen Zauberclip gibt es in Meshys Bibliothek nicht, er entstand
+  in Blender. Laufen, Gehen, Tod und die Angriffe der Kämpferin und der Wildnisläuferin sind Meshys eigene Clips an ihrem Skelett. Die Zeiten der Angriffe (`swings`) stammen vom Mann; die Clips sind gleich lang.
+- **Sitz in der Hand:** Die Handknochen der Frauen sind anders ausgerichtet als die der Männer (um bis zu etwa 12 Grad), die Griffe von Axt, Bogen und Buch passten trotzdem unverändert und wurden nur geprüft (Modell-Prüfer,
+  Leerlauf, Lauf, Ausholen, Treffer, Spannen, Lösen, Zauber). Neu ausgemessen ist nur die Ruhelage `rest` der Schildleine der Kämpferin (`roundShield` in `classes.ts`): `[0.416, -0.168, -0.008]` statt `[0.4, -0.152, -0.027]`.
+  Der Pfeil der Wildnisläuferin zeigt im gespannten Bogen etwa 3 Grad anders als der des Mannes, `turn` bleibt gemeinsam.
 
 ## Stufenaufstieg und Startangriff
 
@@ -803,6 +811,12 @@ Dateien mit gleichem Namen. Neu erzeugte OGG-Dateien nur einchecken, wenn sich d
 - **Modelle verkleinern**: `tools/modelle-verkleinern.py` macht aus schweren Meshy-Exporten spielfertige Kopien.
   Es läuft in Blender (`blender --background --factory-startup --python tools/modelle-verkleinern.py`). Die schweren
   Originale liegen im Ordner `modelle-original/`, der wegen seiner Größe nicht im Repository ist (siehe `.gitignore`).
+- **Spielfiguren aufbereiten**: `tools/helden-aufbereiten.py` verkleinert die Texturen einer Meshy-Figur (Farbe und Metall/Rauheit als JPEG,
+  die Normalenkarte als PNG, Vorgabe 1024 Pixel), überträgt auf Wunsch Clips von einer anderen Figur mit demselben Skelett (`--clip-aus`, `--clip`) und
+  entfernt Clips (`--ohne`); Netz, Skelett und die übrigen Animationen bleiben, was auf nichts mehr zeigt, fällt aus der Datei. Es braucht kein Blender, nur Python 3 mit
+  Pillow und NumPy. So entstanden die drei Frauen:
+  `python tools/helden-aufbereiten.py kaempferin-original.glb public/models/kaempferin.glb --clip-aus public/models/kaempfer.glb --clip Idle_02 --ohne Idle`
+  (ebenso `wildnislaeuferin`; bei der Magierin zusätzlich `--clip mage_soell_cast`). Die schweren Originale gehören wie die der Männer nicht ins Repository.
 - **Sor-Symbol und Favicon**: Das Symbol (`public/sor-symbol.png`, durchsichtiger Hintergrund) steht über dem Titel des Startbildschirms.
   `tools/symbol-erzeugen.py` schneidet es zu und erzeugt daraus `public/favicon.ico` (16, 32 und 48 Pixel); es braucht Python mit Pillow
   (`python tools/symbol-erzeugen.py`, oder mit dem Pfad eines neuen Quellbilds als Argument).

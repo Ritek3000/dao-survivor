@@ -4,7 +4,7 @@
  */
 
 import type { Look } from '../core/settings';
-import type { GearDef } from './gear';
+import type { GearDef, Triple } from './gear';
 
 export type { Look };
 
@@ -130,6 +130,35 @@ const GREAT_CAST: SwingDef = {
   recover: 0.45,
 };
 
+/**
+ * Rundschild in der linken Hand, die Außenseite nach links. Er ist um 20 Grad nach oben geneigt: So fängt die Fläche das
+ * Licht der Fackel über dem Kopf, und der Unterarm ragt nicht durch das Brett. Griffpunkt und Richtungen sind im Leerlauf
+ * der Figur ausgemessen und gelten im Raum des linken Handknochens (`handL`); nach einem neuen Export des Modells
+ * müssen sie neu bestimmt werden. Nur `rest` hängt vom Skelett ab, siehe `Leash`: der Griffpunkt im Leerlauf, gemessen
+ * von der Hüfte in den Achsen der Figur.
+ */
+function roundShield(rest: Triple): GearDef {
+  return {
+    kind: 'schild',
+    hand: 'links',
+    size: 0.56,
+    model: 'ausruestung/schild.glb',
+    offset: [-0.088, 0.129, -0.157],
+    along: [0.601, -0.516, 0.61],
+    toward: [-0.036, -0.78, -0.625],
+    // Im Lauf schwenkt die Hand weit; der Schild bleibt dabei an der linken Seite der Figur und fährt nicht in den Körper.
+    // Die Leine hält ihn beim Ausholen (Wirbelschlag, Wuchthieb) nah am Körper. Ohne Leine entfernte sich die Schildmitte im
+    // Wirbelschlag bis auf 52 cm vom Körper (im Leerlauf 20 cm), mit ihr bis auf etwa 40 cm; im Wuchthieb von 63 auf 33 cm.
+    steady: {
+      weight: 0.9,
+      along: [-0.342, 0.94, 0],
+      toward: [0.94, 0.342, 0],
+      minSide: 0.4,
+      leash: { bone: 'spine', rest, near: 0.15, soft: 0.35, inward: 0.03 },
+    },
+  };
+}
+
 export const CLASSES: readonly ClassDef[] = [
   {
     id: 'kaempfer',
@@ -153,33 +182,12 @@ export const CLASSES: readonly ClassDef[] = [
       along: [0.16, 0.42, 0.89],
       toward: [0.72, 0.57, -0.4],
     },
-    // Rundschild in der linken Hand, die Außenseite nach links. Er ist um 20 Grad nach oben geneigt: So fängt die Fläche das
-    // Licht der Fackel über dem Kopf, und der Unterarm ragt nicht durch das Brett. Griffpunkt und Richtungen sind im Leerlauf
-    // der Figur ausgemessen und gelten im Raum des linken Handknochens (`handL`); nach einem neuen Export des Modells
-    // müssen sie neu bestimmt werden.
-    offhand: {
-      kind: 'schild',
-      hand: 'links',
-      size: 0.56,
-      model: 'ausruestung/schild.glb',
-      offset: [-0.088, 0.129, -0.157],
-      along: [0.601, -0.516, 0.61],
-      toward: [-0.036, -0.78, -0.625],
-      // Im Lauf schwenkt die Hand weit; der Schild bleibt dabei an der linken Seite der Figur und fährt nicht in den Körper.
-      // Die Leine hält ihn beim Ausholen (Wirbelschlag, Wuchthieb) nah am Körper: Ruhelage `rest` ist der Griffpunkt im Leerlauf,
-      // gemessen von der Hüfte in den Achsen der Figur. Ohne Leine entfernte sich die Schildmitte im Wirbelschlag bis auf
-      // 52 cm vom Körper (im Leerlauf 20 cm), mit ihr bis auf etwa 40 cm; im Wuchthieb von 63 auf 33 cm.
-      steady: {
-        weight: 0.9,
-        along: [-0.342, 0.94, 0],
-        toward: [0.94, 0.342, 0],
-        minSide: 0.4,
-        leash: { bone: 'spine', rest: [0.4, -0.152, -0.027], near: 0.15, soft: 0.35, inward: 0.03 },
-      },
-    },
-    // Bis die Kämpferin ihr eigenes Modell hat (`model`, `gear`, `offhand`, siehe `WomenDef`), trägt sie die Figur des Kämpfers.
+    offhand: roundShield([0.4, -0.152, -0.027]),
     women: {
       name: 'Kämpferin',
+      model: { file: 'kaempferin.glb', height: 1.4 },
+      // Dieselbe Axt im Griff wie beim Mann; nur die Ruhelage des Schilds ist am Skelett der Kämpferin neu ausgemessen.
+      offhand: roundShield([0.416, -0.168, -0.008]),
       text: 'Zäh und mitten im Getümmel.',
       home: 'Im Licht einer Feuerschale schlägt sie härter und steckt mehr ein. Erlischt das Feuer, ist sie kurz geschwächt.',
     },
@@ -220,9 +228,9 @@ export const CLASSES: readonly ClassDef[] = [
       along: [-0.538, -0.068, 0.84],
       toward: [-0.225, 0.95, -0.216],
     },
-    // Bis die Wildnisläuferin ihr eigenes Modell hat, trägt sie die Figur des Wildnisläufers.
     women: {
       name: 'Wildnisläuferin',
+      model: { file: 'wildnislaeuferin.glb', height: 1.75 },
       text: 'Schnell und auf Abstand bedacht.',
       home: 'Sie spürt Gegner in der Finsternis und trifft sie dort härter. Dafür trägt sie das kleinste Licht und hält wenig aus.',
     },
@@ -254,9 +262,9 @@ export const CLASSES: readonly ClassDef[] = [
       along: [-0.691, -0.611, 0.386],
       toward: [-0.361, 0.754, 0.548],
     },
-    // Bis die Magierin ihr eigenes Modell hat, trägt sie die Figur des Magiers.
     women: {
       name: 'Magierin',
+      model: { file: 'magierin.glb', height: 1.25 },
       text: 'Zerbrechlich, mit großer Flächenwirkung.',
       home: 'In der Finsternis liegt mehr Staub, dort zaubert sie schneller. Die Finsternis verstaubt auch sie, aber langsamer als andere.',
     },
