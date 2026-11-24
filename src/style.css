@@ -1010,6 +1010,18 @@ body[data-vitals='bottom-left'] #debug {
   opacity: 0.75;
 }
 
+/* Fehlt eine Modelldatei, steht das links unten auf dem Startbildschirm: Sonst fiele nur der Platzhalter im Spiel auf. */
+#title .load-notice {
+  position: absolute;
+  left: 16px;
+  bottom: 12px;
+  max-width: min(46vw, 520px);
+  font-size: 13px;
+  line-height: 1.4;
+  color: #e8b070;
+  opacity: 0.9;
+}
+
 /* Eine dünne Linie unter dem Titel, die an den Rändern ausläuft. */
 .rule {
   width: min(420px, 70vw);

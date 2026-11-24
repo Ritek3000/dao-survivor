@@ -100,6 +100,8 @@
       <p class="keys">Auf und Ab: wählen · Enter: bestätigen</p>
       <!-- Die Zahl kommt aus package.json (siehe vite.config.ts). -->
       <p class="version">Version %APP_VERSION%</p>
+      <!-- Erscheint nur, wenn eine Modelldatei nicht geladen werden konnte (siehe Game.load). -->
+      <p id="load-notice" class="load-notice" hidden></p>
     </div>
 
     <div id="stats" class="overlay" hidden>

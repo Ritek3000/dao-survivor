@@ -320,6 +320,10 @@ export class Game {
       models.props.get(CONFIG.xp.gems.large.file) ?? null,
     );
     this.hud.setLoading(null);
+    // Eine fehlende Datei hält das Spiel nicht auf, soll aber nicht unbemerkt bleiben (sonst fällt nur der Platzhalter in der Nacht auf).
+    this.hud.setLoadNotice(
+      models.failed.length > 0 ? `Nicht geladen, der Platzhalter bleibt: ${models.failed.join(', ')}. Seite neu laden hilft bei Netzfehlern.` : null,
+    );
     this.openTitle();
     if (!this.settings.data.noticeSeen) this.showDataNotice();
   }

@@ -66,7 +66,8 @@ Spiellogik dazukommen kann.
 
 - **Three.js** für die 3D-Darstellung, **TypeScript** (strikt) und **Vite** als Entwicklungsserver und Bündler.
 - Keine Spiel-Engine und kein UI-Framework: Das HUD ist einfaches HTML aus `index.html`, gesteuert von `src/ui/hud.ts`.
-- Modelle sind GLB-Dateien in `public/models`. Fehlt ein Modell, steht stattdessen ein Platzhalter da.
+- Modelle sind GLB-Dateien in `public/models`. Fehlt ein Modell, steht stattdessen ein Platzhalter da. Eine Datei, die sich nicht laden lässt, wird bis zu zweimal neu geholt (große Dateien brechen im Netz gelegentlich ab); gelingt es nicht, bleibt der Platzhalter,
+  und der Startbildschirm nennt links unten die Datei („Nicht geladen, der Platzhalter bleibt: …“), die Konsole zeigt den Fehler.
 - Ton und Musik kommen aus Dateien in `public/audio`, die `public/audio/audio.json` den Ereignissen zuordnet (Web Audio, ohne Bibliothek).
 - Der Boden, die Effekte und die Finsternis entstehen zur Laufzeit aus Shadern und Texturen, nicht aus Dateien.
 - Gegner laufen mit gebackener Bewegung (Vertex-Animation-Textur, `src/game/vat.ts`), damit die Horde flüssig bleibt.
