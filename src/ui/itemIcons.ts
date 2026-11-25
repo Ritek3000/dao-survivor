@@ -53,9 +53,13 @@ export interface ItemImage {
   look: ClassId;
 }
 
-/** Adresse eines Bildes; über BASE_URL, damit der Build mit relativen Pfaden läuft (siehe CLAUDE.md, „Zielplattform offen“). */
+/**
+ * Adresse eines Bildes; über BASE_URL, damit der Build mit relativen Pfaden läuft (siehe CLAUDE.md, „Zielplattform offen“).
+ * Der Ordner heißt bewusst nicht `icons`: Viele Webserver legen `/icons/` selbst auf ihre eigenen Symbole (Apache-Standard).
+ * Liegt die Seite in der Wurzel einer eigenen Domäne, kämen die Bilder dort nie an und das Lager zeigte nur die Umrisszeichen.
+ */
 export function itemImageUrl({ slot, look }: ItemImage): string {
-  return `${import.meta.env.BASE_URL}icons/items/${slot}-${look}.webp`;
+  return `${import.meta.env.BASE_URL}bilder/items/${slot}-${look}.webp`;
 }
 
 /** Das Bild eines Gegenstands; lässt es sich nicht laden, tritt das Umrisszeichen `fallback` an seine Stelle. */

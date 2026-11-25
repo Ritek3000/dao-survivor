@@ -556,7 +556,7 @@
 }
 
 /*
- * Gegenstandsbilder (public/icons/items, 256 px, durchsichtiger Grund). Sie tragen ihre Farben selbst; die Seltenheit zeigen
+ * Gegenstandsbilder (public/bilder/items, 256 px, durchsichtiger Grund). Sie tragen ihre Farben selbst; die Seltenheit zeigen
  * Rand und Hintergrund des Feldes. Der Schatten löst das Bild vom Grund, wenn es klein steht.
  */
 .icon {
