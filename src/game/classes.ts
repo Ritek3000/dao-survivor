@@ -159,6 +159,39 @@ function roundShield(rest: Triple): GearDef {
   };
 }
 
+/**
+ * Bartaxt im Hammergriff: der Kopf an der Daumenseite, die Schneide in Richtung der Knöchel. Die Richtungen gelten im Raum
+ * des Handknochens für beide Aussehen; nur der Griffpunkt (`offset`) hängt von der Hand ab, denn der Handknochen liegt
+ * nicht in der Mitte der Faust. Im Raum der Hand: +Y zu den Fingern, +Z zum Daumen, +X zum Handrücken.
+ */
+function axe(offset: Triple, fist?: GearDef['fist']): GearDef {
+  return { kind: 'axt', hand: 'rechts', size: 0.7, offset, along: [0.16, 0.42, 0.89], toward: [0.72, 0.57, -0.4], fist };
+}
+
+/**
+ * Die Faust der Kämpferin: Die Hand aus Meshys Autorig hat Finger, aber im Leerlauf und Lauf liegen sie gestreckt. Die
+ * Drehungen stammen aus Meshys eigener Schlaghaltung (`Charged_Slash`, dort eine ganz geschlossene Faust), auf zwei
+ * Drittel zurückgenommen, damit die Finger den Stiel umfassen und nicht in die Handfläche drücken. Den Griffpunkt der Axt
+ * gibt die Faust vor: Gemessen an der Fingerkette liegt er dort, wo alle vier Finger etwa gleich weit vom Stiel entfernt sind.
+ */
+const WOMAN_FIST: GearDef['fist'] = {
+  thumb01R: [-15, 15, 18],
+  thumb02R: [-12, -2, -16],
+  thumb03R: [-15, 12, -41],
+  f_index01R: [-10, 3, 35],
+  f_index02R: [-33, 3, 34],
+  f_index03R: [-28, 3, 19],
+  f_middle01R: [-10, 1, 36],
+  f_middle02R: [-34, 2, 40],
+  f_middle03R: [-16, 2, 9],
+  f_ring01R: [-10, 4, 36],
+  f_ring02R: [-35, 1, 38],
+  f_ring03R: [-15, 1, 11],
+  f_pinky01R: [-5, 3, 29],
+  f_pinky02R: [-37, 0, 40],
+  f_pinky03R: [-12, 0, 11],
+};
+
 export const CLASSES: readonly ClassDef[] = [
   {
     id: 'kaempfer',
@@ -173,20 +206,14 @@ export const CLASSES: readonly ClassDef[] = [
     light: 'fackel',
     bodyColor: 0x6f757d,
     model: { file: 'kaempfer.glb', height: 1.4 },
-    gear: {
-      kind: 'axt',
-      hand: 'rechts',
-      size: 0.7,
-      // Hammergriff: der Kopf an der Daumenseite, die Schneide in Richtung der Knöchel.
-      offset: [0.055, 0.085, -0.05],
-      along: [0.16, 0.42, 0.89],
-      toward: [0.72, 0.57, -0.4],
-    },
+    gear: axe([0.055, 0.085, -0.05]),
     offhand: roundShield([0.4, -0.152, -0.027]),
     women: {
       name: 'Kämpferin',
       model: { file: 'kaempferin.glb', height: 1.4 },
-      // Dieselbe Axt im Griff wie beim Mann; nur die Ruhelage des Schilds ist am Skelett der Kämpferin neu ausgemessen.
+      // Ihre Hand hat Finger und ist anders gebaut (siehe `axe` und `WOMAN_FIST`): Die Axt liegt in der Faust, nicht auf dem
+      // Handrücken. Die Ruhelage des Schilds ist am Skelett der Kämpferin neu ausgemessen.
+      gear: axe([-0.025, 0.13, -0.03], WOMAN_FIST),
       offhand: roundShield([0.416, -0.168, -0.008]),
       text: 'Zäh und mitten im Getümmel.',
       home: 'Im Licht einer Feuerschale schlägt sie härter und steckt mehr ein. Erlischt das Feuer, ist sie kurz geschwächt.',

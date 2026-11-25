@@ -363,6 +363,7 @@ function frame(now: number): void {
   last = now;
   controls.update();
   gear?.update(gearState.weight, gearState.charged);
+  gear?.settle();
   offhand?.settle();
   renderer.render(scene, camera);
 }

@@ -34,6 +34,13 @@ export interface GearDef {
    * `leash`: Die Leine hält den Schild nah am Körper, wenn die Hand weit ausholt (Wirbelschlag, Wuchthieb, Lauf).
    */
   steady?: { weight: number; along: Triple; toward: Triple; minSide: number; leash?: Leash };
+  /**
+   * Die Finger der Hand schließen sich um den Griff. Je Fingerknochen (Name wie im Modell, ohne Punkte: `f_index01R`) steht die
+   * Drehung aus seiner Ruhelage als Drehvektor in Grad (Achse mal Winkel, im Raum des Knochens). Gilt für Figuren, deren Hand
+   * Fingerknochen hat (die Frauen aus Meshys Autorig); der Mann hat die Faust schon im Netz, und ohne den Knochen geschieht
+   * nichts. Die Finger bleiben in jedem Clip so: Meshys Leerlauf und Lauf lassen die Hand offen, dann läge der Stiel auf ihr.
+   */
+  fist?: Readonly<Record<string, Triple>>;
 }
 
 /**
@@ -71,6 +78,7 @@ const gripPoint = new THREE.Vector3();
 const outward = new THREE.Vector3();
 const FORWARD = new THREE.Vector3(0, 0, 1);
 const direction = new THREE.Vector3();
+const fistAxis = new THREE.Vector3();
 
 function lit(color: number, roughness = 0.85): THREE.MeshStandardMaterial {
   return swallowedByFinsternis(new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 }));
@@ -282,6 +290,8 @@ export class Gear {
   private readonly grip = new THREE.Vector3();
   /** Der Knochen, an dem die Ruhelage der Leine hängt (nur mit `def.steady.leash` und wenn er da ist). */
   private anchor: THREE.Object3D | null = null;
+  /** Die Fingerknochen mit ihrer Drehung in der geschlossenen Faust (nur mit `def.fist` und wenn sie da sind). */
+  private readonly fingers: { bone: THREE.Object3D; closed: THREE.Quaternion }[] = [];
 
   constructor(
     private readonly def: GearDef,
@@ -301,6 +311,17 @@ export class Gear {
       });
       // Fehlt der Knochen (anderes Skelett), bleibt der Schild ohne Leine.
     }
+    if (def.fist) {
+      // Die Figur steht noch in der Ruhepose, `quaternion` ist also die Ruhelage, von der die Faust ausgeht.
+      hand.traverse((bone) => {
+        const turn = def.fist?.[bone.name];
+        if (!(bone instanceof THREE.Bone) || !turn) return;
+        const degrees = fistAxis.set(...turn).length();
+        if (degrees === 0) return;
+        const closed = new THREE.Quaternion().setFromAxisAngle(fistAxis.divideScalar(degrees), THREE.MathUtils.degToRad(degrees));
+        this.fingers.push({ bone, closed: bone.quaternion.clone().multiply(closed) });
+      });
+    }
     hand.add(this.built.object);
     this.update(0, false);
   }
@@ -314,10 +335,12 @@ export class Gear {
   }
 
   /**
-   * Richtet einen Gegenstand mit `def.steady` im Raum der Figur aus und hält ihn nah am Körper. Gehört hinter jeden
-   * Schritt der Animation, denn die Hand steht erst dann an ihrem neuen Platz.
+   * Schließt die Finger um den Griff (`def.fist`) und richtet einen Gegenstand mit `def.steady` im Raum der Figur aus,
+   * damit er nah am Körper bleibt. Gehört hinter jeden Schritt der Animation: Die Hand steht erst dann an ihrem neuen
+   * Platz, und die Clips setzen die Finger sonst jedes Mal zurück.
    */
   settle(): void {
+    for (const { bone, closed } of this.fingers) bone.quaternion.copy(closed);
     const steady = this.def.steady;
     if (!steady || this.steadiness <= 0) return;
     this.hand.getWorldQuaternion(handRotation);

@@ -283,6 +283,7 @@ export class Player {
     this.model?.gear?.update(0, false);
     this.model?.offhand?.restore();
     this.mixer?.update(0);
+    this.model?.gear?.settle();
     this.model?.offhand?.settle();
   }
 
@@ -393,9 +394,12 @@ export class Player {
       this.blendGait(0, 1);
       this.updateGear();
       this.mixer?.update(dt);
+      this.model?.gear?.settle();
       this.model?.offhand?.settle();
     } else if (this.deadAction) {
       this.mixer?.update(dt);
+      // Die Faust bleibt geschlossen, auch wenn die Figur fällt: Die Axt sitzt starr in der Hand.
+      this.model?.gear?.settle();
     } else if (this.model) {
       // Ohne Sterbe-Animation erstarrt die Figur in ihrer Haltung und kippt nach hinten:
       // erst langsam, dann schnell, wie ein Körper, der das Gleichgewicht verliert.
@@ -480,6 +484,7 @@ export class Player {
       this.blendGait(Math.min(1, currentSpeed / (speed * 0.5)), backwards ? -pace : pace);
       this.updateGear();
       this.mixer.update(dt);
+      this.model?.gear?.settle();
       this.model?.offhand?.settle();
     } else {
       // Die Kapsel wippt leicht, als Ersatz für eine Laufanimation.
