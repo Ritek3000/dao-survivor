@@ -206,7 +206,7 @@ Texte: Werte, Angriffe, Animationen, Gegenstände, Truhe, Gold und Statistik geh
   den Mann; ein Wechsel des Spielstands (Datei sichern und laden) ändert die Wahl nicht, und sie braucht keine neue Fassung des Spielstand-Formats.
 - **Daten:** `ClassDef` ist selbst das Aussehen des Mannes (`LookDef`: Name, Texte, `model`, `gear`, `offhand`); `ClassDef.women` ist das der Frau. Was `women` nicht nennt (`model`, `gear`, `offhand`),
   erbt sie vom Mann. `lookOf(klasse, look)` liefert das Aussehen. Hat die Frau ein eigenes Modell, gehört dazu: die Datei und Höhe, der Sitz von Axt, Bogen oder Buch (`offset`, `along`, `toward`
-  im Raum des Handknochens der neuen Datei) und beim Kämpfer der Schild (`offhand` mit `steady` und Leine), jeweils am neuen Modell neu ausgemessen. Die Animationen (`swings`) bleiben die der Klasse;
+  im Raum des Handknochens der neuen Datei; bei der Kämpferin dazu die Faust `fist`) und beim Kämpfer der Schild (`offhand` mit `steady` und Leine), jeweils am neuen Modell neu ausgemessen. Die Animationen (`swings`) bleiben die der Klasse;
   die Datei der Frau muss dieselben Clips haben (Running, Walking, Idle_02, Dead und die Angriffsclips der Klasse).
 - **Laden:** Beim Start lädt je Klasse nur die Figur im gewählten Aussehen (`loadModels(…, startLook)`), so bleibt der Download gleich groß. Wer das andere wählt, lädt es nach (`Models.loadHero`), und zwar
   schon während der Karte der Startangriff-Wahl; ist es beim Beginn der Nacht noch nicht da, wartet das Spiel kurz („Die Figur wird geladen …“) und beginnt nicht mit der falschen Figur. Schlägt das Laden der Frau fehl, bleibt der Mann.
@@ -217,9 +217,14 @@ Texte: Werte, Angriffe, Animationen, Gegenstände, Truhe, Gold und Statistik geh
   Haltung stünde die Axt quer zum Körper. Darum bekommt jede Frau den Clip `Idle_02` des Mannes (nur die Drehungen der Knochen, nach Knochennamen, als Abstand zur Ruhepose; so bleibt die Bewegung gleich, auch
   wenn die Frau andere Proportionen hat), und ihr `Idle` entfällt. Die Magierin bekommt auf demselben Weg auch `mage_soell_cast` des Magiers; diesen Zauberclip gibt es in Meshys Bibliothek nicht, er entstand
   in Blender. Laufen, Gehen, Tod und die Angriffe der Kämpferin und der Wildnisläuferin sind Meshys eigene Clips an ihrem Skelett. Die Zeiten der Angriffe (`swings`) stammen vom Mann; die Clips sind gleich lang.
-- **Sitz in der Hand:** Die Handknochen der Frauen sind anders ausgerichtet als die der Männer (um bis zu etwa 12 Grad), die Griffe von Axt, Bogen und Buch passten trotzdem unverändert und wurden nur geprüft (Modell-Prüfer,
-  Leerlauf, Lauf, Ausholen, Treffer, Spannen, Lösen, Zauber). Neu ausgemessen ist nur die Ruhelage `rest` der Schildleine der Kämpferin (`roundShield` in `classes.ts`): `[0.416, -0.168, -0.008]` statt `[0.4, -0.152, -0.027]`.
+- **Sitz in der Hand:** Die Handknochen der Frauen sind anders ausgerichtet als die der Männer (um bis zu etwa 12 Grad). Die Griffe von Bogen und Buch passten trotzdem unverändert und wurden nur geprüft (Modell-Prüfer,
+  Leerlauf, Lauf, Ausholen, Treffer, Spannen, Lösen, Zauber). Neu ausgemessen ist die Ruhelage `rest` der Schildleine der Kämpferin (`roundShield` in `classes.ts`): `[0.416, -0.168, -0.008]` statt `[0.4, -0.152, -0.027]`.
   Der Pfeil der Wildnisläuferin zeigt im gespannten Bogen etwa 3 Grad anders als der des Mannes, `turn` bleibt gemeinsam.
+- **Axt der Kämpferin:** Der Griff des Mannes passte bei ihr nicht: Der Mann hat die Faust schon im Netz, die Frau eine Hand mit Fingerknochen, und der Handknochen liegt nicht in der Mitte der Faust. Mit dem Griffpunkt des
+  Mannes (`offset.x` 0,055) lag der Stiel auf ihrem Handrücken. Außerdem hing ihre Hand in Leerlauf und Lauf offen (der Leerlauf des Mannes hat keine Fingerdaten, Meshys Laufclip lässt die Hand offen). Darum hat sie jetzt eine
+  Faust (`GearDef.fist`, in `classes.ts` `WOMAN_FIST`): Je Fingerknochen steht eine Drehung aus der Ruhelage, `Gear.settle()` setzt sie nach jedem Schritt der Animation, in jedem Clip. Die Drehungen stammen aus Meshys Schlaghaltung
+  (`Charged_Slash`), auf zwei Drittel zurückgenommen, damit die Finger den Stiel umfassen. Der Griffpunkt `[-0.025, 0.13, -0.03]` ist an der Fingerkette gemessen: Dort sind alle vier Finger etwa gleich weit vom Stiel
+  entfernt (im Mittel 8 mm Abweichung vom Sollabstand; mit dem Griffpunkt des Mannes waren es 8 cm). `along` und `toward` sind die des Mannes (Hilfsfunktion `axe` in `classes.ts`). Gilt nur für Figuren mit diesen Fingerknochen; beim Mann geschieht nichts.
 
 ## Stufenaufstieg und Startangriff
 
