@@ -1,10 +1,10 @@
 """Prompts fuer die 27 Item-Icons (9 Plaetze x 3 Klassen). ASCII-only, Prompts englisch, weil die Bildmodelle damit am besten arbeiten.
 
-Ablauf (so sind die mitgelieferten Bilder in public/icons/items entstanden):
+Ablauf (so sind die mitgelieferten Bilder in public/bilder/items entstanden):
   1. Je Gegenstand einen Prompt aus diesem Skript an ein Bildmodell geben (verwendet: GPT-Image-2, Qualitaet "mittel", 1:1, 1K).
      Aufruf: python tools/item-icons/prompts.py helm kaempfer
   2. Die Ausgabe auf magenta Grund mit freistellen.py auf durchsichtigen Grund bringen (512 px PNG).
-  3. Mit webp-erzeugen.py auf 256 px als WebP verkleinern und nach public/icons/items/<platz>-<klasse>.webp legen.
+  3. Mit webp-erzeugen.py auf 256 px als WebP verkleinern und nach public/bilder/items/<platz>-<klasse>.webp legen.
 Pillow, numpy und scipy werden gebraucht (pip install pillow numpy scipy).
 """
 

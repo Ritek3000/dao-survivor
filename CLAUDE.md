@@ -83,7 +83,9 @@ Ob das Spiel im Browser bleibt oder als Desktop-Programm erscheint, ist noch nic
     läuft der Stand von `main` nach jedem Merge unter dem Unterpfad `/dao-survivor/` auf GitHub Pages
     (`.github/workflows/pages.yml`); ein absoluter Pfad würde dort ins Leere laufen. Derselbe Workflow lädt `dist/` zudem per SFTP
     auf Fabians eigene Domäne (Job `eigene-domain`, `tools/sftp-hochladen.sh`, siehe README „Eigene Domäne“), je nach Einstellung
-    in deren Wurzel oder einen Unterordner; auch dort tragen nur relative Pfade.
+    in deren Wurzel oder einen Unterordner; auch dort tragen nur relative Pfade. Ordner in `public/` heißen deshalb nie so, wie
+    Webserver sie selbst belegen: vor allem nicht `icons` (Apache legt `/icons/` auf eigene Symbole; so verschwanden die
+    Gegenstandsbilder auf der eigenen Domäne), ebenso nicht `cgi-bin`, `error` oder `manual`.
   - Eingabe nur über die Aktionen in `src/core/input.ts` (Gamepad kommt später dazu), nicht über verstreute Tastenabfragen.
   - Browser-APIs, die in einer Hülle fehlen können (etwa Vollbild, Zeigersperre, Speicher), nur mit Rückfall verwenden.
     Spielstand und Einstellungen liegen hinter einer kleinen Schicht, die sich austauschen lässt (`src/core/storage.ts`,
