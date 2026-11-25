@@ -66,20 +66,23 @@ unverändert; beide Veröffentlichungen laufen als getrennte Jobs und halten sic
 | `FTP_PORT`           | Port des SFTP-Servers (`22`)                                                                                |
 | `FTP_ZIELORDNER`     | Ordner auf dem Webspace, etwa `htdocs`. Der Rückfall `.` ist das Heimatverzeichnis des Zugangs, bei Webspaces meist die Wurzel der Domäne |
 | `FTP_FINGERABDRUCK`  | Fingerabdruck des Server-Schlüssels, `SHA256:…`. Ohne ihn wird der Schlüssel beim Verbinden ungeprüft übernommen; das Protokoll des Laufs nennt die Fingerabdrücke, einen davon hier eintragen |
-| `FTP_ALTES_LOESCHEN` | `ja`: löscht im Zielordner **alles**, was nicht zum Spiel gehört (auch fremde Dateien). Ohne die Variable wird nie gelöscht, dann sammeln sich alte Skripte unter `assets/` an |
+| `FTP_ALTES_LOESCHEN` | `ja`: löscht Dateien, die frühere Uploads angelegt haben und die nicht mehr zum Spiel gehören (zum Beispiel alte Skripte unter `assets/`). Fremde Dateien im Zielordner bleiben unberührt. Ohne die Variable wird nie gelöscht |
+| `FTP_ALLES_HOCHLADEN` | `ja`: lädt alle Dateien neu hoch, auch unveränderte. Nötig, wenn auf dem Webspace von Hand etwas gelöscht oder verändert wurde |
 
 So funktioniert der Upload:
 
 - **Gleiche Dateien wie auf GitHub Pages.** Der Job nimmt den gebauten `dist/`-Ordner aus dem Bau-Job. Weil der Build relative Pfade
   nutzt (`base: './'`), läuft die Seite unverändert in der Wurzel der Domäne wie auch in einem Unterordner; ein Umbau ist nicht nötig.
-- **Nur Geändertes wird hochgeladen.** Die Seite ist rund 170 MB groß. Jede Datei bekommt vor dem Vergleich einen Zeitstempel, der nur
-  von ihrem Inhalt abhängt, so lädt `lftp` nach einem Update nur die geänderten Dateien hoch. Der erste Lauf lädt alles.
+- **Nur Geändertes wird hochgeladen.** Die Seite ist rund 170 MB groß. Das Skript legt im Zielordner die Datei `.deploy-manifest` ab
+  (die Prüfsumme jeder hochgeladenen Datei) und lädt beim nächsten Lauf nur hoch, was sich dort unterscheidet. Ein Vergleich nach Größe
+  und Zeit genügte nicht: Wechselt nur die Versionsnummer in `index.html`, bleibt die Größe gleich, und die Seite zeigte den alten Stand
+  (so war es bei 0.27.2). Der erste Lauf, oder einer ohne Manifest, lädt alles.
 - **Erst die Dateien, dann die Seiten.** Skripte, Modelle und Klänge kommen zuerst, die HTML-Seiten zuletzt, und jede Datei wird erst ersetzt,
   wenn die neue vollständig da ist. Die Seite zeigt also nie auf Dateien, die noch fehlen.
 - **Fehler sind sichtbar.** Scheitert der Upload (falsches Passwort, voller Webspace, Server nicht erreichbar), wird der Lauf unter **Actions**
   rot und nennt den Grund. GitHub Pages ist davon nicht betroffen. Der nächste Lauf versucht es erneut.
 - **Probelauf vor dem Merge:** Unter **Actions → Run workflow** lässt sich der Workflow von Hand auf einem Branch starten.
-- Der Upload ersetzt gleichnamige Dateien im Zielordner, zum Beispiel eine vorhandene `index.html`. Fremde Dateien bleiben stehen (außer bei `FTP_ALTES_LOESCHEN=ja`).
+- Der Upload ersetzt gleichnamige Dateien im Zielordner, zum Beispiel eine vorhandene `index.html`. Fremde Dateien bleiben immer stehen; mit `FTP_ALTES_LOESCHEN=ja` fallen nur Dateien weg, die frühere Uploads selbst angelegt haben.
 
 ## Steuerung
 

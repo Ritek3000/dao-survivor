@@ -88,7 +88,7 @@ jobs:
   # Die Zugangsdaten stehen als Secrets im Repository (Settings → Secrets and variables → Actions):
   #   FTP_SERVER, FTP_BENUTZER, FTP_PASSWORT. Der Name sagt „FTP“, die Verbindung läuft aber über SFTP.
   # Wahlweise als Variablen (gleiche Seite, Reiter „Variables“): FTP_PORT, FTP_ZIELORDNER,
-  # FTP_FINGERABDRUCK, FTP_ALTES_LOESCHEN. Was sie bewirken, steht in tools/sftp-hochladen.sh und in der README.
+  # FTP_FINGERABDRUCK, FTP_ALTES_LOESCHEN, FTP_ALLES_HOCHLADEN. Was sie bewirken, steht in tools/sftp-hochladen.sh und in der README.
   eigene-domain:
     needs: bauen
     runs-on: ubuntu-latest
@@ -119,4 +119,5 @@ jobs:
           FTP_ZIELORDNER: ${{ vars.FTP_ZIELORDNER }}
           FTP_FINGERABDRUCK: ${{ vars.FTP_FINGERABDRUCK }}
           FTP_ALTES_LOESCHEN: ${{ vars.FTP_ALTES_LOESCHEN }}
+          FTP_ALLES_HOCHLADEN: ${{ vars.FTP_ALLES_HOCHLADEN }}
         run: bash tools/sftp-hochladen.sh dist
