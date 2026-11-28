@@ -111,11 +111,17 @@ Spiellogik dazukommen kann.
 - Ton und Musik kommen aus Dateien in `public/audio`, die `public/audio/audio.json` den Ereignissen zuordnet (Web Audio, ohne Bibliothek).
 - Der Boden, die Effekte und die Finsternis entstehen zur Laufzeit aus Shadern und Texturen, nicht aus Dateien.
 - Gegner laufen mit gebackener Bewegung (Vertex-Animation-Textur, `src/game/vat.ts`), damit die Horde flüssig bleibt.
-- **Lauf-Seed.** Die Welt ist fest (`CONFIG.world.seed`), jeder Lauf aber bekommt beim Start einen eigenen Seed aus der Uhrzeit
-  (`src/core/runSeed.ts`). Aus ihm leitet `deriveSeed` je einen Zufallsstrom für die Gegner (Art, Ort, Zeitpunkt), die Schwaden der Finsternis,
+- **Lauf-Seed.** Jeder Lauf bekommt beim Start einen eigenen Seed aus der Uhrzeit
+  (`src/core/runSeed.ts`). Aus ihm leitet `deriveSeed` je einen Zufallsstrom für die Welt, die Gegner (Art, Ort, Zeitpunkt), die Schwaden der Finsternis,
   die Beute und das, was Angebote, Boss und Angriffe würfeln, so dass die Ströme einander nicht gleichen. Der Seed steht im Endbild
   („Lauf-Seed: 1Z141Z3“, sieben Zeichen zur Basis 36). Mit `?seed=1Z141Z3` hinter der Adresse beginnt der erste Lauf mit diesem Seed:
-  Gegner, Schwaden, Beute und Angebote kommen in derselben Folge, auch wenn die Figur andere Wege geht. Rein Optisches und Hörbares
+  dieselbe Welt, und Gegner, Schwaden, Beute und Angebote kommen in derselben Folge, auch wenn die Figur andere Wege geht.
+- **Die Welt je Lauf** (`World.generate` in `src/game/world.ts`, beim Start jeder Nacht aufgerufen). Aus dem Seed des Laufs stehen anders: die 16 Feuerschalen
+  (wie bisher mit 26 m Mindestabstand und eine in 11 m Entfernung vom Start), Felsen, Totholz, kahle Stämme, die Flecken des dürren Grases, die Schiefe der Steinmale
+  und das großflächige Muster aus hellem Staub und dunkler Erde auf dem Boden. **Nur die Orte wechseln:** Zahl, Größen, Abstände und Hindernisradien bleiben die aus `CONFIG`
+  (`scenery`, `islands`, `world`), damit sich das Gleichgewicht nicht verschiebt. Was Zeit kostet, entsteht einmal und bleibt: die Kachel des Bodens und das Modell der Grasbüschel
+  (aus `CONFIG.world.seed`, ebenso die Welt im Titelbild). Eine neue Welt braucht etwa 15 ms; die Netze der Kulisse werden neu gebaut, die Modelle bleiben dieselben.
+  Wer die Welt erweitert, würfelt mit dem Strom, den `generate` hergibt, und stellt feste Netze nur um (`instanceMatrix.needsUpdate` und `computeBoundingSphere`), statt neue zu bauen. Rein Optisches und Hörbares
   (Teilchen, Tonhöhe) würfelt weiter mit `Math.random`. Der Seed wird nicht gespeichert und nicht in die Statistik geschrieben.
 
 ## Aufbau des Projekts
@@ -844,7 +850,7 @@ Dateien mit gleichem Namen. Neu erzeugte OGG-Dateien nur einchecken, wenn sich d
 - **Messlauf** (`src/tools/messlauf.ts`): Im Dev-Modus steht `__messlauf` in der Browser-Konsole. Eine Automatik-Figur
   spielt Nächte im Zeitraffer und zeigt grobe Schieflagen im Gleichgewicht, auch beim Gold. Beispiele stehen im Kopf der Datei.
   Jede Nacht bekommt einen festen Lauf-Seed (`seed` + 4242, je Nacht um eins weiter, siehe [Lauf-Seed](#technik)), damit der Zufall für alle
-  verglichenen Varianten derselbe ist.
+  verglichenen Varianten derselbe ist; mit dem Seed ist auch die Welt der Nacht dieselbe (bis 0.27.4 stand sie für alle Nächte fest, Messungen davor sind darum nicht Nacht für Nacht vergleichbar).
 - **Gegenstände und Fertigkeiten**: `__items` (`src/tools/items.ts`) füllt Ausrüstung, Truhe und Börse und würfelt Beute nach; `__skills` (`src/tools/skills.ts`) bringt Zustände, Bodenfelder und
   zeitweilige Werte an und zählt Ereignisse mit Urheber (siehe [Fertigkeiten](#fertigkeiten-der-unterbau)); `__skills.entwickeln(id)` und `__messlauf.start({ evolution })` probieren die Evolutionen
   aus (siehe [Evolutionen](#evolutionen)).

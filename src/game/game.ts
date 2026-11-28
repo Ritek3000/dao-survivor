@@ -1074,6 +1074,9 @@ export class Game {
     this.runSeed = this.nextSeed ?? newRunSeed();
     this.nextSeed = null;
     this.stream = createRandom(deriveSeed(this.runSeed, 900));
+    // Auch die Welt wächst aus dem Seed: Feuerschalen, Felsen, Totholz, Gras und der Boden stehen in jedem Lauf anders.
+    this.world.generate(this.runSeed);
+    this.zones.arrange(this.world.islandSites);
     this.playerClass = playerClass;
     this.time = 0;
     this.pendingLevels = 0;

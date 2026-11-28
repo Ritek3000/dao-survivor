@@ -215,8 +215,23 @@ function paintGround(random: Random): { color: THREE.Texture; normal: THREE.Text
   return { color, normal };
 }
 
-/** Die Bodenfläche der ganzen Welt; `islands` sind die Standorte der Feuerschalen. */
-export function createGround(random: Random, halfSize: number, islands: readonly Site[]): THREE.Mesh {
+/** Die Bodenfläche der Welt und was sich an ihr je Lauf ändert. */
+export interface Ground {
+  mesh: THREE.Mesh;
+  /**
+   * Legt die Asche um die Feuerschalen und verschiebt das großflächige Muster aus Hell und Dunkel (Staub, Erde, die gröbere Abtastung).
+   * Das ist billig, im Gegensatz zur Kachel selbst, die ihre Zeit zum Errechnen braucht und deshalb nur einmal entsteht.
+   */
+  arrange(islands: readonly Site[], random: Random): void;
+}
+
+/** So weit (Meter) das Muster höchstens verschoben wird; weit genug für ein anderes Bild, nahe genug für die Genauigkeit des Rauschens im Shader. */
+const SHIFT_RANGE = 150;
+/** Ein Standort, den kein Lauf je erreicht: dorthin kommen Aschekreise, für die es keine Schale gibt. */
+const FAR_AWAY = 1e6;
+
+/** Die Bodenfläche der ganzen Welt für `islandCount` Feuerschalen. */
+export function createGround(random: Random, halfSize: number, islandCount: number): Ground {
   const { color, normal } = paintGround(random);
   const repeat = (halfSize * 2) / TILE_METERS;
   color.repeat.set(repeat, repeat);
@@ -225,24 +240,28 @@ export function createGround(random: Random, halfSize: number, islands: readonly
   const material = swallowedByFinsternis(
     new THREE.MeshStandardMaterial({ map: color, normalMap: normal, roughness: 1, metalness: 0 }),
   );
-  const sites = islands.map((site) => new THREE.Vector2(site.x, site.z));
+  // Beide Werte bleiben dieselben Objekte, nur ihr Inhalt wechselt; so kommt der Shader nie neu.
+  const sites = Array.from({ length: Math.max(1, islandCount) }, () => new THREE.Vector2(FAR_AWAY, FAR_AWAY));
+  const shift = new THREE.Vector2();
   // Die Finsternis hängt schon am selben Haken und bringt die Lage in der Welt und ihr Rauschen mit.
   extendShader(material, `boden-${sites.length}`, (shader) => {
     shader.uniforms.uGroundIslands = { value: sites };
+    shader.uniforms.uGroundShift = { value: shift };
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nuniform vec2 uGroundIslands[${Math.max(1, sites.length)}];`)
+      .replace('#include <common>', `#include <common>\nuniform vec2 uGroundIslands[${sites.length}];\nuniform vec2 uGroundShift;`)
       .replace(
         '#include <map_fragment>',
         /* glsl */ `
         // Fleckenweise mischt sich eine zweite, gröbere Abtastung dazu: So fällt die Kachel nicht auf.
         vec2 groundCoarseUv = vMapUv * 0.43 + vec2(0.31, 0.17);
-        float groundBlend = 0.5 * smoothstep(0.42, 0.64, finsternisNoise(vFinsternisPosition * 0.06 + 3.7));
+        vec2 groundAt = vFinsternisPosition + uGroundShift;
+        float groundBlend = 0.5 * smoothstep(0.42, 0.64, finsternisNoise(groundAt * 0.06 + 3.7));
         vec4 sampledDiffuseColor = mix(texture2D(map, vMapUv), texture2D(map, groundCoarseUv), groundBlend);
         // Großflächig wechselt der Boden zwischen hellem Staub und dunkler Erde.
-        sampledDiffuseColor.rgb *= 0.82 + 0.4 * finsternisNoise(vFinsternisPosition * 0.027 + 11.0);
+        sampledDiffuseColor.rgb *= 0.82 + 0.4 * finsternisNoise(groundAt * 0.027 + 11.0);
         // Asche und Ruß um die Feuerschalen, mit ausgefranstem Rand.
         float groundAsh = 0.0;
-        float groundFray = (finsternisNoise(vFinsternisPosition * 1.7) - 0.5) * 1.3;
+        float groundFray = (finsternisNoise(groundAt * 1.7) - 0.5) * 1.3;
         for (int i = 0; i < ${sites.length}; i++) {
           groundAsh = max(groundAsh, 1.0 - smoothstep(0.7, 3.6, distance(vFinsternisPosition, uGroundIslands[i]) + groundFray));
         }
@@ -259,10 +278,19 @@ export function createGround(random: Random, halfSize: number, islands: readonly
       );
   });
 
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(halfSize * 2, halfSize * 2), material);
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  return ground;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(halfSize * 2, halfSize * 2), material);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.receiveShadow = true;
+  return {
+    mesh,
+    arrange(islands, shiftRandom) {
+      sites.forEach((site, index) => {
+        const island = islands[index];
+        site.set(island?.x ?? FAR_AWAY, island?.z ?? FAR_AWAY);
+      });
+      shift.set((shiftRandom() * 2 - 1) * SHIFT_RANGE, (shiftRandom() * 2 - 1) * SHIFT_RANGE);
+    },
+  };
 }
 
 /**

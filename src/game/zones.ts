@@ -106,6 +106,8 @@ export class Zones {
   private bowls: THREE.InstancedMesh;
   /** Höhe, in der die Kohlen liegen und das Feuer beginnt. */
   private fireY = PLACEHOLDER_HEIGHT * 0.95;
+  /** Maßstab des Schalenmodells; `null`, solange die Platzhalter-Schalen stehen (die ohne Drehung und Maßstab auskommen). */
+  private bowlScale: number | null = null;
   private viewerLight = CONFIG.torch.radius as number;
   private readonly viewerTint = new THREE.Color(1, 1, 1);
   private igniting: Island | null = null;
@@ -114,6 +116,7 @@ export class Zones {
   constructor(sites: readonly Site[]) {
     if (CONFIG.finsternis.clouds > MAX_CLOUDS) throw new Error(`Höchstens ${MAX_CLOUDS} Schwaden.`);
     this.bowls = this.buildIslands(sites);
+    this.poseBowls();
     this.group.add(this.fire.points, this.smoke.points);
     for (let i = 0; i < ISLAND_LIGHTS; i++) {
       const light = new THREE.PointLight(CONFIG.torch.color, 0, CONFIG.islands.lightRadius, CONFIG.torch.decay);
@@ -196,23 +199,32 @@ export class Zones {
     if (!model) return;
     const height = CONFIG.islands.model.height;
     const bowls = new THREE.InstancedMesh(model.geometry, model.material, this.islands.length);
-    const pose = new THREE.Object3D();
-    this.islands.forEach((island, index) => {
-      pose.position.set(island.x, 0, island.z);
-      // Jede Schale steht etwas anders gedreht, damit sie nicht wie gestempelt wirken.
-      pose.rotation.y = island.x * 1.7 + island.z * 0.9;
-      pose.scale.setScalar(height);
-      pose.updateMatrix();
-      bowls.setMatrixAt(index, pose.matrix);
-    });
-    bowls.computeBoundingSphere();
     bowls.castShadow = true;
     bowls.receiveShadow = true;
     this.group.remove(this.bowls);
     this.bowls.dispose();
     this.group.add(bowls);
     this.bowls = bowls;
+    this.bowlScale = height;
+    this.poseBowls();
     this.fireY = height * 0.9;
+  }
+
+  /**
+   * Stellt die Feuerschalen an neue Standorte: Jeder Lauf hat seine eigene Welt (siehe `World.generate`). Zustand und Brenndauer bleiben
+   * unberührt, dafür ist `reset` da; es müssen so viele Standorte sein wie Schalen.
+   */
+  arrange(sites: readonly Site[]): void {
+    if (sites.length !== this.islands.length) {
+      throw new Error(`Die Welt liefert ${sites.length} Standorte für ${this.islands.length} Feuerschalen.`);
+    }
+    this.islands.forEach((island, index) => {
+      const site = sites[index] as Site;
+      island.x = site.x;
+      island.z = site.z;
+      island.ring.position.set(site.x, 0.04, site.z);
+    });
+    this.poseBowls();
   }
 
   /** Reichweite und Farbe der Lichtquelle der Spielfigur: In ihrem Schein ist der Rauch zu sehen. */
@@ -275,6 +287,27 @@ export class Zones {
     return out;
   }
 
+  /** Setzt jede Schale an ihren Ort: der Platzhalter schlicht dorthin, das Modell auf seine Höhe gebracht. */
+  private poseBowls(): void {
+    const matrix = new THREE.Matrix4();
+    const pose = new THREE.Object3D();
+    this.islands.forEach((island, index) => {
+      if (this.bowlScale === null) {
+        this.bowls.setMatrixAt(index, matrix.makeTranslation(island.x, 0, island.z));
+        return;
+      }
+      pose.position.set(island.x, 0, island.z);
+      // Jede Schale steht etwas anders gedreht, damit sie nicht wie gestempelt wirken.
+      pose.rotation.y = island.x * 1.7 + island.z * 0.9;
+      pose.scale.setScalar(this.bowlScale);
+      pose.updateMatrix();
+      this.bowls.setMatrixAt(index, pose.matrix);
+    });
+    this.bowls.instanceMatrix.needsUpdate = true;
+    // Die Hüllkugel gilt für die alten Orte; ohne neue würde das Netz am falschen Platz aussortiert.
+    this.bowls.computeBoundingSphere();
+  }
+
   private buildIslands(sites: readonly Site[]): THREE.InstancedMesh {
     const bowl = new THREE.CylinderGeometry(0.6, 0.38, 0.45, 10);
     bowl.translate(0, 0.75, 0);
@@ -297,10 +330,7 @@ export class Zones {
       depthWrite: false,
     });
 
-    const matrix = new THREE.Matrix4();
-    sites.forEach((site, index) => {
-      bowls.setMatrixAt(index, matrix.makeTranslation(site.x, 0, site.z));
-
+    sites.forEach((site) => {
       const ring = new THREE.Mesh(ringGeometry, ringMaterial);
       ring.position.set(site.x, 0.04, site.z);
       this.group.add(ring);
