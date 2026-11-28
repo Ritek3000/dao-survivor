@@ -154,6 +154,11 @@ export const CONFIG = {
     radius: 90,
     /** Freie Fläche um den Startpunkt. */
     spawnClearing: 7,
+    /**
+     * Der Seed der Welt im Titelbild, solange noch kein Lauf läuft, und der Teile, die nicht in jedem Lauf neu entstehen: die Kachel
+     * des Bodens (das Errechnen kostet Zeit), das Modell der Grasbüschel und der Staub in der Luft. Die Welt eines Laufs wächst aus
+     * dem Seed des Laufs (`World.generate`); Zahl und Größen der Dinge in ihr stehen unter `scenery` und `islands`.
+     */
     seed: 20261110,
   },
   /** Was in der Welt herumliegt und -steht. Die Modelle sind verkleinerte Kopien im Ordner models/welt. */

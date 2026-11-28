@@ -27,19 +27,22 @@ const SUNK = 0.06;
 
 const pose = new THREE.Object3D();
 
-/** Ersatz, wenn die Datei eines Modells fehlt: ein kantiger grauer Brocken. */
+/** Ersatz, wenn die Datei eines Modells fehlt: ein kantiger grauer Brocken. Er entsteht einmal und dient allen Welten. */
+let fallback: PropModel | null = null;
+
 function placeholder(): PropModel {
+  if (fallback) return fallback;
   const geometry = new THREE.DodecahedronGeometry(0.5, 0).scale(1, 0.6, 1).translate(0, 0.3, 0);
   const material = swallowedByFinsternis(
     new THREE.MeshStandardMaterial({ color: 0x7c776d, roughness: 0.95, flatShading: true }),
   );
-  return { geometry, material, height: 0.6, width: 1 };
+  fallback = { geometry, material, height: 0.6, width: 1 };
+  return fallback;
 }
 
-/** Baut aus den Standorten die Netze; fehlende Modelle erscheinen als graue Brocken. */
+/** Baut aus den Standorten die Netze; fehlende Modelle erscheinen als graue Brocken. Wird für jede neue Welt (jeder Lauf) neu aufgerufen. */
 export function buildScenery(placements: readonly Placement[], props: ReadonlyMap<string, PropModel>): THREE.Group {
   const group = new THREE.Group();
-  const fallback = placeholder();
 
   // Nach Modell und Kachel bündeln.
   const bundles = new Map<string, Placement[]>();
@@ -53,7 +56,7 @@ export function buildScenery(placements: readonly Placement[], props: ReadonlyMa
   for (const bundle of bundles.values()) {
     const first = bundle[0];
     if (!first) continue;
-    const prop = props.get(first.file) ?? fallback;
+    const prop = props.get(first.file) ?? placeholder();
     const mesh = new THREE.InstancedMesh(prop.geometry, prop.material, bundle.length);
     bundle.forEach((placement, index) => {
       pose.position.set(placement.x, -SUNK * prop.height * placement.size, placement.z);

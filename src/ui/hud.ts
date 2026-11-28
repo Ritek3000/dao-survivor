@@ -513,7 +513,7 @@ export class Hud {
   /** Der Seed des Laufs unter dem Endbild; mit `?seed=` hinter der Adresse beginnt ein Lauf mit demselben Seed. */
   setEndSeed(seed: string): void {
     this.endSeed.textContent = `Lauf-Seed: ${seed}`;
-    this.endSeed.title = `Mit ?seed=${seed} hinter der Adresse beginnt der erste Lauf mit diesem Seed.`;
+    this.endSeed.title = `Mit ?seed=${seed} hinter der Adresse beginnt der erste Lauf mit diesem Seed und derselben Welt.`;
   }
 
   hideEnd(): void {

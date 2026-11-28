@@ -1,6 +1,6 @@
 /**
- * Der Seed eines Laufs: Aus ihm ziehen Gegner, Schwaden, Beute und Angebote ihren Zufall (siehe `deriveSeed`). Die Welt
- * selbst bleibt davon unberührt; sie wächst aus `CONFIG.world.seed`. Wer den Seed eines Laufs kennt, kann ihn wiederholen:
+ * Der Seed eines Laufs: Aus ihm ziehen die Welt (Feuerschalen, Felsen, Totholz, Gras; siehe `World.generate`), Gegner, Schwaden,
+ * Beute und Angebote ihren Zufall (siehe `deriveSeed`). Wer den Seed eines Laufs kennt, kann ihn wiederholen: dieselbe Welt, und
  * Gegner und Angebote kommen in derselben Folge, auch wenn die Figur andere Wege geht.
  */
 
