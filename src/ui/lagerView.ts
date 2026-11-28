@@ -62,6 +62,8 @@ export interface CommandView {
   icon: GlyphId;
   /** Das Gold reicht dafür nicht. */
   poor?: boolean;
+  /** Beim Händler: nur das Zeichen, ohne Beschriftung (ein schmaler Knopf; `label` bleibt für die Vorlesehilfe). */
+  iconOnly?: boolean;
 }
 
 /** Ein Knopf zum Sortieren im Kopf des Inventars oder der Truhe; Tastatur und Gamepad sortieren über die Aktion `sort`. */
@@ -94,7 +96,7 @@ export interface TruheModel {
   sort: readonly SortView[];
 }
 
-/** Der Händler: sein Angebot, der Rückkauf und die Befehle dazwischen (Angebot erneuern, Auto-Verkauf). */
+/** Der Händler: sein Angebot, der Rückkauf und die Befehle dazwischen (Angebot erneuern, Auto-Verkauf und dessen Stufe). */
 export interface HaendlerModel {
   stock: readonly SlotView[];
   buyback: readonly SlotView[];
@@ -505,7 +507,6 @@ export class LagerView {
         return button;
       }),
     );
-    this.askChoices.classList.toggle('stacked', answers.length > 2);
     this.ask.hidden = false;
     this.setAskChoice(0);
   }
@@ -669,10 +670,15 @@ export class LagerView {
   private haendlerCommand(index: number, command: CommandView): ButtonCell {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = command.poor ? 'action poor' : 'action';
+    button.className = command.poor ? 'action poor' : command.iconOnly ? 'action icon-only' : 'action';
     button.title = command.title;
-    button.append(glyphElement(command.icon), span('label', command.label));
-    if (command.note) button.append(span('note', command.note));
+    if (command.iconOnly) {
+      button.setAttribute('aria-label', command.label);
+      button.append(glyphElement(command.icon));
+    } else {
+      button.append(glyphElement(command.icon), span('label', command.label));
+      if (command.note) button.append(span('note', command.note));
+    }
     this.wire(button, { zone: 'befehle', index }, null);
     return button;
   }

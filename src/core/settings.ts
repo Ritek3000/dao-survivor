@@ -1,6 +1,6 @@
 /**
  * Einstellungen des Spielers, die den Neustart überdauern sollen: die Tonregler, die Stelle der Lebensgruppe, das Aussehen der
- * Klassen (Mann oder Frau) und ob die Statistik anonym an die Sammelstelle gehen darf.
+ * Klassen (Mann oder Frau), die Stufe des Auto-Verkaufs und ob die Statistik anonym an die Sammelstelle gehen darf.
  *
  * Wo sie liegen, versteckt `SettingsStore`: im Browser in `localStorage`, und wo der fehlt oder gesperrt ist
  * (private Fenster, eingebettete Hüllen), nur im Speicher der laufenden Sitzung. Eine Desktop-Fassung kann
@@ -28,9 +28,18 @@ export type VitalsPosition = (typeof VITALS_POSITIONS)[number];
 export const LOOKS = ['m', 'w'] as const;
 export type Look = (typeof LOOKS)[number];
 
+/**
+ * Die Stufen des Auto-Verkaufs beim Händler (siehe `game/lager.ts`): bis zu welcher Seltenheit er verkauft. `'normal'` verkauft nur
+ * Normale, `'selten'` Normale und Seltene. Die Wahl ist eine Einstellung und kein Fortschritt, darum liegt sie hier und nicht im Spielstand.
+ */
+export const AUTO_SELL_STAGES = ['normal', 'selten'] as const;
+export type AutoSellStage = (typeof AUTO_SELL_STAGES)[number];
+
 export interface UiSettings {
   /** Wo die Lebensgruppe auf dem Bildschirm steht. */
   vitalsPosition: VitalsPosition;
+  /** Bis zu welcher Seltenheit der Auto-Verkauf beim Händler verkauft; die Wahl bleibt über Neustarts erhalten. */
+  autoSell: AutoSellStage;
   /** Das gewählte Aussehen je Klasse (nach `ClassId`); eine Klasse ohne Eintrag zeigt den Mann. */
   looks: Record<string, Look>;
 }
@@ -78,6 +87,10 @@ function isVitalsPosition(value: unknown): value is VitalsPosition {
   return VITALS_POSITIONS.some((position) => position === value);
 }
 
+function isAutoSellStage(value: unknown): value is AutoSellStage {
+  return AUTO_SELL_STAGES.some((stage) => stage === value);
+}
+
 function isLook(value: unknown): value is Look {
   return LOOKS.some((look) => look === value);
 }
@@ -114,6 +127,8 @@ export function loadSettings(defaults: Settings): Settings {
       vitalsPosition: isVitalsPosition(ui.vitalsPosition) ? ui.vitalsPosition : defaults.ui.vitalsPosition,
       // Ältere Stände kennen das Aussehen noch nicht; dann zeigt jede Klasse den Mann.
       looks: ui.looks === undefined ? { ...defaults.ui.looks } : readLooks(ui.looks),
+      // Ältere Stände kennen die Stufe noch nicht; dann verkauft der Auto-Verkauf nur Normale, wie bisher.
+      autoSell: isAutoSellStage(ui.autoSell) ? ui.autoSell : defaults.ui.autoSell,
     },
     data: {
       share: typeof data.share === 'boolean' ? data.share : defaults.data.share,

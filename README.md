@@ -196,7 +196,7 @@ Die Seite *Nachtarten* führt jede Nachtart und darunter jeden gespielten Grad i
 Nächte, erreichte Stufen, Stärkungen und Segen dieser Nachtart bzw. dieses Grads (ohne Fertigkeiten, die gehören einer Klasse). Links und Rechts wechseln den Reiter, Auf und Ab blättern (`Menus.showStats`, `Menus.scrollPage`). Siehe [Statistik](#statistik). Die *Optionen* haben die Gruppe *Daten* (Häkchen „Statistik anonym senden“).
 
 Alle Einstellungen bleiben erhalten (`localStorage`, Schlüssel `dao-survivor.einstellungen`, siehe `src/core/settings.ts`); Stände ohne die Stelle der
-Lebensgruppe gelten als „oben links“. Die Menüs stehen in `index.html`, bedient werden sie von `src/ui/menus.ts`; was ein Knopf bewirkt,
+Lebensgruppe gelten als „oben links“, Stände ohne die Stufe des Auto-Verkaufs als „nur Normale“. Die Menüs stehen in `index.html`, bedient werden sie von `src/ui/menus.ts`; was ein Knopf bewirkt,
 entscheidet `Game.onMenuCommand`.
 
 ## Mann und Frau
@@ -501,8 +501,9 @@ in `Ausruestung` (er ändert Gold, Gegenstände und Angebot in einem Zug), die B
 - *Kaufen und Verkaufen:* Enter auf einem Gegenstand im Angebot kauft ihn (er kommt ins Inventar der gezeigten Klasse, sonst in die Truhe); ein Gegenstand lässt sich auch
   auf einen freien Platz oder einen Reiter des eigenen Besitzes ziehen. Verkaufen geht mit E auf dem eigenen Gegenstand, mit dem Gegenstand in der Hand und Enter auf dem Angebot oder dem Rückkauf,
   oder indem man ihn auf den Händler zieht. Ab Rar fragt das Spiel vorher nach (Esc oder „Abbrechen“ lässt alles, wie es ist). Der eigene Besitz rechts zeigt das Inventar
-  der Klasse als ersten Reiter, dahinter die Reiter der Truhe; der „Auto-Verkauf“ verkauft Gegenstände des gezeigten Inventars oder Reiters auf einen Schlag. Er fragt immer vorher und bietet zwei Stufen an, jede mit Zahl und Gold:
-  *Normale* oder *Normale und Seltene* (die höhere Stufe schließt die niedrigere ein; Rares und Legendäres bleiben liegen). Eine Stufe, die nicht mehr verkauft als die davor, erscheint nicht
+  der Klasse als ersten Reiter, dahinter die Reiter der Truhe; der „Auto-Verkauf“ verkauft Gegenstände des gezeigten Inventars oder Reiters auf einen Schlag. Seine **Stufe** wählt man mit dem Knopf rechts daneben (Zeichen mit zwei Pfeilen; mit der Tastatur
+  Pfeil rechts, dann Enter): *Normale* oder *bis Selten* (Normale und Seltene; die höhere Stufe schließt die niedrigere ein, Rares und Legendäres bleiben liegen). Die Stufe steht als Beschriftung auf dem
+  Auto-Verkauf-Knopf und bleibt über Neustarts erhalten (`Settings.ui.autoSell`, wie das Aussehen der Klassen eine Einstellung und kein Fortschritt). Der Knopf fragt immer vorher und nennt Zahl und Gold
   (bei mehr als zehn Gegenständen bleiben nur die letzten zehn im Rückkauf; die Stufen stehen als Daten in `SELL_STAGES` in `src/game/lager.ts`). Angelegtes verkauft man nicht; es muss erst abgelegt werden.
 
 **Beute.** Alle Zahlen stehen in `CONFIG.loot` und bei den Gegnerarten (`loot`) in `src/config.ts`; gewürfelt wird in `src/game/beute.ts`.
