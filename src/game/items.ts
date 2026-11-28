@@ -45,6 +45,11 @@ export interface Item {
    * Fertigkeit mit Evolution, fehlt sie, und der Ring ist ein Ring mit drei Eigenschaften.
    */
   evolution?: string;
+  /**
+   * Der Spieler hat den Gegenstand zum Verkauf markiert (Leertaste oder Rechtsklick im Lager); der Händler verkauft alle markierten auf
+   * einen Schlag. Fehlt das Feld, ist er nicht markiert. Angelegt, verkauft oder im Angebot des Händlers trägt ein Gegenstand es nie.
+   */
+  forSale?: true;
 }
 
 /**
@@ -441,6 +446,7 @@ export function parseItem(raw: unknown): Item | null {
     const chosen = known ?? evolutionFor(classId, id);
     if (chosen) item.evolution = chosen;
   }
+  if (raw.forSale === true) item.forSale = true;
   return item;
 }
 
