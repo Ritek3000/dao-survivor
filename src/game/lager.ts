@@ -20,6 +20,7 @@
 import { audio } from '../audio';
 import { CONFIG } from '../config';
 import type { Input } from '../core/input';
+import type { AutoSellStage } from '../core/settings';
 import {
   EQUIPMENT_COLUMNS,
   HAENDLER_COLUMNS,
@@ -95,17 +96,29 @@ const MODES: readonly LagerMode[] = ['ausruestung', 'truhe', 'haendler'];
 /** Die Befehle hinter den Reitern der Truhe, in der Reihenfolge der Leiste. */
 const COMMANDS = ['neu', 'umbenennen', 'farbe', 'loeschen'] as const;
 
-/** Die Befehle zwischen Angebot und Rückkauf des Händlers. */
-const HAENDLER_COMMANDS = ['erneuern', 'verkaufen'] as const;
+/** Die Befehle zwischen Angebot und Rückkauf des Händlers: Angebot erneuern, Auto-Verkauf und der Knopf, der dessen Stufe wechselt. */
+const HAENDLER_COMMANDS = ['erneuern', 'verkaufen', 'stufe'] as const;
 
 /**
- * Die Stufen des Auto-Verkaufs: bis zu welcher Seltenheit er verkauft. Jede Stufe schließt die davor ein; Rares und Legendäres bleiben
- * immer liegen. Das Spiel fragt hier immer vorher, auch wenn der Verkauf eines einzelnen Gegenstands erst ab Rar fragt (`needsConfirm`).
+ * Welche Spalte von Angebot und Rückkauf jeder Befehl gegenübersteht (und umgekehrt): „Erneuern“ nimmt die ersten drei Spalten, der
+ * Auto-Verkauf die vierte, der Knopf für die Stufe die fünfte (die Breiten stehen bei `#haendler-commands` in `lager.css`).
  */
-const SELL_STAGES: readonly { name: string; rarities: readonly Rarity[] }[] = [
-  { name: 'Normale', rarities: ['normal'] },
-  { name: 'Normale und Seltene', rarities: ['normal', 'selten'] },
-];
+const COMMAND_COLUMN: readonly number[] = [1, 3, 4];
+const COLUMN_COMMAND: readonly number[] = [0, 0, 0, 1, 2];
+
+/**
+ * Die Stufen des Auto-Verkaufs (die Wahl liegt in den Einstellungen, `Settings.ui.autoSell`): bis zu welcher Seltenheit er verkauft.
+ * Die höhere Stufe schließt die niedrigere ein; Rares und Legendäres bleiben immer liegen. `label` steht auf dem Knopf, `name` in den
+ * Sätzen, `nothing` sagt, was fehlt, wenn es nichts zu verkaufen gibt. Das Spiel fragt immer vorher, auch wenn der Verkauf eines
+ * einzelnen Gegenstands erst ab Rar fragt (`needsConfirm`).
+ */
+const SELL_STAGES: Readonly<Record<AutoSellStage, { label: string; name: string; nothing: string; rarities: readonly Rarity[] }>> = {
+  normal: { label: 'Normale', name: 'Normale', nothing: 'nichts Normales', rarities: ['normal'] },
+  selten: { label: 'bis Selten', name: 'Normale und Seltene', nothing: 'nichts Normales oder Seltenes', rarities: ['normal', 'selten'] },
+};
+
+/** Die Stufen in der Reihenfolge, in der der Knopf sie durchläuft. */
+const SELL_ORDER: readonly AutoSellStage[] = ['normal', 'selten'];
 
 /** Die Zeichen der Sortierknöpfe. */
 const SORT_ICONS: Readonly<Record<SortOrder, SortView['icon']>> = { art: 'tag', seltenheit: 'gem' };
@@ -152,14 +165,6 @@ interface Answer {
   run: (() => void) | null;
 }
 
-/** Was eine Stufe des Auto-Verkaufs an einem Ort einbrächte. */
-interface SellOffer {
-  name: string;
-  rarities: readonly Rarity[];
-  count: number;
-  gold: number;
-}
-
 function isVendorZone(zone: LagerZone): boolean {
   return zone === 'angebot' || zone === 'befehle' || zone === 'rueckkauf';
 }
@@ -188,6 +193,8 @@ export class Lager {
   constructor(
     private readonly view: LagerView,
     private readonly ausruestung: Ausruestung,
+    /** Die Stufe des Auto-Verkaufs: Das Spiel liest und schreibt sie in den Einstellungen, damit sie den Neustart überdauert. */
+    private readonly autoSell: { get(): AutoSellStage; set(stage: AutoSellStage): void },
   ) {
     preloadItemImages(CLASSES.map((entry) => entry.id));
     view.onClass = (index) => this.selectClass(index);
@@ -278,19 +285,14 @@ export class Lager {
 
   /** Stellt eine Rückfrage mit zwei Antworten; die zweite (`yes`) führt `onYes` aus. Vorgewählt ist die erste, sichere. */
   private ask(text: string, no: string, yes: string, onYes: () => void): void {
-    this.askAmong(text, [
-      { label: no, run: null },
-      { label: yes, run: onYes },
-    ]);
-  }
-
-  /** Stellt eine Rückfrage mit mehreren Antworten; die erste ist die sichere und vorgewählt. */
-  private askAmong(text: string, answers: readonly Answer[]): void {
-    this.asking = { choice: 0, answers };
-    this.view.showAsk(
-      text,
-      answers.map((answer) => answer.label),
-    );
+    this.asking = {
+      choice: 0,
+      answers: [
+        { label: no, run: null },
+        { label: yes, run: onYes },
+      ],
+    };
+    this.view.showAsk(text, [no, yes]);
     audio.play('auswahl');
   }
 
@@ -460,8 +462,9 @@ export class Lager {
     }
     if (this.zone === 'befehle') {
       const last = HAENDLER_COMMANDS.length - 1;
-      if (dy < 0) this.moveTo('angebot', columns + (this.cursor === 0 ? 1 : 3));
-      else if (dy > 0) this.moveTo('rueckkauf', this.cursor === 0 ? 1 : 3);
+      const column = COMMAND_COLUMN[this.cursor] ?? 0;
+      if (dy < 0) this.moveTo('angebot', columns + column);
+      else if (dy > 0) this.moveTo('rueckkauf', column);
       else if (dx < 0) this.moveTo('befehle', Math.max(0, this.cursor - 1));
       else if (this.cursor < last) this.moveTo('befehle', this.cursor + 1);
       else this.moveTo('truhe', 2 * columns);
@@ -472,7 +475,7 @@ export class Lager {
     let column = this.cursor % columns;
     let row = Math.floor(this.cursor / columns);
     // Aus der unteren Zeile des Angebots oder der oberen des Rückkaufs geht es in die Befehle; weiter hinaus geht es nicht.
-    const command = column < 3 ? 0 : 1;
+    const command = COLUMN_COMMAND[column] ?? 0;
     if (dy < 0) {
       if (row > 0) row--;
       else {
@@ -830,7 +833,10 @@ export class Lager {
         this.reroll();
         break;
       case 'verkaufen':
-        this.autoSell();
+        this.autoSellNow();
+        break;
+      case 'stufe':
+        this.switchStage();
         break;
     }
   }
@@ -854,35 +860,29 @@ export class Lager {
     return this.tab < 0 ? { kind: 'inventar', classId: this.playerClass.id } : { kind: 'truhe', tab: this.tab };
   }
 
-  /** Was die Stufen des Auto-Verkaufs an einem Ort einbrächten; eine Stufe, die nicht mehr verkauft als die davor, fällt weg. */
-  private sellOffers(scope: Scope): SellOffer[] {
-    const offers: SellOffer[] = [];
-    for (const stage of SELL_STAGES) {
-      const { count, gold } = this.ausruestung.worth(scope, stage.rarities);
-      if (count > (offers[offers.length - 1]?.count ?? 0)) offers.push({ ...stage, count, gold });
-    }
-    return offers;
+  /** Was der Auto-Verkauf auf der gewählten Stufe an einem Ort einbrächte: die Zahl der Gegenstände und das Gold. */
+  private sellWorth(scope: Scope): { count: number; gold: number } {
+    return this.ausruestung.worth(scope, SELL_STAGES[this.autoSell.get()].rarities);
   }
 
-  /** Auto-Verkauf: Das Spiel fragt, wie weit es verkaufen soll (nur Normale oder auch Seltene), und nennt zu jeder Stufe Zahl und Gold. */
-  private autoSell(): void {
+  /** Der Auto-Verkauf auf der gewählten Stufe: Das Spiel fragt vorher und nennt Zahl und Gold. */
+  private autoSellNow(): void {
     const scope = this.scope();
-    const offers = this.sellOffers(scope);
-    const where = this.tab < 0 ? 'im Inventar' : 'in diesem Reiter';
-    if (offers.length === 0) {
-      this.refuse(`${this.tab < 0 ? 'Im Inventar liegt' : 'In diesem Reiter liegt'} nichts Normales oder Seltenes.`);
+    const stage = SELL_STAGES[this.autoSell.get()];
+    const { count, gold } = this.sellWorth(scope);
+    if (count === 0) {
+      this.refuse(`${this.tab < 0 ? 'Im Inventar liegt' : 'In diesem Reiter liegt'} ${stage.nothing}.`);
       this.render();
       return;
     }
     const { buybackSize } = CONFIG.items.shop;
-    const hint = Math.max(...offers.map((offer) => offer.count)) > buybackSize ? ` Nur die letzten ${buybackSize} bleiben im Rückkauf.` : '';
-    this.askAmong(`Welche Gegenstände ${where} verkaufen?${hint}`, [
-      { label: 'Abbrechen', run: null },
-      ...offers.map((offer) => ({
-        label: `${offer.name}: ${offer.count} für ${offer.gold} Gold`,
-        run: () => this.completeAutoSell(scope, offer.rarities),
-      })),
-    ]);
+    const hint = count > buybackSize ? ` Nur die letzten ${buybackSize} bleiben im Rückkauf.` : '';
+    this.ask(
+      `${count} ${count === 1 ? 'Gegenstand' : 'Gegenstände'} (${stage.name}) ${this.tab < 0 ? 'im Inventar' : 'in diesem Reiter'} für ${gold} Gold verkaufen?${hint}`,
+      'Abbrechen',
+      'Verkaufen',
+      () => this.completeAutoSell(scope, stage.rarities),
+    );
   }
 
   private completeAutoSell(scope: Scope, rarities: readonly Rarity[]): void {
@@ -891,6 +891,15 @@ export class Lager {
     if (this.held && this.ausruestung.itemAt(this.held.place)?.id !== this.held.id) this.held = null;
     this.say(`${count} ${count === 1 ? 'Gegenstand' : 'Gegenstände'} für ${gold} Gold verkauft.`);
     audio.play('muenze');
+    this.render();
+  }
+
+  /** Wechselt die Stufe des Auto-Verkaufs zur nächsten (nur Normale, dann auch Seltene, dann wieder von vorn); die Wahl bleibt gespeichert. */
+  private switchStage(): void {
+    const next = SELL_ORDER[(SELL_ORDER.indexOf(this.autoSell.get()) + 1) % SELL_ORDER.length] ?? 'normal';
+    this.autoSell.set(next);
+    this.say(`Auto-Verkauf: ${SELL_STAGES[next].name}.`);
+    audio.play('auswahl');
     this.render();
   }
 
@@ -1121,11 +1130,16 @@ export class Lager {
         return this.emptyDetail(`Das Angebot neu würfeln; was noch dort liegt, geht verloren. ${cost}.`);
       }
       case 'verkaufen': {
-        const offers = this.sellOffers(this.scope());
+        const stage = SELL_STAGES[this.autoSell.get()];
+        const { count, gold } = this.sellWorth(this.scope());
         const where = this.tab < 0 ? 'im Inventar' : 'in diesem Reiter';
-        const now = offers.length === 0 ? 'Hier liegt nichts davon.' : `Jetzt: ${offers.map((offer) => `${offer.name}: ${offer.count} für ${offer.gold} Gold`).join(', ')}.`;
-        return this.emptyDetail(`Auto-Verkauf ${where}: auf einen Schlag nur die Normalen oder auch die Seltenen verkaufen; das Spiel fragt vorher nach. ${now}`);
+        const now = count === 0 ? `Hier liegt ${stage.nothing}.` : `Jetzt: ${count} für ${gold} Gold.`;
+        return this.emptyDetail(`Auto-Verkauf ${where}: ${stage.name} auf einen Schlag verkaufen; Rares und Legendäres bleiben liegen, und das Spiel fragt vorher nach. ${now}`);
       }
+      case 'stufe':
+        return this.emptyDetail(
+          `Stufe des Auto-Verkaufs: jetzt ${SELL_STAGES[this.autoSell.get()].name}. Der Knopf wechselt zwischen „nur Normale“ und „Normale und Seltene“; die Wahl bleibt gespeichert.`,
+        );
       default:
         return this.emptyDetail('');
     }
@@ -1251,7 +1265,17 @@ export class Lager {
           icon: 'refresh',
           poor: reroll > gold,
         },
-        { label: 'Auto-Verkauf', title: 'Normale oder auch Seltene Gegenstände im gezeigten Inventar oder Reiter auf einmal verkaufen', icon: 'coin' },
+        {
+          label: SELL_STAGES[this.autoSell.get()].label,
+          title: `Auto-Verkauf: ${SELL_STAGES[this.autoSell.get()].name} im gezeigten Inventar oder Reiter auf einmal verkaufen`,
+          icon: 'coin',
+        },
+        {
+          label: 'Stufe wechseln',
+          title: `Stufe des Auto-Verkaufs wechseln (jetzt: ${SELL_STAGES[this.autoSell.get()].name})`,
+          icon: 'swap',
+          iconOnly: true,
+        },
       ] satisfies CommandView[],
     };
   }

@@ -3,7 +3,7 @@
  * vom Text ringsum (`currentColor`); so passt ein Zeichen zu jedem Zustand (golden, rot, gedämpft), ohne eine Datei zu laden.
  * Die Gegenstände haben eigene Zeichen und Bilder (`itemIcons.ts`).
  */
-export type GlyphId = 'coin' | 'plus' | 'pencil' | 'drop' | 'trash' | 'refresh' | 'lock' | 'tag' | 'gem';
+export type GlyphId = 'coin' | 'plus' | 'pencil' | 'drop' | 'trash' | 'refresh' | 'lock' | 'tag' | 'gem' | 'swap';
 
 const GLYPHS: Readonly<Record<GlyphId, string>> = {
   coin: '<circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity="0.16"/><circle cx="12" cy="12" r="5.2"/>',
@@ -16,6 +16,8 @@ const GLYPHS: Readonly<Record<GlyphId, string>> = {
   // Sortieren: das Schild steht für die Art, der Edelstein für die Seltenheit.
   tag: '<path d="M3.5 4.5h8l9 9-8 8-9-9z"/><circle cx="8" cy="9" r="1.3"/>',
   gem: '<path d="M7 4h10l4 5-9 11L3 9z"/><path d="M3 9h18M9.5 4 8 9l4 11M14.5 4 16 9l-4 11"/>',
+  // Wechseln zwischen zwei Möglichkeiten (die Stufe des Auto-Verkaufs).
+  swap: '<path d="M4.5 8.5h14M14.5 4.5l4 4-4 4"/><path d="M19.5 15.5h-14M9.5 11.5l-4 4 4 4"/>',
 };
 
 /** Das Zeichen als Markup; die Pfade oben sind feste Zeichenketten, keine Eingaben. */

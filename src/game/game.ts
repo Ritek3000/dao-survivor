@@ -260,7 +260,13 @@ export class Game {
       this.dust.points,
     );
 
-    this.lager = new Lager(new LagerView(), this.ausruestung);
+    this.lager = new Lager(new LagerView(), this.ausruestung, {
+      get: () => this.settings.ui.autoSell,
+      set: (stage) => {
+        this.settings.ui.autoSell = stage;
+        saveSettings(this.settings);
+      },
+    });
     this.lager.onClose = () => this.closeLager();
     this.hud.onLager = () => this.openLagerFromMenu();
     this.hud.onPick = (index) => this.pick(index);
@@ -276,7 +282,7 @@ export class Game {
     };
     this.settings = loadSettings({
       sound: { ...CONFIG.audio.defaults, muted: false },
-      ui: { vitalsPosition: 'top-left', looks: {} },
+      ui: { vitalsPosition: 'top-left', looks: {}, autoSell: 'normal' },
       data: { share: true, noticeSeen: false },
     });
     // Das gewählte Aussehen der Klassen gilt überall, wo ein Klassenname oder eine Figur gebraucht wird (siehe `lookOf`).

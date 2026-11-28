@@ -786,12 +786,17 @@
 /* Händler: Angebot, Befehle und Rückkauf untereinander (die Höhen stehen im Kommentar zu `.panel-bar.sub`). */
 #haendler-commands {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /* Erneuern, Auto-Verkauf (die Breite hält „Normale“ und „bis Selten“ gleich, damit beim Wechseln der Stufe nichts wandert) und der Knopf für die Stufe. */
+  grid-template-columns: minmax(0, 1fr) 104px var(--cmd-h);
   gap: var(--gap);
 }
 
 #haendler-commands .action {
   height: var(--cmd-h);
+}
+
+#haendler-commands .action.icon-only {
+  padding: 0;
 }
 
 /* Name des Reiters ändern: legt sich über die Zeile der Reiter. */
@@ -847,12 +852,6 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
-}
-
-/* Mehr als zwei Antworten (der Auto-Verkauf nennt je Stufe Zahl und Gold) stehen untereinander, damit keine Zeile umbricht. */
-#truhe-ask .choices.stacked {
-  flex-direction: column;
-  align-items: stretch;
 }
 
 /* Rechte Spalte: die Karte des Gegenstands. Sie wächst nach unten, ohne dass Felder oder Summe sich bewegen. */
