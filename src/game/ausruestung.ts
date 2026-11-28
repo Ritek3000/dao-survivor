@@ -22,6 +22,7 @@ import { emptyStand, parseStand, rerollPrice, rollStock, serializeStand, type Ha
 import {
   applyItems,
   canEquip,
+  compareForSort,
   ITEM_SLOTS,
   itemValue,
   parseItem,
@@ -30,6 +31,8 @@ import {
   type Item,
   type ItemSlot,
   type PropertyId,
+  type Rarity,
+  type SortOrder,
 } from './items';
 import type { Stats } from './progression';
 import { defaultReiterName, emptyReiter, nextReiterPrice, parseTruhe, serializeTruhe, type TruheReiter } from './truhe';
@@ -361,32 +364,33 @@ export class Ausruestung {
     return { ok: true, price, place: null };
   }
 
-  /** Die Plätze eines Orts, auf denen ein Gegenstand der Seltenheit `rarity` liegt. */
-  placesIn(scope: Scope, rarity: Item['rarity']): Place[] {
-    const places: Place[] = [];
+  /** Alle Plätze eines Orts in seiner Reihenfolge, auch die leeren. */
+  scopePlaces(scope: Scope): Place[] {
     if (scope.kind === 'inventar') {
-      this.of(scope.classId).inventory.forEach((item, index) => {
-        if (item?.rarity === rarity) places.push({ kind: 'inventar', classId: scope.classId, index });
-      });
-    } else {
-      this.tabs[scope.tab]?.slots.forEach((item, index) => {
-        if (item?.rarity === rarity) places.push({ kind: 'truhe', tab: scope.tab, index });
-      });
+      return this.of(scope.classId).inventory.map((_, index): Place => ({ kind: 'inventar', classId: scope.classId, index }));
     }
-    return places;
+    return (this.tabs[scope.tab]?.slots ?? []).map((_, index): Place => ({ kind: 'truhe', tab: scope.tab, index }));
   }
 
-  /** Was es einbrächte, alle Gegenstände der Seltenheit `rarity` an einem Ort zu verkaufen: ihre Zahl und das Gold. */
-  worth(scope: Scope, rarity: Item['rarity']): { count: number; gold: number } {
-    const places = this.placesIn(scope, rarity);
+  /** Die Plätze eines Orts, auf denen ein Gegenstand einer der Seltenheiten `rarities` liegt. */
+  placesIn(scope: Scope, rarities: readonly Rarity[]): Place[] {
+    return this.scopePlaces(scope).filter((place) => {
+      const item = this.itemAt(place);
+      return item !== null && rarities.includes(item.rarity);
+    });
+  }
+
+  /** Was es einbrächte, alle Gegenstände der Seltenheiten `rarities` an einem Ort zu verkaufen: ihre Zahl und das Gold. */
+  worth(scope: Scope, rarities: readonly Rarity[]): { count: number; gold: number } {
+    const places = this.placesIn(scope, rarities);
     return { count: places.length, gold: places.reduce((sum, place) => sum + sellPrice(this.itemAt(place) as Item), 0) };
   }
 
-  /** Verkauft alle Gegenstände der Seltenheit `rarity` an einem Ort in einem Zug. Gibt Zahl und Erlös zurück. */
-  sellAll(scope: Scope, rarity: Item['rarity']): { count: number; gold: number } {
+  /** Verkauft alle Gegenstände der Seltenheiten `rarities` an einem Ort in einem Zug. Gibt Zahl und Erlös zurück. */
+  sellAll(scope: Scope, rarities: readonly Rarity[]): { count: number; gold: number } {
     this.refresh();
     let gold = 0;
-    const places = this.placesIn(scope, rarity);
+    const places = this.placesIn(scope, rarities);
     for (const place of places) {
       const item = this.itemAt(place);
       if (!item) continue;
@@ -396,6 +400,23 @@ export class Ausruestung {
     }
     if (places.length > 0) this.persistNow();
     return { count: places.length, gold };
+  }
+
+  /**
+   * Ordnet die Gegenstände eines Orts (siehe `compareForSort`): Sie rücken nach vorn, die freien Plätze liegen danach. Das ändert nur,
+   * wo ein Gegenstand liegt, nichts an ihm. Gibt zurück, wie viele es sind und ob sich etwas bewegt hat (sonst wird nichts gespeichert).
+   */
+  sort(scope: Scope, order: SortOrder): { count: number; changed: boolean } {
+    this.refresh();
+    const places = this.scopePlaces(scope);
+    const before = places.map((place) => this.itemAt(place));
+    const sorted = before.filter((item): item is Item => item !== null).sort(compareForSort(order));
+    const changed = sorted.some((item, index) => item !== before[index]);
+    if (changed) {
+      places.forEach((place, index) => this.put(place, sorted[index] ?? null));
+      this.persistNow();
+    }
+    return { count: sorted.length, changed };
   }
 
   /** Wie viele Boss-Kisten in Folge ohne Legendäres blieben; je eine hebt die Chance der nächsten (`game/beute.ts`). */

@@ -1,4 +1,4 @@
-import type { Rarity } from '../game/items';
+import type { Rarity, SortOrder } from '../game/items';
 import './lager.css';
 import { element, span } from './dom';
 import { glyphElement, type GlyphId } from './glyphs';
@@ -64,6 +64,14 @@ export interface CommandView {
   poor?: boolean;
 }
 
+/** Ein Knopf zum Sortieren im Kopf des Inventars oder der Truhe; Tastatur und Gamepad sortieren über die Aktion `sort`. */
+export interface SortView {
+  order: SortOrder;
+  /** Erklärung beim Verweilen des Zeigers, etwa „Inventar nach Art sortieren“. */
+  title: string;
+  icon: GlyphId;
+}
+
 /** Ein Reiter der Truhe in der Leiste. */
 export interface ReiterView {
   name: string;
@@ -82,9 +90,11 @@ export interface TruheModel {
   slots: readonly SlotView[];
   /** Die Befehle hinter den Reitern, in der Reihenfolge: neuer Reiter, umbenennen, Farbe, löschen. */
   commands: readonly CommandView[];
+  /** Die Knöpfe zum Sortieren dessen, was das Feld zeigt (der Reiter, beim Händler auch das Inventar). */
+  sort: readonly SortView[];
 }
 
-/** Der Händler: sein Angebot, der Rückkauf und die Befehle dazwischen (Angebot erneuern, Normale verkaufen). */
+/** Der Händler: sein Angebot, der Rückkauf und die Befehle dazwischen (Angebot erneuern, Auto-Verkauf). */
 export interface HaendlerModel {
   stock: readonly SlotView[];
   buyback: readonly SlotView[];
@@ -125,6 +135,8 @@ export interface LagerModel {
   mode: LagerMode;
   equipment: readonly SlotView[];
   inventory: readonly SlotView[];
+  /** Die Knöpfe zum Sortieren des Inventars. */
+  inventorySort: readonly SortView[];
   /** Die Summe der Eigenschaften der angelegten Gegenstände; `capped`: der Höchstwert ist erreicht. */
   summary: readonly { name: string; value: string; capped: boolean }[];
   truhe: TruheModel;
@@ -184,8 +196,10 @@ export class LagerView {
   onDrag: (from: Mark, to: Mark | null) => void = () => {};
   /** Der Name eines Reiters wurde bestätigt (`text`) oder die Eingabe abgebrochen (`null`). */
   onRename: (text: string | null) => void = () => {};
-  /** Antwort auf die Rückfrage: `true` für die zweite Möglichkeit. */
-  onAsk: (yes: boolean) => void = () => {};
+  /** Antwort auf die Rückfrage: die Stelle der gewählten Antwort; die erste (0) ist die sichere. */
+  onAsk: (index: number) => void = () => {};
+  /** Ein Knopf zum Sortieren wurde gedrückt: für das Inventar oder für das, was die Truhe gerade zeigt. */
+  onSort: (panel: 'inventar' | 'truhe', order: SortOrder) => void = () => {};
   onBack: () => void = () => {};
   private readonly root = element('lager');
   private readonly goldChip = element('lager-gold');
@@ -198,6 +212,7 @@ export class LagerView {
   private readonly inventoryPanel = element('lager-inventory');
   private readonly inventory = element('inventory-slots');
   private readonly inventoryMeter = element('inventory-meter');
+  private readonly inventorySort = element('inventory-sort');
   private readonly truhe = element('lager-truhe');
   private readonly truheTitle = element('truhe-title');
   private readonly haendler = element('lager-haendler');
@@ -207,12 +222,12 @@ export class LagerView {
   private readonly reiter = element('truhe-tabs');
   private readonly truheCommands = element('truhe-commands');
   private readonly truheSlots = element('truhe-slots');
+  private readonly truheSort = element('truhe-sort');
   private readonly rename = element('truhe-rename');
   private readonly nameField = element<HTMLInputElement>('truhe-name');
   private readonly ask = element('truhe-ask');
   private readonly askText = element('truhe-ask-text');
-  private readonly askNo = element<HTMLButtonElement>('truhe-ask-no');
-  private readonly askYes = element<HTMLButtonElement>('truhe-ask-yes');
+  private readonly askChoices = element('truhe-ask-choices');
   private readonly detail = element('lager-detail');
   private readonly summary = element('lager-summary');
   private readonly hand = element('lager-hand');
@@ -250,13 +265,6 @@ export class LagerView {
     });
     this.nameField.addEventListener('blur', () => this.finishRename(true));
     element('truhe-name-ok').addEventListener('click', () => this.finishRename(true));
-
-    for (const [button, yes] of [[this.askNo, false], [this.askYes, true]] as const) {
-      button.addEventListener('click', () => {
-        button.blur();
-        this.onAsk(yes);
-      });
-    }
 
     // Viele Reiter laufen über die Leiste hinaus: Das Rad schiebt sie seitwärts (ein Rad kennt sonst nur „auf“ und „ab“).
     this.reiter.addEventListener(
@@ -328,6 +336,8 @@ export class LagerView {
     this.truheSlots.replaceChildren(...this.cells.truhe);
     this.reiter.replaceChildren(...reiterTabs);
     this.truheCommands.replaceChildren(...reiterCommands);
+    this.inventorySort.replaceChildren(...model.inventorySort.map((sort) => this.sortButton('inventar', sort)));
+    this.truheSort.replaceChildren(...model.truhe.sort.map((sort) => this.sortButton('truhe', sort)));
     this.truheTitle.textContent = model.truhe.title;
     this.stock.replaceChildren(...this.cells.angebot);
     this.haendlerCommands.replaceChildren(...this.cells.befehle);
@@ -479,19 +489,30 @@ export class LagerView {
     this.nameField.blur();
   }
 
-  /** Eine Rückfrage vor dem Löschen eines vollen Reiters; die Antwort kommt über `onAsk`. */
-  showAsk(text: string, no: string, yes: string): void {
+  /** Eine Rückfrage mit zwei oder mehr Antworten (die erste ist die sichere); die Antwort kommt über `onAsk`. */
+  showAsk(text: string, answers: readonly string[]): void {
     this.askText.textContent = text;
-    this.askNo.textContent = no;
-    this.askYes.textContent = yes;
+    this.askChoices.replaceChildren(
+      ...answers.map((answer, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'action';
+        button.textContent = answer;
+        button.addEventListener('click', () => {
+          button.blur();
+          this.onAsk(index);
+        });
+        return button;
+      }),
+    );
+    this.askChoices.classList.toggle('stacked', answers.length > 2);
     this.ask.hidden = false;
-    this.setAskChoice(false);
+    this.setAskChoice(0);
   }
 
-  /** Welche Antwort vorgewählt ist; `false` ist die sichere. */
-  setAskChoice(yes: boolean): void {
-    this.askNo.classList.toggle('selected', !yes);
-    this.askYes.classList.toggle('selected', yes);
+  /** Welche Antwort vorgewählt ist; 0 ist die sichere. */
+  setAskChoice(index: number): void {
+    for (const [position, button] of [...this.askChoices.children].entries()) button.classList.toggle('selected', position === index);
   }
 
   hideAsk(): void {
@@ -613,6 +634,22 @@ export class LagerView {
     dot.className = 'dot';
     button.append(dot, span('name', tab.name), span('count', String(tab.count)));
     this.wire(button, { zone: 'reiter', index }, null);
+    return button;
+  }
+
+  /** Ein Knopf zum Sortieren: nur das Zeichen, der Name steht beim Verweilen. Er gehört nicht zu den Plätzen des Zeigers (dafür gibt es die Taste). */
+  private sortButton(panel: 'inventar' | 'truhe', sort: SortView): ButtonCell {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'icon-btn';
+    button.title = sort.title;
+    button.setAttribute('aria-label', sort.title);
+    button.append(glyphElement(sort.icon));
+    button.addEventListener('click', () => {
+      // Der Fokus bliebe sonst am Knopf hängen; Leertaste und Enter gehören aber dem Spiel.
+      button.blur();
+      this.onSort(panel, sort.order);
+    });
     return button;
   }
 

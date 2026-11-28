@@ -13,8 +13,10 @@ export type Action =
   | 'down'
   /** Öffnet das Lager mit Ausrüstung, Truhe und Händler (Menü zwischen den Nächten). */
   | 'lager'
-  /** Im Lager: den markierten Gegenstand gleich anlegen oder wegräumen, ohne ihn erst aufzunehmen. */
+  /** Im Lager: den markierten Gegenstand gleich anlegen oder wegräumen, ohne ihn erst aufzunehmen (in der Truhe: zwischen Inventar und Truhe umräumen). */
   | 'use'
+  /** Im Lager: das gezeigte Inventar oder den gezeigten Reiter der Truhe sortieren; jeder Druck wechselt zwischen Art und Seltenheit. */
+  | 'sort'
   /** Im Lager: zwischen Ausrüstung, Truhe und Händler wechseln. */
   | 'switch'
   /** Beim Stufenaufstieg: die Karten neu würfeln. */
@@ -77,6 +79,8 @@ const ACTION_KEYS: Readonly<Record<string, Action>> = {
   KeyU: 'lager',
   KeyL: 'lager',
   KeyE: 'use',
+  // O wie „ordnen“: S wie „sortieren“ bewegt schon.
+  KeyO: 'sort',
   KeyR: 'reroll',
   KeyX: 'banish',
   KeyF: 'look',

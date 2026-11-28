@@ -8,8 +8,10 @@
  * Ein Gegenstand wandert so: Enter oder Klick nimmt ihn auf, ein zweiter Druck legt ihn auf einen anderen Platz ab (liegt dort
  * schon einer, tauschen beide); Ziehen mit der Maus oder dem Finger tut dasselbe in einem Zug. Aufgenommen ist er nur gemerkt:
  * Erst das Ablegen ändert etwas, ein Abbruch (Esc) lässt alles, wie es war. Wer es eilig hat, drückt E: Das legt den
- * Gegenstand gleich an, oder räumt ihn zwischen Inventar und Truhe um, und beim Händler kauft oder verkauft es. Jede Handlung geht
- * mit Maus und mit der Tastatur gleichwertig (Pfeile bewegen den Zeiger), damit später ein Gamepad ohne Umbau passt.
+ * Gegenstand gleich an (in der Ansicht Truhe räumt es ihn stattdessen zwischen Inventar und Truhe um), und beim Händler kauft oder
+ * verkauft es. O sortiert das gezeigte Inventar oder den gezeigten Reiter, im Wechsel nach Art und nach Seltenheit; die Knöpfe im Kopf
+ * der Felder tun es mit der Maus gezielt. Jede Handlung geht mit Maus und mit der Tastatur gleichwertig (Pfeile bewegen den Zeiger),
+ * damit später ein Gamepad ohne Umbau passt.
  *
  * Beim Händler heißt „ablegen“ auf sein Angebot oder den Rückkauf: verkaufen. Gekauft wird mit Enter auf dem Angebot oder indem man
  * den Gegenstand auf einen freien Platz des eigenen Besitzes zieht. Ab Rar fragt das Spiel vorher nach.
@@ -34,6 +36,7 @@ import {
   type LagerZone,
   type Mark,
   type SlotView,
+  type SortView,
   type TruheModel,
 } from '../ui/lagerView';
 import { itemIconId, preloadItemImages } from '../ui/itemIcons';
@@ -54,7 +57,11 @@ import {
   RARITY_LABELS,
   sellPrice,
   slotLabel,
+  SORT_LABELS,
+  SORT_ORDERS,
   type Item,
+  type Rarity,
+  type SortOrder,
 } from './items';
 import { cleanReiterName } from './truhe';
 
@@ -89,43 +96,69 @@ const MODES: readonly LagerMode[] = ['ausruestung', 'truhe', 'haendler'];
 const COMMANDS = ['neu', 'umbenennen', 'farbe', 'loeschen'] as const;
 
 /** Die Befehle zwischen Angebot und Rückkauf des Händlers. */
-const HAENDLER_COMMANDS = ['erneuern', 'normale'] as const;
+const HAENDLER_COMMANDS = ['erneuern', 'verkaufen'] as const;
+
+/**
+ * Die Stufen des Auto-Verkaufs: bis zu welcher Seltenheit er verkauft. Jede Stufe schließt die davor ein; Rares und Legendäres bleiben
+ * immer liegen. Das Spiel fragt hier immer vorher, auch wenn der Verkauf eines einzelnen Gegenstands erst ab Rar fragt (`needsConfirm`).
+ */
+const SELL_STAGES: readonly { name: string; rarities: readonly Rarity[] }[] = [
+  { name: 'Normale', rarities: ['normal'] },
+  { name: 'Normale und Seltene', rarities: ['normal', 'selten'] },
+];
+
+/** Die Zeichen der Sortierknöpfe. */
+const SORT_ICONS: Readonly<Record<SortOrder, SortView['icon']>> = { art: 'tag', seltenheit: 'gem' };
 
 /** Die Farbe der Leiste für das Inventar, das beim Händler als erster Reiter vor denen der Truhe steht. */
 const INVENTORY_COLOR = '#b9b3a5';
 
-/** Die Tasten unten, je Ansicht; die Texte sind kurz, damit sie in einer Zeile stehen. Wohin man mit den Pfeilen kommt, sagt die Karte rechts. */
+/**
+ * Die Tasten unten, je Ansicht; die Texte sind kurz, damit sie in einer Zeile stehen. Wohin man mit den Pfeilen kommt, sagt die Karte rechts.
+ * Zurück (Esc, L) steht nicht hier, sondern auf dem Knopf links daneben (`#lager-back` in `index.html`), sonst reichte die Zeile nicht.
+ */
 const KEY_MOVE: KeyHint = { keys: ['←', '↑', '↓', '→'], text: 'Wählen' };
-const KEY_VIEW: KeyHint = { keys: ['Tab'], text: 'Nächste Ansicht' };
+const KEY_VIEW: KeyHint = { keys: ['Tab'], text: 'Ansicht' };
 const KEY_CLASS: KeyHint = { keys: ['1', '2', '3'], text: 'Klasse' };
-const KEY_BACK: KeyHint = { keys: ['Esc', 'L'], text: 'Zurück' };
+const KEY_SORT: KeyHint = { keys: ['O'], text: 'Sortieren' };
 const KEYS_EQUIPMENT: readonly KeyHint[] = [
   KEY_MOVE,
   { keys: ['Enter'], text: 'Aufnehmen / ablegen' },
   { keys: ['E'], text: 'Anlegen / abnehmen' },
+  KEY_SORT,
   KEY_VIEW,
   KEY_CLASS,
-  KEY_BACK,
 ];
 const KEYS_TRUHE: readonly KeyHint[] = [
   KEY_MOVE,
   { keys: ['Enter'], text: 'Aufnehmen / ablegen' },
-  { keys: ['E'], text: 'Anlegen / umräumen' },
+  { keys: ['E'], text: 'Inventar ↔ Truhe' },
+  KEY_SORT,
   KEY_VIEW,
   KEY_CLASS,
-  KEY_BACK,
 ];
 const KEYS_HAENDLER: readonly KeyHint[] = [
   KEY_MOVE,
   { keys: ['Enter'], text: 'Kaufen / aufnehmen / ablegen' },
   { keys: ['E'], text: 'Kaufen / verkaufen' },
+  KEY_SORT,
   KEY_VIEW,
   KEY_CLASS,
-  KEY_BACK,
 ];
 
-/** Ein Rückruf auf die Antwort „Ja“ einer Rückfrage; bei „Nein“ geschieht nichts. */
-type OnYes = () => void;
+/** Eine Antwort auf eine Rückfrage; bei `run: null` geschieht nichts (die sichere Antwort, immer die erste). */
+interface Answer {
+  label: string;
+  run: (() => void) | null;
+}
+
+/** Was eine Stufe des Auto-Verkaufs an einem Ort einbrächte. */
+interface SellOffer {
+  name: string;
+  rarities: readonly Rarity[];
+  count: number;
+  gold: number;
+}
 
 function isVendorZone(zone: LagerZone): boolean {
   return zone === 'angebot' || zone === 'befehle' || zone === 'rueckkauf';
@@ -144,8 +177,10 @@ export class Lager {
   /** Der aufgenommene Gegenstand: sein Platz und seine Nummer, damit ein Wechsel im anderen Tab auffällt. */
   private held: { place: Place; id: number } | null = null;
   private renaming = false;
-  /** Läuft eine Rückfrage? `yes`: die zweite Antwort ist vorgewählt; `onYes` geschieht bei dieser Antwort. */
-  private asking: { yes: boolean; onYes: OnYes } | null = null;
+  /** Läuft eine Rückfrage? `choice`: die vorgewählte Antwort (zuerst die sichere, 0). */
+  private asking: { choice: number; answers: readonly Answer[] } | null = null;
+  /** Wonach zuletzt sortiert wurde; die Taste sortiert beim nächsten Druck nach der folgenden Ordnung. */
+  private lastSort: SortOrder | null = null;
   private note = '';
   /** Ist die Rückmeldung eine Absage (rot) statt einer Bestätigung? */
   private noteBad = false;
@@ -164,7 +199,8 @@ export class Lager {
     view.onHover = (zone, index) => this.moveTo(zone, index);
     view.onDrag = (from, to) => this.dragged(from, to);
     view.onRename = (text) => this.renamed(text);
-    view.onAsk = (yes) => this.answered(yes);
+    view.onAsk = (index) => this.answered(index);
+    view.onSort = (panel, order) => this.sortFrom(panel, order);
     view.onBack = () => this.onClose();
   }
 
@@ -202,7 +238,7 @@ export class Lager {
     this.view.hide();
   }
 
-  /** Bedienung: Pfeile bewegen den Zeiger, Enter nimmt auf und legt ab, E handelt gleich, Tab wechselt die Ansicht, 1 bis 3 die Klasse. */
+  /** Bedienung: Pfeile bewegen den Zeiger, Enter nimmt auf und legt ab, E handelt gleich, O sortiert, Tab wechselt die Ansicht, 1 bis 3 die Klasse. */
   update(input: Input): void {
     // Beim Umbenennen gehören die Tasten dem Textfeld (siehe `Input`); nur dessen Ende kommt als Rückruf an.
     if (this.renaming) return;
@@ -220,6 +256,7 @@ export class Lager {
     if (input.wasPressed('switch')) this.setMode(MODES[(MODES.indexOf(this.mode) + 1) % MODES.length] ?? 'ausruestung');
     if (input.wasPressed('confirm')) this.activate();
     else if (input.wasPressed('use')) this.quick();
+    else if (input.wasPressed('sort')) this.sortByKey();
     else if (input.wasPressed('lager')) this.onClose();
     else if (input.wasPressed('pause')) {
       // Esc legt zuerst zurück, was in der Hand liegt; erst ein zweiter Druck schließt das Lager.
@@ -229,18 +266,31 @@ export class Lager {
   }
 
   private updateAsk(input: Input): void {
-    if (!this.asking) return;
-    if (input.wasPressed('left') || input.wasPressed('up')) this.asking.yes = false;
-    else if (input.wasPressed('right') || input.wasPressed('down')) this.asking.yes = true;
-    this.view.setAskChoice(this.asking.yes);
-    if (input.wasPressed('confirm')) this.answered(this.asking.yes);
-    else if (input.wasPressed('pause')) this.answered(false);
+    const { asking } = this;
+    if (!asking) return;
+    const last = asking.answers.length - 1;
+    if (input.wasPressed('left') || input.wasPressed('up')) asking.choice = Math.max(0, asking.choice - 1);
+    else if (input.wasPressed('right') || input.wasPressed('down')) asking.choice = Math.min(last, asking.choice + 1);
+    this.view.setAskChoice(asking.choice);
+    if (input.wasPressed('confirm')) this.answered(asking.choice);
+    else if (input.wasPressed('pause')) this.answered(0);
   }
 
   /** Stellt eine Rückfrage mit zwei Antworten; die zweite (`yes`) führt `onYes` aus. Vorgewählt ist die erste, sichere. */
-  private ask(text: string, no: string, yes: string, onYes: OnYes): void {
-    this.asking = { yes: false, onYes };
-    this.view.showAsk(text, no, yes);
+  private ask(text: string, no: string, yes: string, onYes: () => void): void {
+    this.askAmong(text, [
+      { label: no, run: null },
+      { label: yes, run: onYes },
+    ]);
+  }
+
+  /** Stellt eine Rückfrage mit mehreren Antworten; die erste ist die sichere und vorgewählt. */
+  private askAmong(text: string, answers: readonly Answer[]): void {
+    this.asking = { choice: 0, answers };
+    this.view.showAsk(
+      text,
+      answers.map((answer) => answer.label),
+    );
     audio.play('auswahl');
   }
 
@@ -251,12 +301,13 @@ export class Lager {
     this.view.hideAsk();
   }
 
-  private answered(yes: boolean): void {
+  private answered(index: number): void {
     const asking = this.asking;
     if (!asking) return;
     this.asking = null;
     this.view.hideAsk();
-    if (yes) asking.onYes();
+    const run = asking.answers[index]?.run;
+    if (run) run();
     else this.render();
   }
 
@@ -644,6 +695,7 @@ export class Lager {
   /**
    * E: Schnell erledigen, ohne den Gegenstand aufzunehmen. Ein angelegter wandert ins Inventar; ein Gegenstand, den die gezeigte
    * Klasse tragen kann, wird angelegt (der getragene nimmt seinen Platz); alles andere wandert zwischen Inventar und Truhe.
+   * In der Ansicht Truhe legt E nie an, sondern räumt immer zwischen Inventar und Truhe um: Wer dort ist, räumt gerade auf.
    * Beim Händler kauft E, was im Angebot oder im Rückkauf liegt, und verkauft, was man besitzt.
    */
   private quick(): void {
@@ -662,7 +714,8 @@ export class Lager {
     }
     const { id } = this.playerClass;
     let target: Place | null;
-    if (from.kind === 'ausruestung') target = this.ausruestung.freeInventory(id) ?? this.ausruestung.freeChest(this.tab);
+    if (this.mode === 'truhe') target = from.kind === 'truhe' ? this.ausruestung.freeInventory(id) : this.ausruestung.freeChest(this.tab);
+    else if (from.kind === 'ausruestung') target = this.ausruestung.freeInventory(id) ?? this.ausruestung.freeChest(this.tab);
     else if (canEquip(item, id)) target = { kind: 'ausruestung', classId: id, slot: item.slot };
     else if (from.kind === 'inventar') target = this.ausruestung.freeChest(this.tab);
     else target = this.ausruestung.freeInventory(id);
@@ -670,9 +723,17 @@ export class Lager {
       this.refuse('Es ist kein Platz frei.');
       return;
     }
-    if (this.ausruestung.move(from, target)) audio.play('bestaetigen');
-    else this.refuse(this.ausruestung.refusal(from, target) ?? 'Das ging nicht.');
+    if (this.ausruestung.move(from, target)) {
+      audio.play('bestaetigen');
+      // Das Umräumen zeigt sonst nur, dass der Platz leer wird; wohin der Gegenstand kam, steht nicht am Zeiger (auch nicht im Reiter dahinter).
+      if (this.mode === 'truhe') this.say(`„${itemName(item)}“ ${this.movedTo(target)}.`);
+    } else this.refuse(this.ausruestung.refusal(from, target) ?? 'Das ging nicht.');
     this.render();
+  }
+
+  /** „ins Inventar gelegt“ oder „in den Reiter „…“ gelegt“: wohin E einen Gegenstand umgeräumt hat. */
+  private movedTo(place: Place): string {
+    return place.kind === 'truhe' ? `in den Reiter „${this.ausruestung.truhe()[place.tab]?.name ?? ''}“ gelegt` : 'ins Inventar gelegt';
   }
 
   /** Was ein Gegenstand des Händlers kostet: im Angebot den vollen Wert, im Rückkauf das, was der Verkauf eingebracht hat. */
@@ -768,8 +829,8 @@ export class Lager {
       case 'erneuern':
         this.reroll();
         break;
-      case 'normale':
-        this.sellNormals();
+      case 'verkaufen':
+        this.autoSell();
         break;
     }
   }
@@ -788,37 +849,94 @@ export class Lager {
     this.render();
   }
 
-  /** Der Ort, den „Normale verkaufen“ meint: das gezeigte Inventar oder der gezeigte Reiter der Truhe. */
+  /** Der Ort, den der Auto-Verkauf und das Sortieren meinen: das gezeigte Inventar oder der gezeigte Reiter der Truhe. */
   private scope(): Scope {
     return this.tab < 0 ? { kind: 'inventar', classId: this.playerClass.id } : { kind: 'truhe', tab: this.tab };
   }
 
-  /** Verkauft alle normalen Gegenstände des gezeigten Inventars oder Reiters, nach einer Rückfrage mit der Summe. */
-  private sellNormals(): void {
+  /** Was die Stufen des Auto-Verkaufs an einem Ort einbrächten; eine Stufe, die nicht mehr verkauft als die davor, fällt weg. */
+  private sellOffers(scope: Scope): SellOffer[] {
+    const offers: SellOffer[] = [];
+    for (const stage of SELL_STAGES) {
+      const { count, gold } = this.ausruestung.worth(scope, stage.rarities);
+      if (count > (offers[offers.length - 1]?.count ?? 0)) offers.push({ ...stage, count, gold });
+    }
+    return offers;
+  }
+
+  /** Auto-Verkauf: Das Spiel fragt, wie weit es verkaufen soll (nur Normale oder auch Seltene), und nennt zu jeder Stufe Zahl und Gold. */
+  private autoSell(): void {
     const scope = this.scope();
-    const { count, gold } = this.ausruestung.worth(scope, 'normal');
-    if (count === 0) {
-      this.refuse(this.tab < 0 ? 'Im Inventar liegt nichts Normales.' : 'In diesem Reiter liegt nichts Normales.');
+    const offers = this.sellOffers(scope);
+    const where = this.tab < 0 ? 'im Inventar' : 'in diesem Reiter';
+    if (offers.length === 0) {
+      this.refuse(`${this.tab < 0 ? 'Im Inventar liegt' : 'In diesem Reiter liegt'} nichts Normales oder Seltenes.`);
       this.render();
       return;
     }
     const { buybackSize } = CONFIG.items.shop;
-    const hint = count > buybackSize ? ` Nur die letzten ${buybackSize} bleiben im Rückkauf.` : '';
-    this.ask(
-      `${count} normale${count === 1 ? 'n Gegenstand' : ' Gegenstände'} für ${gold} Gold verkaufen?${hint}`,
-      'Abbrechen',
-      'Verkaufen',
-      () => this.completeSellNormals(scope),
-    );
+    const hint = Math.max(...offers.map((offer) => offer.count)) > buybackSize ? ` Nur die letzten ${buybackSize} bleiben im Rückkauf.` : '';
+    this.askAmong(`Welche Gegenstände ${where} verkaufen?${hint}`, [
+      { label: 'Abbrechen', run: null },
+      ...offers.map((offer) => ({
+        label: `${offer.name}: ${offer.count} für ${offer.gold} Gold`,
+        run: () => this.completeAutoSell(scope, offer.rarities),
+      })),
+    ]);
   }
 
-  private completeSellNormals(scope: Scope): void {
-    const { count, gold } = this.ausruestung.sellAll(scope, 'normal');
+  private completeAutoSell(scope: Scope, rarities: readonly Rarity[]): void {
+    const { count, gold } = this.ausruestung.sellAll(scope, rarities);
     // Was in der Hand lag und mitverkauft wurde, ist nicht mehr da.
     if (this.held && this.ausruestung.itemAt(this.held.place)?.id !== this.held.id) this.held = null;
     this.say(`${count} ${count === 1 ? 'Gegenstand' : 'Gegenstände'} für ${gold} Gold verkauft.`);
     audio.play('muenze');
     this.render();
+  }
+
+  /** Die Taste O: sortiert das Inventar (in der Ansicht Ausrüstung und mit dem Zeiger im Inventar) oder sonst den gezeigten Reiter, im Wechsel nach Art und Seltenheit. */
+  private sortByKey(): void {
+    const inventory = this.mode === 'ausruestung' || (this.mode === 'truhe' && this.zone === 'inventar');
+    const index = this.lastSort ? SORT_ORDERS.indexOf(this.lastSort) + 1 : 0;
+    this.sortIn(inventory ? this.inventoryScope() : this.scope(), SORT_ORDERS[index % SORT_ORDERS.length] ?? 'art');
+  }
+
+  /** Ein Knopf im Kopf des Inventars oder der Truhe (beim Händler: dessen Besitz); er sortiert gezielt nach der Ordnung, die er trägt. */
+  private sortFrom(panel: 'inventar' | 'truhe', order: SortOrder): void {
+    this.dismissAsk();
+    this.sortIn(panel === 'inventar' ? this.inventoryScope() : this.scope(), order);
+  }
+
+  private inventoryScope(): Scope {
+    return { kind: 'inventar', classId: this.playerClass.id };
+  }
+
+  private sortIn(scope: Scope, order: SortOrder): void {
+    this.say('');
+    const name = this.tabName(scope.kind === 'inventar' ? -1 : scope.tab);
+    const { count, changed } = this.ausruestung.sort(scope, order);
+    if (count === 0) {
+      this.refuse(`${name} ist leer.`);
+      this.render();
+      return;
+    }
+    this.lastSort = order;
+    if (changed) {
+      // Ein aufgenommener Gegenstand wandert mit: Er liegt nach dem Sortieren auf einem anderen Platz.
+      const held = this.held;
+      if (held) {
+        const place = this.ausruestung.scopePlaces(scope).find((candidate) => this.ausruestung.itemAt(candidate)?.id === held.id);
+        if (place) this.held = { place, id: held.id };
+      }
+      audio.play('bestaetigen');
+    }
+    this.say(`${name} ist nach ${SORT_LABELS[order]} sortiert.`);
+    this.render();
+  }
+
+  /** Die Knöpfe zum Sortieren im Kopf eines Feldes; `what` ist, was sie ordnen („Inventar“ oder „Reiter“). */
+  private sortViews(what: string): SortView[] {
+    return SORT_ORDERS.map((order) => ({ order, title: `${what} nach ${SORT_LABELS[order]} sortieren`, icon: SORT_ICONS[order] }));
   }
 
   private activateReiter(): void {
@@ -1002,12 +1120,11 @@ export class Lager {
         const cost = price === 0 ? 'Das erste Mal in einer Nacht ist es gratis' : `Es kostet ${price} Gold, danach das Doppelte`;
         return this.emptyDetail(`Das Angebot neu würfeln; was noch dort liegt, geht verloren. ${cost}.`);
       }
-      case 'normale': {
-        const { count, gold } = this.ausruestung.worth(this.scope(), 'normal');
+      case 'verkaufen': {
+        const offers = this.sellOffers(this.scope());
         const where = this.tab < 0 ? 'im Inventar' : 'in diesem Reiter';
-        return this.emptyDetail(
-          count === 0 ? `Alle normalen Gegenstände ${where} verkaufen: hier liegt keiner.` : `Alle normalen Gegenstände ${where} verkaufen: ${count} für ${gold} Gold.`,
-        );
+        const now = offers.length === 0 ? 'Hier liegt nichts davon.' : `Jetzt: ${offers.map((offer) => `${offer.name}: ${offer.count} für ${offer.gold} Gold`).join(', ')}.`;
+        return this.emptyDetail(`Auto-Verkauf ${where}: auf einen Schlag nur die Normalen oder auch die Seltenen verkaufen; das Spiel fragt vorher nach. ${now}`);
       }
       default:
         return this.emptyDetail('');
@@ -1105,6 +1222,7 @@ export class Lager {
             { label: 'Farbe wechseln', title: 'Die Farbe des Reiters wechseln', icon: 'drop' },
             { label: 'Reiter löschen', title: 'Den Reiter löschen', icon: 'trash' },
           ] satisfies CommandView[],
+      sort: this.sortViews(this.tab < 0 ? 'Inventar' : 'Reiter'),
     };
   }
 
@@ -1133,7 +1251,7 @@ export class Lager {
           icon: 'refresh',
           poor: reroll > gold,
         },
-        { label: 'Normale verkaufen', title: 'Alle normalen Gegenstände im gezeigten Inventar oder Reiter verkaufen', icon: 'coin' },
+        { label: 'Auto-Verkauf', title: 'Normale oder auch Seltene Gegenstände im gezeigten Inventar oder Reiter auf einmal verkaufen', icon: 'coin' },
       ] satisfies CommandView[],
     };
   }
@@ -1174,6 +1292,7 @@ export class Lager {
       mode: this.mode,
       equipment,
       inventory,
+      inventorySort: this.sortViews('Inventar'),
       summary,
       truhe: this.truheModel(),
       haendler: this.haendlerModel(),

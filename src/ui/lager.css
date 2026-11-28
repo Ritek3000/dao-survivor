@@ -690,11 +690,27 @@
   box-shadow: inset 0 -2px 0 var(--tab, var(--stroke-strong));
 }
 
-/* Befehle der Truhe: Zeichen im Kopf des Feldes (der Name steht beim Verweilen und auf der Karte). */
+/* Knöpfe im Kopf eines Feldes: Sortieren (Inventar und Truhe) und die Befehle der Truhe, dazwischen ein Strich. */
+.head-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#inventory-sort,
+#truhe-sort,
 #truhe-commands {
   display: flex;
   gap: 4px;
 }
+
+/* Der Strich steht nur, wenn die Truhe Befehle hat; beim Händler zeigt das Feld den Besitz und hat keine. */
+#truhe-commands:not(:empty) {
+  padding-left: 10px;
+  border-left: 1px solid var(--stroke);
+}
+
+/* Befehle der Truhe: Zeichen im Kopf des Feldes (der Name steht beim Verweilen und auf der Karte). */
 
 .icon-btn {
   position: relative;
@@ -831,6 +847,12 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
+}
+
+/* Mehr als zwei Antworten (der Auto-Verkauf nennt je Stufe Zahl und Gold) stehen untereinander, damit keine Zeile umbricht. */
+#truhe-ask .choices.stacked {
+  flex-direction: column;
+  align-items: stretch;
 }
 
 /* Rechte Spalte: die Karte des Gegenstands. Sie wächst nach unten, ohne dass Felder oder Summe sich bewegen. */
