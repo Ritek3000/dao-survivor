@@ -21,10 +21,10 @@
 import { browserTextStore, type TextStore } from './storage';
 
 /** Die Fassung des Formats, die dieser Code schreibt. */
-export const SAVEGAME_VERSION = 8;
+export const SAVEGAME_VERSION = 9;
 /**
- * Stände von einer älteren Fassung als dieser werden vor dem Heben gesichert. Das Heben von Fassung 6 auf 7 und von 7 auf 8 verwirft
- * nichts; die Sicherung aus der Umstellung auf Fassung 6 (die Ränge der Steigerungen) soll darum nicht davon überschrieben werden.
+ * Stände von einer älteren Fassung als dieser werden vor dem Heben gesichert. Das Heben von Fassung 6 auf 7, von 7 auf 8 und von 8 auf 9
+ * verwirft nichts; die Sicherung aus der Umstellung auf Fassung 6 (die Ränge der Steigerungen) soll darum nicht davon überschrieben werden.
  */
 const BACKUP_BELOW = 6;
 
@@ -161,6 +161,7 @@ function savegameFromRecord(parsed: Record<string, unknown>): Savegame {
   if (version < 6) raw = von5auf6(raw);
   if (version < 7) raw = von6auf7(raw);
   if (version < 8) raw = von7auf8(raw);
+  if (version < 9) raw = von8auf9(raw);
 
   if (typeof raw.version === 'number' && Number.isFinite(raw.version)) {
     // Ein Stand aus einer neueren Fassung wird so gut gelesen wie möglich, seine Nummer aber nicht zurückgesetzt.
@@ -255,6 +256,14 @@ function von6auf7(raw: Record<string, unknown>): Record<string, unknown> {
 /** Fassung 8 kennt die Grade der Nächte; ältere Stände haben noch keine Nacht geschafft, die Grade beginnen bei null. */
 function von7auf8(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, version: 8, grades: {} };
+}
+
+/**
+ * Fassung 9: Ein Gegenstand kann zum Verkauf markiert sein (Feld `forSale` am Gegenstand, siehe `game/items.ts`). Gegenstände aus
+ * Fassung 8 haben das Feld nicht und gelten als nicht markiert. Sonst ändert sich nichts am Format.
+ */
+function von8auf9(raw: Record<string, unknown>): Record<string, unknown> {
+  return { ...raw, version: 9 };
 }
 
 /** Liest die Grade; ein Eintrag, der keine Zahl ab 0 ist, fällt weg (er würde sonst als geschaffter Grad 0 gelten). */

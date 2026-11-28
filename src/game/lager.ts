@@ -10,7 +10,8 @@
  * Erst das Ablegen ändert etwas, ein Abbruch (Esc) lässt alles, wie es war. Wer es eilig hat, drückt E: Das legt den
  * Gegenstand gleich an (in der Ansicht Truhe räumt es ihn stattdessen zwischen Inventar und Truhe um), und beim Händler kauft oder
  * verkauft es. O sortiert das gezeigte Inventar oder den gezeigten Reiter, im Wechsel nach Art und nach Seltenheit; die Knöpfe im Kopf
- * der Felder tun es mit der Maus gezielt. Jede Handlung geht mit Maus und mit der Tastatur gleichwertig (Pfeile bewegen den Zeiger),
+ * der Felder tun es mit der Maus gezielt. Die Leertaste (oder die rechte Maustaste) markiert einen Gegenstand zum Verkauf; beim Händler verkauft der
+ * Knopf „Markierte“ im Kopf des eigenen Besitzes alle markierten auf einmal. Jede Handlung geht mit Maus und mit der Tastatur gleichwertig (Pfeile bewegen den Zeiger),
  * damit später ein Gamepad ohne Umbau passt.
  *
  * Beim Händler heißt „ablegen“ auf sein Angebot oder den Rückkauf: verkaufen. Gekauft wird mit Enter auf dem Angebot oder indem man
@@ -87,6 +88,7 @@ function itemView(item: Item, viewer: ClassId): ItemView {
     })),
     bound: owner ? `Gehört zur Klasse ${className(owner)}` : null,
     evolution: describeEvolution(item),
+    forSale: item.forSale === true,
   };
 }
 
@@ -95,6 +97,10 @@ const MODES: readonly LagerMode[] = ['ausruestung', 'truhe', 'haendler'];
 
 /** Die Befehle hinter den Reitern der Truhe, in der Reihenfolge der Leiste. */
 const COMMANDS = ['neu', 'umbenennen', 'farbe', 'loeschen'] as const;
+
+/** Die Befehle im Kopf des eigenen Besitzes beim Händler (hinter den Reitern): der Verkauf aller zum Verkauf markierten Gegenstände. */
+const HAENDLER_TAB_COMMANDS = ['markierte'] as const;
+type TabCommand = (typeof COMMANDS)[number] | (typeof HAENDLER_TAB_COMMANDS)[number];
 
 /** Die Befehle zwischen Angebot und Rückkauf des Händlers: Angebot erneuern, Auto-Verkauf und der Knopf, der dessen Stufe wechselt. */
 const HAENDLER_COMMANDS = ['erneuern', 'verkaufen', 'stufe'] as const;
@@ -130,15 +136,17 @@ const INVENTORY_COLOR = '#b9b3a5';
  * Die Tasten unten, je Ansicht; die Texte sind kurz, damit sie in einer Zeile stehen. Wohin man mit den Pfeilen kommt, sagt die Karte rechts.
  * Zurück (Esc, L) steht nicht hier, sondern auf dem Knopf links daneben (`#lager-back` in `index.html`), sonst reichte die Zeile nicht.
  */
-const KEY_MOVE: KeyHint = { keys: ['←', '↑', '↓', '→'], text: 'Wählen' };
+const KEY_MOVE: KeyHint = { keys: ['←', '↑', '↓', '→'], text: '' };
 const KEY_VIEW: KeyHint = { keys: ['Tab'], text: 'Ansicht' };
 const KEY_CLASS: KeyHint = { keys: ['1', '2', '3'], text: 'Klasse' };
 const KEY_SORT: KeyHint = { keys: ['O'], text: 'Sortieren' };
+const KEY_MARK: KeyHint = { keys: ['Leertaste'], text: 'Markieren' };
 const KEYS_EQUIPMENT: readonly KeyHint[] = [
   KEY_MOVE,
   { keys: ['Enter'], text: 'Aufnehmen / ablegen' },
   { keys: ['E'], text: 'Anlegen / abnehmen' },
   KEY_SORT,
+  KEY_MARK,
   KEY_VIEW,
   KEY_CLASS,
 ];
@@ -147,14 +155,16 @@ const KEYS_TRUHE: readonly KeyHint[] = [
   { keys: ['Enter'], text: 'Aufnehmen / ablegen' },
   { keys: ['E'], text: 'Inventar ↔ Truhe' },
   KEY_SORT,
+  KEY_MARK,
   KEY_VIEW,
   KEY_CLASS,
 ];
 const KEYS_HAENDLER: readonly KeyHint[] = [
   KEY_MOVE,
-  { keys: ['Enter'], text: 'Kaufen / aufnehmen / ablegen' },
+  { keys: ['Enter'], text: 'Kaufen / aufnehmen' },
   { keys: ['E'], text: 'Kaufen / verkaufen' },
   KEY_SORT,
+  KEY_MARK,
   KEY_VIEW,
   KEY_CLASS,
 ];
@@ -208,6 +218,7 @@ export class Lager {
     view.onRename = (text) => this.renamed(text);
     view.onAsk = (index) => this.answered(index);
     view.onSort = (panel, order) => this.sortFrom(panel, order);
+    view.onMark = (zone, index) => this.markFrom(zone, index);
     view.onBack = () => this.onClose();
   }
 
@@ -245,7 +256,7 @@ export class Lager {
     this.view.hide();
   }
 
-  /** Bedienung: Pfeile bewegen den Zeiger, Enter nimmt auf und legt ab, E handelt gleich, O sortiert, Tab wechselt die Ansicht, 1 bis 3 die Klasse. */
+  /** Bedienung: Pfeile bewegen den Zeiger, Enter nimmt auf und legt ab, E handelt gleich, O sortiert, die Leertaste markiert, Tab wechselt die Ansicht, 1 bis 3 die Klasse. */
   update(input: Input): void {
     // Beim Umbenennen gehören die Tasten dem Textfeld (siehe `Input`); nur dessen Ende kommt als Rückruf an.
     if (this.renaming) return;
@@ -261,7 +272,9 @@ export class Lager {
     else if (input.wasPressed('choice2')) this.selectClass(1);
     else if (input.wasPressed('choice3')) this.selectClass(2);
     if (input.wasPressed('switch')) this.setMode(MODES[(MODES.indexOf(this.mode) + 1) % MODES.length] ?? 'ausruestung');
-    if (input.wasPressed('confirm')) this.activate();
+    // Die Leertaste bestätigt wie Enter; auf einem eigenen Gegenstand ohne etwas in der Hand markiert sie ihn stattdessen zum Verkauf.
+    if (input.wasPressed('mark') && this.canMark()) this.markAt(this.zone, this.cursor);
+    else if (input.wasPressed('confirm')) this.activate();
     else if (input.wasPressed('use')) this.quick();
     else if (input.wasPressed('sort')) this.sortByKey();
     else if (input.wasPressed('lager')) this.onClose();
@@ -367,7 +380,7 @@ export class Lager {
   }
 
   private get entries(): number {
-    return this.chips + (this.mode === 'haendler' ? 0 : COMMANDS.length);
+    return this.chips + (this.mode === 'haendler' ? HAENDLER_TAB_COMMANDS.length : COMMANDS.length);
   }
 
   private columnsOf(zone: LagerZone): number {
@@ -948,6 +961,87 @@ export class Lager {
     return SORT_ORDERS.map((order) => ({ order, title: `${what} nach ${SORT_LABELS[order]} sortieren`, icon: SORT_ICONS[order] }));
   }
 
+  /** Welcher Befehl hinter den Reitern an einer Stelle der Leiste steht; beim Händler ist es ein anderer als in der Truhe. */
+  private commandAt(index: number): TabCommand | undefined {
+    const commands: readonly TabCommand[] = this.mode === 'haendler' ? HAENDLER_TAB_COMMANDS : COMMANDS;
+    return commands[index - this.chips];
+  }
+
+  /**
+   * Darf die Leertaste jetzt markieren? Nur auf einem eigenen Gegenstand im Inventar oder in der Truhe und mit leerer Hand: Mit etwas in
+   * der Hand legt sie es ab, beim Händler kauft sie, und angelegte Gegenstände nimmt sie auf, alles wie Enter.
+   */
+  private canMark(): boolean {
+    if (this.held || (this.zone !== 'inventar' && this.zone !== 'truhe')) return false;
+    const place = this.placeAt(this.zone, this.cursor);
+    return place !== null && this.ausruestung.itemAt(place) !== null;
+  }
+
+  /** Die rechte Maustaste auf einem Gegenstand: dasselbe wie die Leertaste, aber für diesen Platz (auch mit etwas in der Hand). */
+  private markFrom(zone: LagerZone, index: number): void {
+    this.dismissAsk();
+    this.moveTo(zone, index);
+    this.markAt(zone, index);
+  }
+
+  private markAt(zone: LagerZone, index: number): void {
+    this.say('');
+    if (zone === 'angebot' || zone === 'rueckkauf') {
+      const stand = this.ausruestung.haendler();
+      if (zone === 'angebot' ? stand.stock[index] : stand.buyback[index]) this.refuse('Nur eigene Gegenstände lassen sich zum Verkauf markieren.');
+      return;
+    }
+    const place = this.placeAt(zone, index);
+    if (place) this.markPlace(place);
+  }
+
+  /** Schaltet die Markierung zum Verkauf für den Gegenstand auf einem Platz um und sagt, was daraus wurde. */
+  private markPlace(place: Place): void {
+    const item = this.ausruestung.itemAt(place);
+    if (!item) return;
+    const result = this.ausruestung.toggleMark(place, item.id);
+    if (!result.ok) {
+      this.refuse(result.reason);
+      this.render();
+      return;
+    }
+    audio.play('auswahl');
+    this.say(result.marked ? `„${itemName(item)}“ ist zum Verkauf markiert.` : `Die Markierung von „${itemName(item)}“ ist zurückgenommen.`);
+    this.render();
+  }
+
+  /** Der Befehl „Markierte“ beim Händler: Das Spiel fragt vorher und nennt Zahl und Gold, dazu wie viele ab Rar sind. */
+  private sellMarkedNow(): void {
+    const { count, gold, rare } = this.ausruestung.worthMarked(this.playerClass.id);
+    if (count === 0) {
+      this.refuse('Nichts ist zum Verkauf markiert. Mit der Leertaste oder der rechten Maustaste markierst du Gegenstände.');
+      this.render();
+      return;
+    }
+    const { buybackSize } = CONFIG.items.shop;
+    const hints = `${rare > 0 ? ` Darunter ${rare} ab Rar.` : ''}${count > buybackSize ? ` Nur die letzten ${buybackSize} bleiben im Rückkauf.` : ''}`;
+    this.ask(
+      `${count === 1 ? '1 markierter Gegenstand' : `${count} markierte Gegenstände`} (Inventar und Truhe) für ${gold} Gold verkaufen?${hints}`,
+      'Abbrechen',
+      'Verkaufen',
+      () => this.completeMarkedSale(),
+    );
+  }
+
+  private completeMarkedSale(): void {
+    const { count, gold } = this.ausruestung.sellMarked(this.playerClass.id);
+    if (count === 0) {
+      this.refuse('Nichts ist zum Verkauf markiert.');
+      this.render();
+      return;
+    }
+    // Was in der Hand lag und mitverkauft wurde, ist nicht mehr da.
+    if (this.held && this.ausruestung.itemAt(this.held.place)?.id !== this.held.id) this.held = null;
+    this.say(`${count} ${count === 1 ? 'markierter Gegenstand' : 'markierte Gegenstände'} für ${gold} Gold verkauft.`);
+    audio.play('muenze');
+    this.render();
+  }
+
   private activateReiter(): void {
     const { chips, offset } = this;
     if (this.cursor < chips) {
@@ -956,7 +1050,10 @@ export class Lager {
       else this.selectTab(this.cursor - offset);
       return;
     }
-    switch (COMMANDS[this.cursor - chips]) {
+    switch (this.commandAt(this.cursor)) {
+      case 'markierte':
+        this.sellMarkedNow();
+        break;
       case 'neu':
         this.newTab();
         break;
@@ -1116,7 +1213,10 @@ export class Lager {
         const place = this.placeAt(this.zone, this.cursor);
         const item = place ? this.ausruestung.itemAt(place) : null;
         if (!item) return this.emptyDetail('Leerer Platz.');
-        const detail = this.itemDetail(item);
+        const detail = {
+          ...this.itemDetail(item),
+          markHint: item.forSale ? 'Leertaste oder rechte Maustaste: Markierung zurücknehmen' : 'Leertaste oder rechte Maustaste: zum Verkauf markieren',
+        };
         return this.mode === 'haendler' ? { ...detail, price: { label: 'Verkauf', amount: sellPrice(item), poor: false } } : detail;
       }
     }
@@ -1161,7 +1261,14 @@ export class Lager {
       return this.emptyDetail(`Reiter „${tab.name}“: ${count} von ${tab.slots.length} Plätzen belegt. ${hand}`);
     }
     const current = tabs[this.tab];
-    switch (COMMANDS[this.cursor - chips]) {
+    switch (this.commandAt(this.cursor)) {
+      case 'markierte': {
+        const { count, gold, rare } = this.ausruestung.worthMarked(this.playerClass.id);
+        const now = count === 0 ? 'Nichts ist markiert.' : `Jetzt: ${count} für ${gold} Gold${rare > 0 ? `, darunter ${rare} ab Rar` : ''}.`;
+        return this.emptyDetail(
+          `Alle zum Verkauf markierten Gegenstände auf einmal verkaufen, im Inventar ${className(this.playerClass)} und in der ganzen Truhe; das Spiel fragt vorher nach. Markiert wird mit der Leertaste oder der rechten Maustaste. ${now}`,
+        );
+      }
       case 'neu': {
         const price = this.ausruestung.nextTabPrice();
         if (price === null) return this.emptyDetail(`Mehr als ${CONFIG.items.truhe.maxTabs} Reiter gibt es nicht.`);
@@ -1199,7 +1306,7 @@ export class Lager {
 
   /**
    * Das Raster rechts in der Truhe und beim Händler. Die Truhe zeigt ihre Reiter und die Befehle dahinter; beim Händler steht davor
-   * das Inventar als erster Reiter (`tab` -1), und es gibt keine Befehle.
+   * das Inventar als erster Reiter (`tab` -1), und der einzige Befehl ist der Verkauf der markierten Gegenstände.
    */
   private truheModel(): TruheModel {
     const tabs = this.ausruestung.truhe();
@@ -1214,6 +1321,7 @@ export class Lager {
       size: tab.slots.length,
     }));
     const haendler = this.mode === 'haendler';
+    const marked = this.ausruestung.worthMarked(id);
     const shown = this.tab < 0 ? inventory : (tabs[this.tab]?.slots ?? []);
     return {
       title: haendler ? 'Dein Besitz' : 'Truhe',
@@ -1223,7 +1331,16 @@ export class Lager {
       active: this.tab + this.offset,
       slots: shown.map((item) => ({ label: '', icon: null, item: item ? itemView(item, id) : null })),
       commands: haendler
-        ? []
+        ? ([
+            {
+              label: 'Markierte',
+              note: marked.count > 0 ? String(marked.count) : undefined,
+              title: 'Alle zum Verkauf markierten Gegenstände verkaufen (Inventar und Truhe)',
+              icon: 'coin',
+              wide: true,
+              idle: marked.count === 0,
+            },
+          ] satisfies CommandView[])
         : [
             {
               label: 'Neuer Reiter',

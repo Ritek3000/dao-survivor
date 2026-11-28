@@ -18,7 +18,7 @@ import { CONFIG } from '../config';
 import { createRandom } from '../core/random';
 import { loadSavegame, writeSavegame, type Savegame, type StoredItems } from '../core/savegame';
 import { className, CLASSES, type ClassId } from './classes';
-import { emptyStand, parseStand, rerollPrice, rollStock, serializeStand, type HaendlerStand } from './haendler';
+import { emptyStand, needsConfirm, parseStand, rerollPrice, rollStock, serializeStand, type HaendlerStand } from './haendler';
 import {
   applyItems,
   canEquip,
@@ -57,6 +57,9 @@ export type RemoveResult = 'ok' | 'letzter' | 'belegt' | 'voll';
 /** Der Ausgang eines Handels: der Preis in Gold und, wo ein Gegenstand neu hingekommen ist, sein Platz; sonst der Grund der Absage. */
 export type Deal = { ok: true; price: number; place: Place | null } | { ok: false; reason: string };
 
+/** Der Ausgang einer Markierung: ob der Gegenstand nun zum Verkauf markiert ist, oder der Grund der Absage. */
+export type MarkResult = { ok: true; marked: boolean } | { ok: false; reason: string };
+
 /** Ein Ort, dessen Gegenstände man dem Händler auf einmal anbieten kann: das Inventar einer Klasse oder ein Reiter der Truhe. */
 export type Scope = { kind: 'inventar'; classId: ClassId } | { kind: 'truhe'; tab: number };
 
@@ -68,6 +71,13 @@ interface ClassItems {
 
 function emptyClassItems(): ClassItems {
   return { inventory: Array.from({ length: CONFIG.items.inventorySize }, () => null), equipment: {} };
+}
+
+/** Derselbe Gegenstand ohne die Markierung zum Verkauf; trägt er keine, kommt er selbst zurück. */
+function withoutMark(item: Item): Item {
+  if (!item.forSale) return item;
+  const { forSale: _forSale, ...plain } = item;
+  return plain;
 }
 
 export class Ausruestung {
@@ -403,6 +413,50 @@ export class Ausruestung {
   }
 
   /**
+   * Markiert den Gegenstand auf `place` zum Verkauf oder nimmt die Markierung zurück. Nur Gegenstände im Inventar und in der Truhe lassen
+   * sich markieren: Was angelegt ist, wird erst abgelegt. Die Markierung bleibt am Gegenstand, wohin er auch wandert (Inventar, Reiter,
+   * andere Klasse), bis er angelegt oder verkauft wird.
+   */
+  toggleMark(place: Place, id?: number): MarkResult {
+    this.refresh();
+    if (place.kind === 'ausruestung') return { ok: false, reason: 'Was angelegt ist, lässt sich nicht zum Verkauf markieren.' };
+    const item = this.itemAt(place);
+    if (!item || (id !== undefined && item.id !== id)) return { ok: false, reason: 'Dort liegt nichts.' };
+    const marked = item.forSale !== true;
+    this.put(place, marked ? { ...item, forSale: true } : withoutMark(item));
+    this.persistNow();
+    return { ok: true, marked };
+  }
+
+  /** Die Plätze, auf denen ein zum Verkauf markierter Gegenstand liegt: im Inventar der Klasse, dann in den Reitern der Truhe. */
+  markedPlaces(classId: ClassId): Place[] {
+    const scopes: Scope[] = [{ kind: 'inventar', classId }, ...this.tabs.map((_, tab): Scope => ({ kind: 'truhe', tab }))];
+    return scopes.flatMap((scope) => this.scopePlaces(scope)).filter((place) => this.itemAt(place)?.forSale === true);
+  }
+
+  /** Was es einbrächte, alle markierten Gegenstände zu verkaufen: ihre Zahl, das Gold und wie viele davon ab Rar sind (die den Verkauf einzeln erfragen). */
+  worthMarked(classId: ClassId): { count: number; gold: number; rare: number } {
+    const items = this.markedPlaces(classId).map((place) => this.itemAt(place) as Item);
+    return { count: items.length, gold: items.reduce((sum, item) => sum + sellPrice(item), 0), rare: items.filter(needsConfirm).length };
+  }
+
+  /** Verkauft alle markierten Gegenstände in einem Zug. Gibt Zahl und Erlös zurück. */
+  sellMarked(classId: ClassId): { count: number; gold: number } {
+    this.refresh();
+    let gold = 0;
+    const places = this.markedPlaces(classId);
+    for (const place of places) {
+      const item = this.itemAt(place);
+      if (!item) continue;
+      const price = sellPrice(item);
+      this.sellItem(place, item, price);
+      gold += price;
+    }
+    if (places.length > 0) this.persistNow();
+    return { count: places.length, gold };
+  }
+
+  /**
    * Ordnet die Gegenstände eines Orts (siehe `compareForSort`): Sie rücken nach vorn, die freien Plätze liegen danach. Das ändert nur,
    * wo ein Gegenstand liegt, nichts an ihm. Gibt zurück, wie viele es sind und ob sich etwas bewegt hat (sonst wird nichts gespeichert).
    */
@@ -449,7 +503,7 @@ export class Ausruestung {
     const item = items.inventory[index];
     if (!item || !canEquip(item, classId)) return false;
     items.inventory[index] = items.equipment[item.slot] ?? null;
-    items.equipment[item.slot] = item;
+    items.equipment[item.slot] = withoutMark(item);
     this.persistNow();
     return true;
   }
@@ -503,7 +557,8 @@ export class Ausruestung {
   private sellItem(from: Place, item: Item, price: number): void {
     this.put(from, null);
     this.save.gold += price;
-    this.shop.buyback.unshift(item);
+    // Zurückgekauft liegt er wieder unmarkiert da: Wer ihn zurückholt, will ihn behalten.
+    this.shop.buyback.unshift(withoutMark(item));
     this.shop.buyback.length = Math.min(this.shop.buyback.length, CONFIG.items.shop.buybackSize);
   }
 
@@ -548,7 +603,8 @@ export class Ausruestung {
         this.of(place.classId).inventory[place.index] = item;
         break;
       case 'ausruestung':
-        if (item) this.of(place.classId).equipment[place.slot] = item;
+        // Was angelegt ist, wird nicht verkauft: Die Markierung fällt beim Anlegen weg.
+        if (item) this.of(place.classId).equipment[place.slot] = withoutMark(item);
         else delete this.of(place.classId).equipment[place.slot];
         break;
       case 'truhe': {
@@ -594,7 +650,7 @@ export class Ausruestung {
           const item = parseItem(raw.equipment[slot]);
           // Ein Gegenstand gehört auf seinen Platz und darf nur von seiner Klasse getragen werden.
           if (!item || item.slot !== slot || !canEquip(item, entry.id)) continue;
-          items.equipment[slot] = item;
+          items.equipment[slot] = withoutMark(item);
           this.nextId = Math.max(this.nextId, item.id + 1);
         }
       }

@@ -32,6 +32,8 @@ export interface ItemView {
   bound: string | null;
   /** Die Evolution eines legendären Rings: ihr Name, was sie freischaltet und was sie bewirkt; sonst `null`. */
   evolution: { title: string; requirement: string; text: string } | null;
+  /** Der Spieler hat den Gegenstand zum Verkauf markiert. */
+  forSale: boolean;
 }
 
 /** Ein Preis in Gold, wie ihn der Händler an einen Gegenstand schreibt; `poor`: Das Gold in der Börse reicht dafür nicht. */
@@ -64,6 +66,10 @@ export interface CommandView {
   poor?: boolean;
   /** Beim Händler: nur das Zeichen, ohne Beschriftung (ein schmaler Knopf; `label` bleibt für die Vorlesehilfe). */
   iconOnly?: boolean;
+  /** Im Kopf des Feldes: mit Beschriftung statt nur dem Zeichen (so wie die Knöpfe des Händlers). */
+  wide?: boolean;
+  /** Es gibt nichts zu tun (etwa: nichts markiert); der Knopf wirkt gedämpft, lässt sich aber drücken und sagt dann, warum nicht. */
+  idle?: boolean;
 }
 
 /** Ein Knopf zum Sortieren im Kopf des Inventars oder der Truhe; Tastatur und Gamepad sortieren über die Aktion `sort`. */
@@ -90,7 +96,7 @@ export interface TruheModel {
   /** Der geöffnete Reiter. */
   active: number;
   slots: readonly SlotView[];
-  /** Die Befehle hinter den Reitern, in der Reihenfolge: neuer Reiter, umbenennen, Farbe, löschen. */
+  /** Die Befehle hinter den Reitern: in der Truhe neuer Reiter, umbenennen, Farbe, löschen; beim Händler der Verkauf der markierten Gegenstände. */
   commands: readonly CommandView[];
   /** Die Knöpfe zum Sortieren dessen, was das Feld zeigt (der Reiter, beim Händler auch das Inventar). */
   sort: readonly SortView[];
@@ -162,6 +168,8 @@ export interface DetailView {
   compareTitle: string;
   /** Beim Händler: Was der Gegenstand kostet oder einbringt. */
   price?: PriceView | null;
+  /** Bei einem eigenen Gegenstand im Inventar oder in der Truhe: wie man ihn zum Verkauf markiert oder die Markierung zurücknimmt. */
+  markHint?: string;
 }
 
 export const EQUIPMENT_COLUMNS = 3;
@@ -202,6 +210,8 @@ export class LagerView {
   onAsk: (index: number) => void = () => {};
   /** Ein Knopf zum Sortieren wurde gedrückt: für das Inventar oder für das, was die Truhe gerade zeigt. */
   onSort: (panel: 'inventar' | 'truhe', order: SortOrder) => void = () => {};
+  /** Ein Gegenstand wurde mit der rechten Maustaste angeklickt: Markierung zum Verkauf umschalten (Tastatur und Gamepad über die Aktion `mark`). */
+  onMark: (zone: LagerZone, index: number) => void = () => {};
   onBack: () => void = () => {};
   private readonly root = element('lager');
   private readonly goldChip = element('lager-gold');
@@ -428,6 +438,12 @@ export class LagerView {
       bound.append(glyphElement('lock'), span('text', item.bound));
       card.append(bound);
     }
+    if (item.forSale) {
+      const sale = document.createElement('p');
+      sale.className = 'for-sale';
+      sale.append(glyphElement('coin'), span('text', 'Zum Verkauf markiert'));
+      card.append(sale);
+    }
     if (view.compare) {
       const compare = document.createElement('div');
       compare.className = 'compare';
@@ -457,6 +473,12 @@ export class LagerView {
       price.append(span('plabel', view.price.label), amount);
       if (view.price.poor) price.append(span('short', 'Dein Gold reicht nicht.'));
       card.append(price);
+    }
+    if (view.markHint) {
+      const hint = document.createElement('p');
+      hint.className = 'mark-hint';
+      hint.textContent = view.markHint;
+      card.append(hint);
     }
     this.detail.replaceChildren(card);
   }
@@ -594,7 +616,7 @@ export class LagerView {
     button.setAttribute(
       'aria-label',
       item
-        ? `${item.name}, ${item.rarityLabel}, ${item.slotLabel}${slot.price ? `, ${slot.price.amount} Gold` : ''}`
+        ? `${item.name}, ${item.rarityLabel}, ${item.slotLabel}${slot.price ? `, ${slot.price.amount} Gold` : ''}${item.forSale ? ', zum Verkauf markiert' : ''}`
         : slot.label !== ''
           ? `${slot.label}: leer`
           : 'Leerer Platz',
@@ -608,6 +630,13 @@ export class LagerView {
         button.append(mark);
       }
       button.append(itemImageElement(item.image, item.icon));
+      if (item.forSale) {
+        // Eine Münze in der Ecke: Der Gegenstand ist zum Verkauf markiert (das Bild tritt dafür etwas zurück, siehe `.forsale`).
+        button.classList.add('forsale');
+        const badge = span('sale-badge', '');
+        badge.append(glyphElement('coin'));
+        button.append(badge);
+      }
     } else if (slot.icon) {
       button.append(iconElement(slot.icon));
     }
@@ -654,15 +683,24 @@ export class LagerView {
     return button;
   }
 
-  /** Ein Befehl der Truhe: nur das Zeichen, der Name steht beim Verweilen (und auf der Karte rechts). */
+  /**
+   * Ein Befehl im Kopf des Feldes: meist nur das Zeichen (der Name steht beim Verweilen und auf der Karte rechts); mit `wide` ein
+   * beschrifteter Knopf wie die des Händlers.
+   */
   private iconCommand(index: number, command: CommandView): ButtonCell {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = command.poor ? 'icon-btn poor' : 'icon-btn';
     const text = command.note ? `${command.label} (${command.note})` : command.label;
-    button.title = text;
+    button.title = command.wide ? command.title : text;
     button.setAttribute('aria-label', text);
-    button.append(glyphElement(command.icon));
+    if (command.wide) {
+      button.className = command.poor ? 'action poor' : command.idle ? 'action idle' : 'action';
+      button.append(glyphElement(command.icon), span('label', command.label));
+      if (command.note) button.append(span('note', command.note));
+    } else {
+      button.className = command.poor ? 'icon-btn poor' : 'icon-btn';
+      button.append(glyphElement(command.icon));
+    }
     this.wire(button, { zone: 'reiter', index }, null);
     return button;
   }
@@ -699,6 +737,12 @@ export class LagerView {
       button.addEventListener('pointerdown', (event) => {
         if (event.button !== 0) return;
         this.pressed = { from: mark, item, x: event.clientX, y: event.clientY };
+      });
+      // Die rechte Maustaste markiert zum Verkauf (statt des Menüs des Browsers).
+      button.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        button.blur();
+        this.onMark(mark.zone, mark.index);
       });
     }
   }

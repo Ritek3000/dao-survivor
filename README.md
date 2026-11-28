@@ -98,6 +98,7 @@ So funktioniert der Upload:
 | F (bei der Klassenwahl)    | Aussehen der gewählten Klasse wechseln: Mann oder Frau (siehe [Mann und Frau](#mann-und-frau)) |
 | L oder U                   | Lager öffnen: Ausrüstung, Truhe und Händler (bei der Klassenwahl und am Ende der Nacht; sobald es Gegenstände oder Gold gibt, siehe [Gegenstände](#gegenstände)). U war die Taste der entfallenen Steigerungen |
 | Tab, E, O (im Lager)       | Ansicht wechseln (Ausrüstung, Truhe, Händler); E: Gegenstand gleich anlegen, beim Händler kaufen oder verkaufen, in der Ansicht Truhe zwischen Inventar und Truhe umräumen; O: das gezeigte Inventar oder den gezeigten Reiter sortieren (im Wechsel nach Art und Seltenheit) |
+| Leertaste oder rechte Maustaste (im Lager) | Den Gegenstand unter dem Zeiger zum Verkauf markieren oder die Markierung zurücknehmen; der Händler verkauft alle markierten mit dem Knopf „Markierte“ auf einmal. Mit einem Gegenstand in der Hand, auf dem Angebot des Händlers und auf angelegten Gegenständen wirkt die Leertaste wie Enter |
 
 Die Eingabe läuft über Aktionen (`src/core/input.ts`), damit später ein Gamepad ohne Eingriff in die
 Spiellogik dazukommen kann.
@@ -468,13 +469,19 @@ von einer Klasse zur anderen, und aus der Ausrüstung in die Truhe. Ein Platz de
 das Spiel unten, warum nicht. **E** erledigt das Häufige gleich ohne Aufnehmen: In der Ansicht Ausrüstung legt es an, was die gezeigte Klasse tragen kann (der getragene nimmt den Platz), nimmt Angelegtes
 ab und räumt alles andere zwischen Inventar und Truhe um; in der Ansicht Truhe legt es nie an, sondern räumt immer um (vom Inventar in die Truhe, von der Truhe ins Inventar; die Zeile unten sagt, wohin
 der Gegenstand kam). Beim Händler kauft E, was im Angebot oder Rückkauf liegt, und verkauft, was man besitzt. Pfeile bewegen den Zeiger, 1, 2, 3 wechseln die Klasse, Esc oder L führen zurück. Alles geht
-mit Maus und Tastatur gleichwertig (`src/core/input.ts`: die Aktionen `use`, `sort` und `switch`; ein späteres Gamepad belegt sie mit Knöpfen).
+mit Maus und Tastatur gleichwertig (`src/core/input.ts`: die Aktionen `use`, `sort`, `mark` und `switch`; ein späteres Gamepad belegt sie mit Knöpfen).
 
 **Sortieren.** Die Knöpfe im Kopf des Inventars und der Truhe (Schild: nach Art, Edelstein: nach Seltenheit) und die Taste **O** ordnen die Gegenstände eines Inventars oder Reiters; die leeren Plätze
 rücken ans Ende. *Nach Art* folgt der Reihenfolge der neun Plätze (Fackel, Helm, Gürtel, Waffe, Handschuhe, Schuhe, Ring, Brustrüstung, Amulett), darin das Seltenste zuerst; *nach Seltenheit*
 steht das Seltenste vorn (Legendär, Rar, Selten, Normal), darin die Plätze in derselben Reihenfolge. Was dann noch gleich ist, ordnet sich nach der Klasse, nach der Güte des Wurfs (der beste zuerst) und
 zuletzt nach der Nummer des Gegenstands (`compareForSort` in `src/game/items.ts`, gespeichert wird in `Ausruestung.sort`). Die Taste O sortiert das Inventar, solange der Zeiger dort steht (in der Ansicht
 Ausrüstung immer), sonst den gezeigten Reiter, und wechselt bei jedem Druck zwischen den beiden Ordnungen; die Zeile unten sagt, was sortiert wurde. Ein aufgenommener Gegenstand bleibt in der Hand.
+
+**Zum Verkauf markieren.** Die **Leertaste** oder die **rechte Maustaste** markiert den Gegenstand unter dem Zeiger zum Verkauf; dieselbe Eingabe nimmt die Markierung zurück. Ein markierter Gegenstand trägt eine Münze in der
+Ecke seines Platzes (das Bild tritt etwas zurück), und seine Karte sagt „Zum Verkauf markiert“ und wie man die Markierung zurücknimmt. Markieren lässt sich, was im Inventar oder in der Truhe liegt, in allen drei Ansichten; die
+Markierung bleibt am Gegenstand, wohin er auch wandert (Inventar, Reiter, andere Klasse). Sie fällt weg, sobald er angelegt oder verkauft wird, und ein zurückgekaufter Gegenstand ist wieder unmarkiert. Die Leertaste bestätigt sonst
+wie Enter und markiert darum nur auf einem eigenen Gegenstand, wenn nichts in der Hand liegt (mit einem Gegenstand in der Hand legt sie ihn ab, beim Händler kauft sie, auf Angelegtem nimmt sie auf); die rechte Maustaste markiert
+immer. Die Markierung liegt im Spielstand (Feld `forSale` am Gegenstand, `Ausruestung.toggleMark`), geht also über einen Neustart nicht verloren. Verkauft wird beim Händler (siehe unten).
 
 **Truhe.** Alle Zahlen stehen in `CONFIG.items.truhe`. Ein neuer Spielstand beginnt mit einem Reiter; **Reiter** lassen sich anlegen (bis 16), umbenennen
 (höchstens 16 Zeichen), mit einer von acht Farben markieren und löschen. Die ersten fünf Reiter sind gratis, jeder weitere kostet 500 Gold mal seiner Nummer über
@@ -505,6 +512,9 @@ in `Ausruestung` (er ändert Gold, Gegenstände und Angebot in einem Zug), die B
   Pfeil rechts, dann Enter): *Normale* oder *bis Selten* (Normale und Seltene; die höhere Stufe schließt die niedrigere ein, Rares und Legendäres bleiben liegen). Die Stufe steht als Beschriftung auf dem
   Auto-Verkauf-Knopf und bleibt über Neustarts erhalten (`Settings.ui.autoSell`, wie das Aussehen der Klassen eine Einstellung und kein Fortschritt). Der Knopf fragt immer vorher und nennt Zahl und Gold
   (bei mehr als zehn Gegenständen bleiben nur die letzten zehn im Rückkauf; die Stufen stehen als Daten in `SELL_STAGES` in `src/game/lager.ts`). Angelegtes verkauft man nicht; es muss erst abgelegt werden.
+- *Markierte verkaufen:* Im Kopf des eigenen Besitzes steht der Knopf „Markierte“ (mit der Zahl der markierten Gegenstände; ohne markierte ist er gedämpft). Er verkauft alle zum Verkauf markierten Gegenstände auf einen Schlag, im Inventar der gezeigten Klasse
+  und in der ganzen Truhe, nicht nur im gezeigten Reiter. Mit der Tastatur geht es aus der obersten Reihe des eigenen Besitzes nach oben in die Leiste und mit Rechts hinter die Reiter, dann Enter. Das Spiel fragt immer vorher, nennt Zahl und Gold und sagt, wie
+  viele davon ab Rar sind (bei mehr als zehn bleiben nur die letzten zehn im Rückkauf). Die Stufe des Auto-Verkaufs spielt dabei keine Rolle; die beiden sind unabhängig (`Ausruestung.sellMarked`, `Lager.sellMarkedNow`).
 
 **Beute.** Alle Zahlen stehen in `CONFIG.loot` und bei den Gegnerarten (`loot`) in `src/config.ts`; gewürfelt wird in `src/game/beute.ts`.
 
@@ -528,9 +538,9 @@ in `Ausruestung` (er ändert Gold, Gegenstände und Angebot in einem Zug), die B
 - *Legendäre Ringe:* Jeder trägt die Evolution einer Fertigkeit seiner Klasse (siehe [Evolutionen](#evolutionen)). Welche, entscheidet der Wurf; Angriffe, die in
   der laufenden Nacht schon Rang 3 erreicht haben, werden dreimal so häufig gewürfelt (`CONFIG.skills.evolution.lootRank` und `lootWeight`), eine Hilfe und kein Zwang.
 
-**Speicherung.** Die Gegenstände liegen im selben Spielstand wie das Gold (Feld `items`; `src/game/ausruestung.ts`), Fassung 8 (neu: die Grade der Nächte im Feld `grades`, siehe [Grade der Nächte](#grade-der-nächte); ältere Stände bekommen leere Grade; Fassung 7: ein legendärer Ring trägt die Evolution einer Fertigkeit; Ringe aus Fassung 6 bekommen beim Lesen eine, ohne dass etwas verloren geht, und
+**Speicherung.** Die Gegenstände liegen im selben Spielstand wie das Gold (Feld `items`; `src/game/ausruestung.ts`), Fassung 9 (neu: Ein Gegenstand kann zum Verkauf markiert sein, Feld `forSale` am Gegenstand; ältere Gegenstände sind unmarkiert); Fassung 8: die Grade der Nächte im Feld `grades`, siehe [Grade der Nächte](#grade-der-nächte); ältere Stände bekommen leere Grade; Fassung 7: ein legendärer Ring trägt die Evolution einer Fertigkeit; Ringe aus Fassung 6 bekommen beim Lesen eine, ohne dass etwas verloren geht, und
 die Sicherung aus Fassung 6 bleibt dabei unberührt; Fassung 6 erstattete die Ränge der entfallenen Steigerungen als Gold und legte den alten Stand als Sicherung bereit, siehe [Gold](#gold); Fassung 5 brachte den Stand des Händlers mit Angebot, Rückkauf und Zähler der Erneuerungen, Fassung 4 die Truhe,
-Fassung 3 den Pech-Schutz). Ältere Stände (Fassung 1 bis 7) werden Schritt für Schritt gehoben; Gold und Gegenstände bleiben unverändert. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
+Fassung 3 den Pech-Schutz). Ältere Stände (Fassung 1 bis 8) werden Schritt für Schritt gehoben; Gold und Gegenstände bleiben unverändert. Was im Spielstand nicht zum Spiel passt (unbekannter Platz oder
 Name, unmögliche Eigenschaft), wird beim Lesen verworfen, Werte außerhalb des heutigen Bereichs rücken an dessen Rand.
 
 **Gleichgewicht.** `__items.verteilung('stark')`, `__items.kisten()` und `__items.angebote()` würfeln die Seltenheiten, den Pech-Schutz und das Angebot des Händlers in der Konsole tausendfach nach

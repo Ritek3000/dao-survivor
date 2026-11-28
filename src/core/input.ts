@@ -17,6 +17,11 @@ export type Action =
   | 'use'
   /** Im Lager: das gezeigte Inventar oder den gezeigten Reiter der Truhe sortieren; jeder Druck wechselt zwischen Art und Seltenheit. */
   | 'sort'
+  /**
+   * Im Lager: den Gegenstand unter dem Zeiger zum Verkauf markieren oder die Markierung zurücknehmen (der Händler verkauft alle markierten
+   * auf einmal). Löst die Leertaste aus, die zugleich `confirm` auslöst; das Lager nimmt sie nur als Markierung, wo es etwas zu markieren gibt.
+   */
+  | 'mark'
   /** Im Lager: zwischen Ausrüstung, Truhe und Händler wechseln. */
   | 'switch'
   /** Beim Stufenaufstieg: die Karten neu würfeln. */
@@ -101,6 +106,12 @@ const ACTION_KEYS: Readonly<Record<string, Action>> = {
   Numpad7: 'choice7',
 };
 
+// Weitere Aktionen, die eine Taste neben ihrer eigenen auslöst: Die Leertaste bestätigt überall wie Enter und markiert im Lager außerdem
+// einen Gegenstand zum Verkauf. Welche der beiden gilt, entscheidet die Stelle, die fragt (siehe `Lager.update`).
+const ALSO_KEYS: Readonly<Record<string, Action>> = {
+  Space: 'mark',
+};
+
 // Die Zeichen + und - liegen je nach Tastatur an anderer Stelle (und am Ziffernblock); darum zählt für sie das Zeichen, nicht die Taste.
 const CHAR_ACTIONS: Readonly<Record<string, Action>> = {
   '+': 'gradeUp',
@@ -166,6 +177,8 @@ export class Input {
     if (event.repeat) return;
     if (isMove) this.held.add(event.code);
     if (action) this.pressed.add(action);
+    const also = ALSO_KEYS[event.code];
+    if (also) this.pressed.add(also);
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
