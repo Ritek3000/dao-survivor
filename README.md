@@ -97,7 +97,7 @@ So funktioniert der Upload:
 | R, X (beim Stufenaufstieg) | Karten neu würfeln; eine Karte verbannen (danach die Karte wählen, X oder Esc bricht ab) |
 | F (bei der Klassenwahl)    | Aussehen der gewählten Klasse wechseln: Mann oder Frau (siehe [Mann und Frau](#mann-und-frau)) |
 | L oder U                   | Lager öffnen: Ausrüstung, Truhe und Händler (bei der Klassenwahl und am Ende der Nacht; sobald es Gegenstände oder Gold gibt, siehe [Gegenstände](#gegenstände)). U war die Taste der entfallenen Steigerungen |
-| Tab, E (im Lager)          | Ansicht wechseln (Ausrüstung, Truhe, Händler); Gegenstand gleich anlegen, umräumen, beim Händler kaufen oder verkaufen |
+| Tab, E, O (im Lager)       | Ansicht wechseln (Ausrüstung, Truhe, Händler); E: Gegenstand gleich anlegen, beim Händler kaufen oder verkaufen, in der Ansicht Truhe zwischen Inventar und Truhe umräumen; O: das gezeigte Inventar oder den gezeigten Reiter sortieren (im Wechsel nach Art und Seltenheit) |
 
 Die Eingabe läuft über Aktionen (`src/core/input.ts`), damit später ein Gamepad ohne Eingriff in die
 Spiellogik dazukommen kann.
@@ -465,9 +465,16 @@ laufen und prüft, dass sich kein Feld bewegt.
 Ziehen mit der Maus oder dem Finger tut dasselbe in einem Zug. Aufgenommen ist ein Gegenstand nur gemerkt: Erst das Ablegen ändert etwas, Esc legt ihn
 zurück, und ein Neuladen mitten im Zug verliert nichts. Die Aufnahme bleibt beim Wechsel der Ansicht und der Klasse bestehen; so wandert ein Gegenstand
 von einer Klasse zur anderen, und aus der Ausrüstung in die Truhe. Ein Platz der Ausrüstung nimmt nur den passenden Gegenstand an (Platz, Klasse); sonst sagt
-das Spiel unten, warum nicht. **E** erledigt das Häufige gleich ohne Aufnehmen: Es legt an, was die gezeigte Klasse tragen kann (der getragene nimmt den Platz), nimmt Angelegtes
-ab und räumt alles andere zwischen Inventar und Truhe um; beim Händler kauft E, was im Angebot oder Rückkauf liegt, und verkauft, was man besitzt. Pfeile bewegen den Zeiger, 1, 2, 3 wechseln die Klasse, Esc oder L führen zurück. Alles geht
-mit Maus und Tastatur gleichwertig (`src/core/input.ts`: die Aktionen `use` und `switch`; ein späteres Gamepad belegt sie mit Knöpfen).
+das Spiel unten, warum nicht. **E** erledigt das Häufige gleich ohne Aufnehmen: In der Ansicht Ausrüstung legt es an, was die gezeigte Klasse tragen kann (der getragene nimmt den Platz), nimmt Angelegtes
+ab und räumt alles andere zwischen Inventar und Truhe um; in der Ansicht Truhe legt es nie an, sondern räumt immer um (vom Inventar in die Truhe, von der Truhe ins Inventar; die Zeile unten sagt, wohin
+der Gegenstand kam). Beim Händler kauft E, was im Angebot oder Rückkauf liegt, und verkauft, was man besitzt. Pfeile bewegen den Zeiger, 1, 2, 3 wechseln die Klasse, Esc oder L führen zurück. Alles geht
+mit Maus und Tastatur gleichwertig (`src/core/input.ts`: die Aktionen `use`, `sort` und `switch`; ein späteres Gamepad belegt sie mit Knöpfen).
+
+**Sortieren.** Die Knöpfe im Kopf des Inventars und der Truhe (Schild: nach Art, Edelstein: nach Seltenheit) und die Taste **O** ordnen die Gegenstände eines Inventars oder Reiters; die leeren Plätze
+rücken ans Ende. *Nach Art* folgt der Reihenfolge der neun Plätze (Fackel, Helm, Gürtel, Waffe, Handschuhe, Schuhe, Ring, Brustrüstung, Amulett), darin das Seltenste zuerst; *nach Seltenheit*
+steht das Seltenste vorn (Legendär, Rar, Selten, Normal), darin die Plätze in derselben Reihenfolge. Was dann noch gleich ist, ordnet sich nach der Klasse, nach der Güte des Wurfs (der beste zuerst) und
+zuletzt nach der Nummer des Gegenstands (`compareForSort` in `src/game/items.ts`, gespeichert wird in `Ausruestung.sort`). Die Taste O sortiert das Inventar, solange der Zeiger dort steht (in der Ansicht
+Ausrüstung immer), sonst den gezeigten Reiter, und wechselt bei jedem Druck zwischen den beiden Ordnungen; die Zeile unten sagt, was sortiert wurde. Ein aufgenommener Gegenstand bleibt in der Hand.
 
 **Truhe.** Alle Zahlen stehen in `CONFIG.items.truhe`. Ein neuer Spielstand beginnt mit einem Reiter; **Reiter** lassen sich anlegen (bis 16), umbenennen
 (höchstens 16 Zeichen), mit einer von acht Farben markieren und löschen. Die ersten fünf Reiter sind gratis, jeder weitere kostet 500 Gold mal seiner Nummer über
@@ -494,8 +501,9 @@ in `Ausruestung` (er ändert Gold, Gegenstände und Angebot in einem Zug), die B
 - *Kaufen und Verkaufen:* Enter auf einem Gegenstand im Angebot kauft ihn (er kommt ins Inventar der gezeigten Klasse, sonst in die Truhe); ein Gegenstand lässt sich auch
   auf einen freien Platz oder einen Reiter des eigenen Besitzes ziehen. Verkaufen geht mit E auf dem eigenen Gegenstand, mit dem Gegenstand in der Hand und Enter auf dem Angebot oder dem Rückkauf,
   oder indem man ihn auf den Händler zieht. Ab Rar fragt das Spiel vorher nach (Esc oder „Abbrechen“ lässt alles, wie es ist). Der eigene Besitz rechts zeigt das Inventar
-  der Klasse als ersten Reiter, dahinter die Reiter der Truhe; „Normale verkaufen“ verkauft alle normalen Gegenstände des gezeigten Inventars oder Reiters nach einer Rückfrage mit der Summe
-  (bei mehr als zehn bleiben nur die letzten zehn im Rückkauf). Angelegtes verkauft man nicht; es muss erst abgelegt werden.
+  der Klasse als ersten Reiter, dahinter die Reiter der Truhe; der „Auto-Verkauf“ verkauft Gegenstände des gezeigten Inventars oder Reiters auf einen Schlag. Er fragt immer vorher und bietet zwei Stufen an, jede mit Zahl und Gold:
+  *Normale* oder *Normale und Seltene* (die höhere Stufe schließt die niedrigere ein; Rares und Legendäres bleiben liegen). Eine Stufe, die nicht mehr verkauft als die davor, erscheint nicht
+  (bei mehr als zehn Gegenständen bleiben nur die letzten zehn im Rückkauf; die Stufen stehen als Daten in `SELL_STAGES` in `src/game/lager.ts`). Angelegtes verkauft man nicht; es muss erst abgelegt werden.
 
 **Beute.** Alle Zahlen stehen in `CONFIG.loot` und bei den Gegnerarten (`loot`) in `src/config.ts`; gewürfelt wird in `src/game/beute.ts`.
 

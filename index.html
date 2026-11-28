@@ -255,7 +255,9 @@
             färben kannst; die ersten fünf sind gratis) und <b>Händler</b>. Er verkauft Gegenstände für Gold und kauft deine für
             ein Viertel des Preises; was du ihm verkauft hast, kannst du zurückkaufen, und sein Angebot lässt sich erneuern.
             Ein aufgenommener Gegenstand bleibt in der Hand, wenn du Ansicht oder Klasse wechselst (<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>);
-            so zieht er in die Truhe oder zu einer anderen Klasse.
+            so zieht er in die Truhe oder zu einer anderen Klasse. <kbd>E</kbd> räumt in der Truhe einen Gegenstand zwischen Inventar und
+            Truhe um, <kbd>O</kbd> sortiert das Inventar oder den Reiter (im Wechsel nach Art und Seltenheit), und der Auto-Verkauf beim
+            Händler verkauft auf Wunsch alle Normalen oder auch alle Seltenen auf einmal.
           </p>
         </section>
       </div>
@@ -398,7 +400,10 @@
             <div id="equipment-slots" class="slots" aria-label="Angelegt"></div>
           </section>
           <section id="lager-inventory" class="panel" aria-labelledby="inventory-title">
-            <header class="panel-head"><h2 id="inventory-title">Inventar</h2></header>
+            <header class="panel-head">
+              <h2 id="inventory-title">Inventar</h2>
+              <div id="inventory-sort" class="head-tools"></div>
+            </header>
             <div class="panel-bar"><div id="inventory-meter" class="meter"></div></div>
             <div id="inventory-slots" class="slots" aria-label="Inventar"></div>
           </section>
@@ -413,7 +418,10 @@
           <section id="lager-truhe" class="panel" aria-labelledby="truhe-title" hidden>
             <header class="panel-head">
               <h2 id="truhe-title">Truhe</h2>
-              <div id="truhe-commands"></div>
+              <div class="head-tools">
+                <div id="truhe-sort"></div>
+                <div id="truhe-commands"></div>
+              </div>
             </header>
             <div class="panel-bar">
               <div id="truhe-tabs" role="tablist" aria-label="Reiter"></div>
@@ -426,10 +434,7 @@
               <div id="truhe-slots" class="slots" aria-label="Truhe"></div>
               <div id="truhe-ask" role="alertdialog" aria-labelledby="truhe-ask-text" hidden>
                 <p id="truhe-ask-text"></p>
-                <div class="choices">
-                  <button id="truhe-ask-no" class="action" type="button"></button>
-                  <button id="truhe-ask-yes" class="action" type="button"></button>
-                </div>
+                <div id="truhe-ask-choices" class="choices"></div>
               </div>
             </div>
           </section>
@@ -444,7 +449,7 @@
             <p id="lager-note" aria-live="polite"></p>
           </div>
           <div id="lager-foot-row">
-            <button id="lager-back" class="button" type="button">Zurück <kbd>Esc</kbd></button>
+            <button id="lager-back" class="button" type="button">Zurück <kbd>Esc</kbd> <kbd>L</kbd></button>
             <p id="lager-keys"></p>
           </div>
         </div>

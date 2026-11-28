@@ -320,6 +320,30 @@ export function sellPrice(item: Item): number {
   return Math.max(1, Math.round(itemValue(item) * CONFIG.items.price.sellShare));
 }
 
+/** Wonach sich ein Inventar oder ein Reiter der Truhe ordnen lässt. */
+export const SORT_ORDERS = ['art', 'seltenheit'] as const;
+export type SortOrder = (typeof SORT_ORDERS)[number];
+
+/** Der Name der Ordnung, wie er im Satz „nach …“ steht. */
+export const SORT_LABELS: Readonly<Record<SortOrder, string>> = { art: 'Art', seltenheit: 'Seltenheit' };
+
+/**
+ * Die Reihenfolge beim Sortieren. Nach Art stehen die Plätze in der Reihenfolge von `ITEM_SLOTS` (Fackel bis Amulett), darin das
+ * Seltenste zuerst; nach Seltenheit steht das Seltenste vorn, darin die Plätze in derselben Reihenfolge. Was dann noch gleich ist,
+ * ordnet sich nach der Klasse (gebundene Gegenstände in der Reihenfolge von `CLASSES`, freie zuletzt), nach der Güte des Wurfs (der
+ * beste zuerst) und zuletzt nach der Nummer, damit gleiche Gegenstände nicht bei jedem Sortieren die Plätze tauschen.
+ */
+export function compareForSort(order: SortOrder): (a: Item, b: Item) => number {
+  const slot = (a: Item, b: Item): number => ITEM_SLOTS.indexOf(a.slot) - ITEM_SLOTS.indexOf(b.slot);
+  const rarity = (a: Item, b: Item): number => RARITIES.indexOf(b.rarity) - RARITIES.indexOf(a.rarity);
+  const owner = (item: Item): number => (item.classId ? CLASSES.findIndex((entry) => entry.id === item.classId) : CLASSES.length);
+  return (a, b) =>
+    (order === 'art' ? slot(a, b) || rarity(a, b) : rarity(a, b) || slot(a, b)) ||
+    owner(a) - owner(b) ||
+    itemQuality(b) - itemQuality(a) ||
+    a.id - b.id;
+}
+
 /** Die Fertigkeiten einer Klasse, deren Evolution ein legendärer Ring freischalten kann. */
 export function evolutionChoices(classId: ClassId): string[] {
   const owner = CLASSES.find((entry) => entry.id === classId);
